@@ -184,7 +184,143 @@ Authentication tokens and sensitive credentials. **All credentials trigger criti
 | `GOOGLE_OAUTH_SECRET` | **9** | Google OAuth client secret | |
 | `FIREBASE_KEY` | **9** | Firebase API key | |
 
-### Service Provider Tokens
+### AI/ML Platform Keys (P0 - High Leak Risk)
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `OPENAI_API_KEY` | **10** | OpenAI API key | `sk-[a-zA-Z0-9]{48}` |
+| `ANTHROPIC_API_KEY` | **10** | Anthropic/Claude API key | `sk-ant-api03-[a-zA-Z0-9\-_]{93}` |
+| `HUGGINGFACE_TOKEN` | **9** | Hugging Face access token | `hf_[a-zA-Z0-9]{34}` |
+| `COHERE_API_KEY` | **9** | Cohere API key | Context-based |
+| `REPLICATE_TOKEN` | **9** | Replicate API token | `r8_[a-zA-Z0-9]{40}` |
+| `STABILITY_API_KEY` | **9** | Stability AI key | Context-based |
+| `MISTRAL_API_KEY` | **9** | Mistral AI key | Context-based |
+| `TOGETHER_API_KEY` | **9** | Together AI key | Context-based |
+| `GROQ_API_KEY` | **9** | Groq API key | `gsk_[a-zA-Z0-9]{52}` |
+
+### Additional Cloud Providers
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `GCP_SERVICE_ACCOUNT` | **10** | GCP service account JSON | JSON with `"type": "service_account"` |
+| `GCP_API_KEY` | **9** | GCP API key | Context-based |
+| `DIGITALOCEAN_TOKEN` | **10** | DigitalOcean API token | `dop_v1_[a-f0-9]{64}` |
+| `LINODE_TOKEN` | **9** | Linode API token | Context-based |
+| `VULTR_API_KEY` | **9** | Vultr API key | Context-based |
+| `ALIBABA_ACCESS_KEY` | **10** | Alibaba Cloud access key | `LTAI[a-zA-Z0-9]{12,20}` |
+| `ORACLE_CLOUD_KEY` | **9** | Oracle Cloud API key | Context-based |
+| `IBM_CLOUD_KEY` | **9** | IBM Cloud API key | Context-based |
+| `CLOUDFLARE_API_KEY` | **9** | Cloudflare API key | Context-based |
+| `CLOUDFLARE_TOKEN` | **9** | Cloudflare API token | Context-based |
+
+### CI/CD Platform Tokens
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `CIRCLECI_TOKEN` | **9** | CircleCI API token | 40-char hex |
+| `TRAVIS_TOKEN` | **9** | Travis CI token | Context-based |
+| `JENKINS_TOKEN` | **9** | Jenkins API token | Context-based |
+| `AZURE_DEVOPS_PAT` | **9** | Azure DevOps personal access token | 52-char base64 |
+| `BITBUCKET_TOKEN` | **9** | Bitbucket app password/token | Context-based |
+| `VERCEL_TOKEN` | **9** | Vercel API token | Context-based |
+| `NETLIFY_TOKEN` | **9** | Netlify access token | Context-based |
+| `RENDER_API_KEY` | **9** | Render API key | `rnd_[a-zA-Z0-9]+` |
+| `RAILWAY_TOKEN` | **9** | Railway API token | Context-based |
+| `FLY_TOKEN` | **9** | Fly.io API token | Context-based |
+
+### Container Registry Tokens
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `DOCKER_HUB_TOKEN` | **9** | Docker Hub access token | `dckr_pat_[a-zA-Z0-9\-_]{56}` |
+| `QUAY_TOKEN` | **9** | Quay.io robot token | Context-based |
+| `ECR_TOKEN` | **9** | AWS ECR token | Context-based |
+| `GCR_TOKEN` | **9** | Google Container Registry | Context-based |
+| `ACR_TOKEN` | **9** | Azure Container Registry | Context-based |
+| `HARBOR_TOKEN` | **9** | Harbor registry token | Context-based |
+
+### Communication Platform Tokens
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `TELEGRAM_BOT_TOKEN` | **9** | Telegram bot token | `[0-9]{9,10}:[a-zA-Z0-9_-]{35}` |
+| `TEAMS_WEBHOOK` | **8** | Microsoft Teams webhook | `https://.*\.webhook\.office\.com/.*` |
+| `ZOOM_JWT` | **9** | Zoom JWT token | JWT with zoom context |
+| `WEBEX_TOKEN` | **9** | Cisco Webex token | Context-based |
+| `TWITCH_TOKEN` | **9** | Twitch OAuth token | `oauth:[a-z0-9]{30}` |
+| `WHATSAPP_TOKEN` | **9** | WhatsApp Business API | Context-based |
+
+### Payment Processor Tokens
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `PAYPAL_CLIENT_ID` | **8** | PayPal client ID | Context-based |
+| `PAYPAL_SECRET` | **10** | PayPal client secret | Context-based |
+| `BRAINTREE_TOKEN` | **9** | Braintree API token | Context-based |
+| `PLAID_CLIENT_ID` | **8** | Plaid client ID | Context-based |
+| `PLAID_SECRET` | **10** | Plaid secret | Context-based |
+| `ADYEN_API_KEY` | **10** | Adyen API key | `AQE...` prefix |
+| `KLARNA_TOKEN` | **9** | Klarna API token | Context-based |
+
+### SaaS API Tokens
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `ATLASSIAN_TOKEN` | **9** | Atlassian/Jira/Confluence | Variable length |
+| `NOTION_TOKEN` | **9** | Notion API token | `secret_[a-zA-Z0-9]{43}` |
+| `AIRTABLE_KEY` | **9** | Airtable API key | `key[a-zA-Z0-9]{14}` or `pat...` |
+| `LINEAR_TOKEN` | **9** | Linear API key | `lin_api_[a-zA-Z0-9]{40}` |
+| `FIGMA_TOKEN` | **9** | Figma access token | `figd_[a-zA-Z0-9\-_]{40}` |
+| `ASANA_TOKEN` | **9** | Asana personal access token | Context-based |
+| `MONDAY_TOKEN` | **9** | Monday.com API token | Context-based |
+| `ZENDESK_TOKEN` | **9** | Zendesk API token | Context-based |
+| `INTERCOM_TOKEN` | **9** | Intercom access token | Context-based |
+| `SEGMENT_KEY` | **9** | Segment write key | Context-based |
+| `MIXPANEL_TOKEN` | **8** | Mixpanel project token | Context-based |
+| `AMPLITUDE_KEY` | **8** | Amplitude API key | Context-based |
+| `LAUNCHDARKLY_KEY` | **9** | LaunchDarkly SDK key | `sdk-[a-f0-9\-]{36}` |
+| `SENTRY_DSN` | **8** | Sentry DSN | `https://[a-f0-9]+@...sentry.io/...` |
+| `PAGERDUTY_KEY` | **9** | PagerDuty API key | `u+[a-zA-Z0-9]{18}` |
+| `OPSGENIE_KEY` | **9** | Opsgenie API key | Context-based |
+| `ROLLBAR_TOKEN` | **8** | Rollbar access token | Context-based |
+
+### Database & Data Platform Tokens
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `SUPABASE_KEY` | **9** | Supabase API key | `sbp_[a-f0-9]{40}` |
+| `PLANETSCALE_TOKEN` | **9** | PlanetScale token | `pscale_tkn_[a-zA-Z0-9\-_]{43}` |
+| `NEON_TOKEN` | **9** | Neon database token | Context-based |
+| `COCKROACHDB_TOKEN` | **9** | CockroachDB token | Context-based |
+| `SNOWFLAKE_TOKEN` | **9** | Snowflake access token | Context-based |
+| `DATABRICKS_TOKEN` | **9** | Databricks access token | `dapi[a-f0-9]{32}` |
+| `ELASTICSEARCH_KEY` | **9** | Elasticsearch API key | Context-based |
+| `ALGOLIA_KEY` | **9** | Algolia admin API key | 32-char hex |
+| `REDIS_URL` | **9** | Redis connection URL | `redis://...` with password |
+| `GRAFANA_TOKEN` | **9** | Grafana API token | `glc_[a-zA-Z0-9\-_]{32,}` |
+
+### Email Service Tokens
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `POSTMARK_TOKEN` | **9** | Postmark server token | GUID format |
+| `MAILGUN_KEY` | **9** | Mailgun API key | `key-[a-f0-9]{32}` |
+| `RESEND_KEY` | **9** | Resend API key | `re_[a-zA-Z0-9]{32}` |
+| `SPARKPOST_KEY` | **9** | SparkPost API key | Context-based |
+| `SES_CREDENTIALS` | **9** | Amazon SES SMTP credentials | Context-based |
+
+### SMS/Voice Service Tokens
+
+| Entity Type | Weight | Description | Pattern Hint |
+|-------------|--------|-------------|--------------|
+| `VONAGE_KEY` | **9** | Vonage/Nexmo API key | Context-based |
+| `VONAGE_SECRET` | **9** | Vonage/Nexmo API secret | Context-based |
+| `PLIVO_AUTH_ID` | **8** | Plivo Auth ID | Context-based |
+| `PLIVO_TOKEN` | **9** | Plivo Auth Token | Context-based |
+| `MESSAGEBIRD_KEY` | **9** | MessageBird API key | Context-based |
+| `BANDWIDTH_TOKEN` | **9** | Bandwidth API credentials | Context-based |
+
+### Legacy Service Provider Tokens
 
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
@@ -242,6 +378,202 @@ Security classifications and government identifiers.
 
 ---
 
+## Category: Education / FERPA
+
+Student records and educational identifiers protected under FERPA.
+
+| Entity Type | Weight | Description | Aliases |
+|-------------|--------|-------------|---------|
+| `STUDENT_ID` | **7** | Student identification number | |
+| `TRANSCRIPT` | **7** | Academic transcript/grades reference | |
+| `ENROLLMENT_ID` | **6** | School enrollment identifier | |
+| `FINANCIAL_AID_ID` | **7** | Financial aid application ID | fafsa_id |
+| `SCHOOL_RECORD` | **6** | Educational record reference | |
+| `GPA` | **5** | Grade point average | |
+| `DISCIPLINARY_RECORD` | **7** | Student disciplinary information | |
+| `IEP_ID` | **8** | Individualized Education Program | special_ed |
+| `TEACHER_ID` | **5** | Teacher/instructor identifier | |
+| `FERPA_DIRECTORY_INFO` | **4** | FERPA directory information | |
+
+---
+
+## Category: Legal
+
+Court records, case identifiers, and legal professional IDs.
+
+| Entity Type | Weight | Description | Aliases |
+|-------------|--------|-------------|---------|
+| `CASE_NUMBER` | **6** | Court case/docket number | docket_number |
+| `BAR_NUMBER` | **5** | Attorney bar registration | bar_id |
+| `COURT_ID` | **4** | Court identifier | |
+| `PACER_ID` | **6** | PACER login/account ID | |
+| `INMATE_NUMBER` | **7** | Prison/jail inmate identifier | bop_number |
+| `PROBATION_ID` | **7** | Probation/parole identifier | |
+| `ARREST_RECORD` | **8** | Arrest record reference | booking_number |
+| `WARRANT_NUMBER` | **7** | Warrant identifier | |
+| `JUDGMENT_ID` | **6** | Court judgment reference | |
+| `LEGAL_HOLD_ID` | **5** | Legal hold identifier | |
+
+---
+
+## Category: Vehicle & Transportation
+
+Vehicle and transportation-related identifiers.
+
+| Entity Type | Weight | Description | Aliases |
+|-------------|--------|-------------|---------|
+| `VIN` | **5** | Vehicle Identification Number | |
+| `LICENSE_PLATE` | **5** | Vehicle license plate number | plate_number |
+| `REGISTRATION_NUMBER` | **5** | Vehicle registration | |
+| `TITLE_NUMBER` | **5** | Vehicle title identifier | |
+| `DOT_NUMBER` | **4** | USDOT carrier number | |
+| `MC_NUMBER` | **4** | Motor carrier number | |
+| `VESSEL_ID` | **5** | Boat/vessel identification | hin, hull_id |
+| `AIRCRAFT_TAIL` | **5** | Aircraft tail number | n_number |
+| `PILOT_LICENSE` | **6** | FAA pilot certificate number | |
+| `CDL_NUMBER` | **7** | Commercial driver's license | |
+| `TOLL_ACCOUNT` | **4** | Toll transponder account | ezpass, fastrak |
+
+---
+
+## Category: Immigration
+
+Immigration and visa-related identifiers.
+
+| Entity Type | Weight | Description | Aliases |
+|-------------|--------|-------------|---------|
+| `A_NUMBER` | **9** | USCIS Alien Registration Number | alien_number |
+| `VISA_NUMBER` | **8** | Visa foil number | |
+| `I94_NUMBER` | **8** | I-94 arrival/departure number | |
+| `GREEN_CARD_NUMBER` | **9** | Permanent resident card number | |
+| `EAD_NUMBER` | **8** | Employment Authorization Document | work_permit |
+| `SEVIS_ID` | **7** | Student visa SEVIS identifier | |
+| `TRAVEL_DOCUMENT_NUMBER` | **8** | Refugee travel document | |
+| `PETITION_NUMBER` | **6** | USCIS petition receipt number | |
+| `NATURALIZATION_NUMBER` | **8** | Certificate of naturalization | |
+
+---
+
+## Category: Insurance
+
+Insurance policy and claims identifiers (non-health).
+
+| Entity Type | Weight | Description | Aliases |
+|-------------|--------|-------------|---------|
+| `POLICY_NUMBER` | **6** | Insurance policy number | |
+| `CLAIM_NUMBER` | **6** | Insurance claim identifier | claim_id |
+| `AGENT_NUMBER` | **4** | Insurance agent identifier | |
+| `ADJUSTER_ID` | **4** | Claims adjuster identifier | |
+| `NAIC_NUMBER` | **3** | NAIC company code | |
+| `AUTO_POLICY_ID` | **6** | Auto insurance policy | |
+| `HOME_POLICY_ID` | **6** | Homeowner's insurance policy | |
+| `LIFE_POLICY_ID` | **7** | Life insurance policy | |
+| `WORKERS_COMP_CLAIM` | **7** | Workers' compensation claim | |
+| `DISABILITY_CLAIM_ID` | **7** | Disability insurance claim | |
+
+---
+
+## Category: Real Estate
+
+Property and real estate identifiers.
+
+| Entity Type | Weight | Description | Aliases |
+|-------------|--------|-------------|---------|
+| `PARCEL_NUMBER` | **4** | Property parcel/APN number | apn |
+| `DEED_NUMBER` | **5** | Deed recording number | |
+| `MORTGAGE_ACCOUNT` | **7** | Mortgage loan number | loan_number |
+| `ESCROW_NUMBER` | **6** | Escrow account identifier | |
+| `MLS_NUMBER` | **3** | Multiple Listing Service ID | |
+| `HOA_ACCOUNT` | **4** | Homeowner association account | |
+| `TITLE_POLICY_NUMBER` | **5** | Title insurance policy | |
+| `PROPERTY_TAX_ID` | **4** | Property tax account | |
+
+---
+
+## Category: Telecommunications
+
+Mobile and telecommunications identifiers.
+
+| Entity Type | Weight | Description | Aliases |
+|-------------|--------|-------------|---------|
+| `IMEI` | **6** | Mobile device IMEI number | |
+| `IMSI` | **7** | International Mobile Subscriber ID | |
+| `ICCID` | **6** | SIM card identifier | sim_number |
+| `MSISDN` | **6** | Mobile subscriber number | |
+| `MEID` | **6** | Mobile Equipment Identifier | |
+| `ESN` | **5** | Electronic Serial Number (legacy) | |
+| `CARRIER_ACCOUNT` | **5** | Mobile carrier account number | |
+| `VOIP_ACCOUNT` | **4** | VoIP service account | |
+| `CALLING_CARD_NUMBER` | **5** | Calling card PIN | |
+| `PORT_NUMBER` | **4** | Number porting authorization | |
+
+---
+
+## Category: Biometric & Genetic
+
+Biometric templates and genetic identifiers.
+
+| Entity Type | Weight | Description | Aliases |
+|-------------|--------|-------------|---------|
+| `FINGERPRINT_TEMPLATE` | **9** | Fingerprint minutiae data | |
+| `FACE_TEMPLATE` | **9** | Facial recognition template | face_encoding |
+| `IRIS_TEMPLATE` | **9** | Iris scan template | |
+| `VOICE_PRINT` | **8** | Voice biometric template | |
+| `RETINAL_SCAN` | **9** | Retinal scan data | |
+| `PALM_PRINT` | **8** | Palm print template | |
+| `GAIT_SIGNATURE` | **7** | Gait analysis data | |
+| `DNA_SEQUENCE` | **10** | DNA/genetic sequence data | |
+| `GENETIC_MARKER` | **9** | Genetic marker/SNP data | snp |
+| `ANCESTRY_ID` | **7** | Genetic ancestry service ID | |
+| `BIOBANK_ID` | **8** | Biobank specimen identifier | |
+
+---
+
+## Category: Military
+
+Military and defense-related identifiers.
+
+| Entity Type | Weight | Description | Aliases |
+|-------------|--------|-------------|---------|
+| `EDIPI` | **8** | DoD Electronic Data Interchange PI | |
+| `SERVICE_NUMBER` | **8** | Military service number | |
+| `MILITARY_ID` | **8** | Military ID card number | cac_number |
+| `VA_CLAIM_NUMBER` | **7** | VA benefits claim identifier | |
+| `DD214_NUMBER` | **8** | Discharge document number | |
+| `MOS_CODE` | **3** | Military Occupational Specialty | |
+| `UNIT_IDENTIFICATION` | **4** | Military unit identifier | uic |
+| `SECURITY_BADGE_ID` | **6** | Facility security badge | |
+| `SIPR_TOKEN` | **9** | SIPRNet token identifier | |
+| `CAC_PIN` | **9** | CAC card PIN | |
+
+---
+
+## Category: Sensitive Files & Context
+
+File patterns and contextual indicators of sensitive content.
+
+| Entity Type | Weight | Description | Detection Pattern |
+|-------------|--------|-------------|-------------------|
+| `DOTENV_FILE` | **9** | Environment variable file | `.env`, `.env.local`, `.env.prod` |
+| `KUBECONFIG` | **10** | Kubernetes configuration | `kubeconfig`, `.kube/config` |
+| `SSH_CONFIG` | **8** | SSH configuration file | `.ssh/config`, `ssh_config` |
+| `DOCKER_CONFIG` | **8** | Docker credentials | `.docker/config.json` |
+| `NPM_RC` | **9** | NPM registry credentials | `.npmrc` with auth tokens |
+| `PYPIRC` | **9** | PyPI credentials | `.pypirc` |
+| `AWS_CREDENTIALS` | **10** | AWS credentials file | `.aws/credentials` |
+| `NETRC` | **9** | FTP/HTTP credentials | `.netrc` |
+| `HTPASSWD` | **8** | Apache password file | `.htpasswd` |
+| `PGP_PRIVATE` | **10** | PGP private key file | `*.asc`, `secring.gpg` |
+| `TERRAFORM_STATE` | **9** | Terraform state (may contain secrets) | `*.tfstate` |
+| `ANSIBLE_VAULT` | **8** | Ansible encrypted content | Contains `$ANSIBLE_VAULT` |
+| `CERTIFICATE_BUNDLE` | **7** | Certificate with private key | PFX, P12, combined PEM |
+| `KEYSTORE` | **9** | Java keystore | `.jks`, `.keystore` |
+| `WALLET_FILE` | **10** | Cryptocurrency wallet | `wallet.dat`, keystore JSON |
+| `HISTORY_FILE` | **6** | Shell command history | `.bash_history`, `.zsh_history` |
+| `SHADOW_FILE` | **10** | Unix shadow passwords | `/etc/shadow` format |
+
+---
+
 ## Category: Temporal
 
 Date and time values.
@@ -291,6 +623,12 @@ Certain entity combinations create elevated risk beyond individual weights:
 | `bulk_quasi_id` | quasi_id (4+) alone | **1.7×** | Re-identification probability |
 | `minor_data` | direct_id + age (<18) | **1.8×** | COPPA, enhanced protection |
 | `classified_data` | classification_marking present | **2.5×** | National security |
+| `ferpa_violation` | student_id + education_record | **1.8×** | FERPA privacy |
+| `biometric_pii` | biometric + direct_id | **2.2×** | BIPA, biometric laws |
+| `genetic_data` | genetic_marker OR dna_sequence | **2.0×** | GINA, genetic privacy |
+| `immigration_status` | immigration_id + direct_id | **1.9×** | Immigration privacy |
+| `military_sensitive` | military_id + classification | **2.5×** | OPSEC |
+| `credential_file` | sensitive_file present | **1.5×** | Credential exposure |
 
 ### Category Mappings for Co-occurrence
 
@@ -343,6 +681,51 @@ classification:
   - DISSEMINATION_CONTROL
   - ITAR_MARKING
   - EAR_MARKING
+
+education:
+  - STUDENT_ID
+  - TRANSCRIPT
+  - ENROLLMENT_ID
+  - FINANCIAL_AID_ID
+  - SCHOOL_RECORD
+  - DISCIPLINARY_RECORD
+  - IEP_ID
+
+biometric:
+  - FINGERPRINT_TEMPLATE
+  - FACE_TEMPLATE
+  - IRIS_TEMPLATE
+  - VOICE_PRINT
+  - RETINAL_SCAN
+  - PALM_PRINT
+  - DNA_SEQUENCE
+  - GENETIC_MARKER
+
+immigration:
+  - A_NUMBER
+  - VISA_NUMBER
+  - I94_NUMBER
+  - GREEN_CARD_NUMBER
+  - EAD_NUMBER
+  - SEVIS_ID
+  - NATURALIZATION_NUMBER
+
+military:
+  - EDIPI
+  - SERVICE_NUMBER
+  - MILITARY_ID
+  - DD214_NUMBER
+  - SIPR_TOKEN
+  - CAC_PIN
+
+sensitive_file:
+  - DOTENV_FILE
+  - KUBECONFIG
+  - AWS_CREDENTIALS
+  - TERRAFORM_STATE
+  - WALLET_FILE
+  - SHADOW_FILE
+  - PGP_PRIVATE
 ```
 
 ---
@@ -357,11 +740,21 @@ classification:
 | Contact Information | 7 |
 | Financial | 17 |
 | Digital Identifiers | 12 |
-| Credentials & Secrets | 40 |
+| Credentials & Secrets | 115 |
 | Government & Classification | 13 |
+| Education / FERPA | 10 |
+| Legal | 10 |
+| Vehicle & Transportation | 11 |
+| Immigration | 9 |
+| Insurance | 10 |
+| Real Estate | 8 |
+| Telecommunications | 10 |
+| Biometric & Genetic | 11 |
+| Military | 10 |
+| Sensitive Files & Context | 17 |
 | Temporal | 4 |
 | Healthcare Context | 6 |
-| **Total Unique Entity Types** | **~130** |
+| **Total Unique Entity Types** | **~303** |
 
 ---
 
@@ -370,6 +763,8 @@ classification:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-01 | Initial registry derived from scrubIQ modules |
+| 1.1 | 2026-01 | Added 115 credential/secret types (AI/ML, Cloud, CI/CD, SaaS, etc.) |
+| 1.2 | 2026-01 | Added 96 entity types: Education/FERPA, Legal, Vehicle, Immigration, Insurance, Real Estate, Telecommunications, Biometric/Genetic, Military, Sensitive Files |
 
 ---
 
