@@ -27,8 +27,7 @@ This document defines the core principles, boundaries, and design decisions for 
 │                                                                              │
 │  1. OPENRISK IS A STANDARD FOR RISK, NOT JUST LABELS                        │
 │     The unique value is: Risk = Content × Exposure                           │
-│     Same SSN, different context, different risk.                             │
-│     Without exposure context, it's just another classification tool.         │
+│     Same SSN, different context, different risk.                             │        │
 │                                                                              │
 │  2. THE SCANNER IS AN ADAPTER, NOT A SEPARATE PRODUCT                        │
 │     Scanner produces NormalizedInput just like Macie/DLP/Purview adapters.   │
@@ -42,9 +41,9 @@ This document defines the core principles, boundaries, and design decisions for 
 │                                                                              │
 │  4. ADAPTERS NORMALIZE, THEY DON'T REPLACE                                   │
 │     Macie adapter normalizes Macie output to OpenRisk format.                │
-│     DLP adapter normalizes DLP output to OpenRisk format.                    │
+│     GCP adapter normalizes GCP output to OpenRisk format.                    │
 │     Scanner adapter normalizes scanner output to OpenRisk format.            │
-│     All adapters produce identical NormalizedInput structure.                │
+│     All adapters produce identical Normalized structure.                │
 │                                                                              │
 │  5. CONSERVATIVE UNION FOR DEFENSE IN DEPTH                                  │
 │     When multiple adapters run, take max confidence per entity type.         │
