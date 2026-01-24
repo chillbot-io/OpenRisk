@@ -1221,7 +1221,7 @@ def should_scan(
 | Labels exist, **no encryption** | ✓ | Protection gap |
 | Labels exist, **stale >1yr** | ✓ | Verify still accurate |
 | Labels: **SSN @ 0.65 confidence** | ✓ | High risk + uncertain |
-| Labels: **EMAIL @ 0.65 confidence** | ✗ | Low risk, who cares |
+| Labels: **EMAIL @ 0.35 confidence** | ✗ | Lower risk, trust it |
 | Labels: **CREDIT_CARD @ 0.90 confidence** | ✗ | High confidence, trust it |
 
 ---
