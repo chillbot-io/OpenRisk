@@ -68,9 +68,9 @@ Names and demographic identifiers.
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
 | `NAME` | **5** | Generic person name | full_name |
-| `NAME_PATIENT` | **6** | Patient name (healthcare context) | patient |
+| `NAME_PATIENT` | **8** | Patient name (healthcare context) | patient |
 | `NAME_PROVIDER` | **4** | Healthcare provider name | doctor, physician, hcw |
-| `NAME_RELATIVE` | **5** | Family member/emergency contact | |
+| `NAME_RELATIVE` | **7** | Family member/emergency contact | |
 | `DATE_DOB` | **6** | Date of birth | dob, birthdate |
 | `DATE` | **3** | Generic date | |
 | `AGE` | **4** | Age in years/months | |
