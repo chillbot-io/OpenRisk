@@ -109,7 +109,7 @@ Payment instruments and financial identifiers.
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
 | `CREDIT_CARD` | **9** | Credit/debit card number | cc, card_number |
-| `BANK_ACCOUNT` | **8** | Bank account number | account_number |
+| `BANK_ACCOUNT` | **7** | Bank account number | account_number |
 | `BANK_ROUTING` | **6** | ABA routing number | aba, routing_number |
 | `IBAN` | **7** | International Bank Account Number | |
 | `SWIFT_BIC` | **5** | SWIFT/BIC code | bic |
@@ -128,14 +128,14 @@ Payment instruments and financial identifiers.
 
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
-| `BITCOIN_ADDRESS` | **7** | Bitcoin wallet address | btc_address |
-| `ETHEREUM_ADDRESS` | **7** | Ethereum wallet address | eth_address |
-| `CRYPTO_SEED_PHRASE` | **10** | BIP-39 mnemonic seed phrase | seed_phrase, mnemonic |
-| `SOLANA_ADDRESS` | **6** | Solana wallet address | |
-| `CARDANO_ADDRESS` | **6** | Cardano wallet address | |
-| `LITECOIN_ADDRESS` | **6** | Litecoin wallet address | |
-| `DOGECOIN_ADDRESS` | **5** | Dogecoin wallet address | |
-| `XRP_ADDRESS` | **6** | XRP/Ripple address | |
+| `BITCOIN_ADDRESS` | **8** | Bitcoin wallet address | btc_address |
+| `ETHEREUM_ADDRESS` | **8** | Ethereum wallet address | eth_address |
+| `CRYPTO_SEED_PHRASE` | **9** | BIP-39 mnemonic seed phrase | seed_phrase, mnemonic |
+| `SOLANA_ADDRESS` | **8** | Solana wallet address | |
+| `CARDANO_ADDRESS` | **8** | Cardano wallet address | |
+| `LITECOIN_ADDRESS` | **8** | Litecoin wallet address | |
+| `DOGECOIN_ADDRESS` | **8** | Dogecoin wallet address | |
+| `XRP_ADDRESS` | **8** | XRP/Ripple address | |
 
 ---
 
