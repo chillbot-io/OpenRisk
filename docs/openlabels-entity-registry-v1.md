@@ -104,7 +104,7 @@ Payment instruments and financial identifiers.
 
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
-| `CREDIT_CARD` | **8** | Credit/debit card number | cc, card_number |
+| `CREDIT_CARD` | **9** | Credit/debit card number | cc, card_number |
 | `BANK_ACCOUNT` | **8** | Bank account number | account_number |
 | `BANK_ROUTING` | **6** | ABA routing number | aba, routing_number |
 | `IBAN` | **7** | International Bank Account Number | |
