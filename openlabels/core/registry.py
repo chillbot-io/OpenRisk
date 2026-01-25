@@ -7,7 +7,7 @@ This is the source of truth for entity classification.
 See docs/openlabels-entity-registry-v1.md for the full specification.
 """
 
-from typing import Dict, List, Set
+from typing import Dict, List
 from dataclasses import dataclass
 
 

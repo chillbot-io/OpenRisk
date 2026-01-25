@@ -19,7 +19,7 @@ Entity Types:
 
 import re
 import hashlib
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 from ..types import Span, Tier
 from .base import BaseDetector

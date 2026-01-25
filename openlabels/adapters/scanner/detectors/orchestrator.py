@@ -36,7 +36,7 @@ from .checksum import ChecksumDetector
 from .patterns import PatternDetector
 from .additional_patterns import AdditionalPatternDetector
 from .dictionaries import DictionaryDetector
-from .structured import extract_structured_phi, StructuredExtractionResult, post_process_ocr, map_span_to_original
+from .structured import extract_structured_phi, post_process_ocr, map_span_to_original
 
 # Domain-specific detectors
 from .secrets import SecretsDetector

@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Union
 
-from .types import Span, DetectionResult, Tier
+from .types import DetectionResult
 from .config import Config
 
 logger = logging.getLogger(__name__)

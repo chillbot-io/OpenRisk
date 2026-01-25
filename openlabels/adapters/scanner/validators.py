@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 from typing import Optional, Union
 
-from ..constants import MAX_FILE_SIZE_BYTES, MAX_FILENAME_LENGTH
+from .constants import MAX_FILE_SIZE_BYTES, MAX_FILENAME_LENGTH
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Dict, Any, TYPE_CHECKING
 
-from ..constants import (
+from .constants import (
     MIN_NATIVE_TEXT_LENGTH,
     MAX_DOCUMENT_PAGES,
     MAX_SPREADSHEET_ROWS,
