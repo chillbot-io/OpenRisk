@@ -49,3 +49,8 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Calibration (generated files)
+calibration/scoring_results.jsonl
+calibration/labeling_sheet.csv
+calibration/analysis_summary.json
