@@ -206,6 +206,12 @@ class Span:
     confidence: float
     detector: str
     tier: Tier
+    # Optional fields for pipeline processing
+    safe_harbor_value: str = None  # Replacement token for redaction
+    needs_review: bool = False  # Flag for LLM verification
+    review_reason: str = None  # Why review is needed
+    coref_anchor_value: str = None  # Links repeated mentions to anchor
+    token: str = None  # Assigned token for consistent replacement
 
     def __post_init__(self):
         if self.start < 0:
@@ -244,7 +250,7 @@ class Span:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        result = {
             "start": self.start,
             "end": self.end,
             "text": self.text,
@@ -253,6 +259,9 @@ class Span:
             "detector": self.detector,
             "tier": self.tier.name,
         }
+        if self.token:
+            result["token"] = self.token
+        return result
 
 
 @dataclass
