@@ -131,7 +131,7 @@ class Detector:
         Returns:
             DetectionResult containing detected spans and extracted text.
         """
-        from .files.extractor import extract_text
+        from .extractor import extract_text
 
         start_time = time.perf_counter()
         path = Path(path)

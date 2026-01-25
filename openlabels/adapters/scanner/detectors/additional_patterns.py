@@ -241,17 +241,3 @@ class AdditionalPatternDetector(BaseDetector):
                     continue
         
         return spans
-
-
-# --- ORCHESTRATOR REGISTRATION ---
-# Add this to orchestrator.py in the _init_detectors() method:
-#
-# from .additional_patterns import AdditionalPatternDetector
-#
-# Then in the detector list, add:
-#
-#     AdditionalPatternDetector(),
-#
-# Or if using lazy loading:
-#
-#     ("additional_patterns", lambda: AdditionalPatternDetector()),

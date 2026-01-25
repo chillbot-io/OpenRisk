@@ -7,6 +7,7 @@ Processes the calibration dataset and generates scoring results for analysis.
 
 import json
 import csv
+import sys
 import yaml
 import random
 from pathlib import Path
@@ -14,6 +15,8 @@ from collections import Counter
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 
+# Ensure local imports work regardless of working directory
+sys.path.insert(0, str(Path(__file__).parent))
 from scorer import score_entities, RiskTier, ENTITY_WEIGHTS
 
 

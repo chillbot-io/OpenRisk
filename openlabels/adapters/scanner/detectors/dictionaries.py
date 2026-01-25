@@ -138,73 +138,67 @@ class DictionaryDetector(BaseDetector):
             return False
 
         loaded_any = False
+        loaded_counts = {}
 
         # Load drugs (min_length=4 to avoid "ABC", "Heart" false positives)
-        # Also filter common words via DRUG_DENY_LIST
         drugs_file = self.dictionaries_dir / "drugs.txt"
         if drugs_file.exists():
             self._drugs = self._load_file(drugs_file, min_length=4, deny_list=DRUG_DENY_LIST)
-            logger.info(f"Loaded {len(self._drugs)} drug names")
+            loaded_counts['drugs'] = len(self._drugs)
             loaded_any = True
 
-        # Load diagnoses
         diagnoses_file = self.dictionaries_dir / "diagnoses.txt"
         if diagnoses_file.exists():
             self._diagnoses = self._load_file(diagnoses_file, min_length=4)
-            logger.info(f"Loaded {len(self._diagnoses)} diagnoses")
+            loaded_counts['diagnoses'] = len(self._diagnoses)
             loaded_any = True
 
-        # Load facilities (min_length=5 for better precision)
+        # min_length=5 for better precision
         facilities_file = self.dictionaries_dir / "facilities.txt"
         if facilities_file.exists():
             self._facilities = self._load_file(facilities_file, min_length=5)
-            logger.info(f"Loaded {len(self._facilities)} facilities")
+            loaded_counts['facilities'] = len(self._facilities)
             loaded_any = True
 
-        # Load lab tests
         lab_tests_file = self.dictionaries_dir / "lab_tests.txt"
         if lab_tests_file.exists():
             self._lab_tests = self._load_file(lab_tests_file, min_length=3)
-            logger.info(f"Loaded {len(self._lab_tests)} lab tests")
+            loaded_counts['lab_tests'] = len(self._lab_tests)
             loaded_any = True
 
-        # Load payers
         payers_file = self.dictionaries_dir / "payers.txt"
         if payers_file.exists():
             self._payers = self._load_file(payers_file, min_length=4)
-            logger.info(f"Loaded {len(self._payers)} payers")
+            loaded_counts['payers'] = len(self._payers)
             loaded_any = True
 
-        # Load professions (NOT context-only - real PHI per i2b2)
         professions_file = self.dictionaries_dir / "professions.txt"
         if professions_file.exists():
             self._professions = self._load_file(professions_file, min_length=4)
-            logger.info(f"Loaded {len(self._professions)} professions")
+            loaded_counts['professions'] = len(self._professions)
             loaded_any = True
 
-        # Load geo subdirectory
         geo_dir = self.dictionaries_dir / "geo"
         if geo_dir.is_dir():
-            # Load cities (min_length=4 to avoid short common words)
             cities_file = geo_dir / "cities.txt"
             if cities_file.exists():
                 self._cities = self._load_file(cities_file, min_length=4)
-                logger.info(f"Loaded {len(self._cities)} cities")
+                loaded_counts['cities'] = len(self._cities)
                 loaded_any = True
-            
-            # Load states (min_length=2 to include abbreviations like "CA")
+
             states_file = geo_dir / "states.txt"
             if states_file.exists():
                 self._states = self._load_file(states_file, min_length=2)
-                logger.info(f"Loaded {len(self._states)} states")
+                loaded_counts['states'] = len(self._states)
                 loaded_any = True
-        
+
         self._loaded = loaded_any
-        
-        # Build Aho-Corasick automaton for fast matching
+
         if loaded_any:
             self._build_automaton()
-        
+            total = sum(loaded_counts.values())
+            logger.info(f"Loaded {total} dictionary terms: {loaded_counts}")
+
         return loaded_any
 
     def _load_file(
