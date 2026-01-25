@@ -1,4 +1,4 @@
-# OpenRisk Calibration Plan
+# OpenLabels Calibration Plan
 
 **Step-by-Step Instructions for Score Calibration**
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document provides explicit instructions for calibrating the OpenRisk scoring algorithm using your annotated dataset. You will:
+This document provides explicit instructions for calibrating the OpenLabels scoring algorithm using your annotated dataset. You will:
 
 1. Prepare the calibration dataset
 2. Label a subset with expected risk tiers
@@ -57,10 +57,10 @@ Your data is in JSONL format with this structure:
 
 ### Step 1.2: Create Entity Mapping
 
-Your dataset uses labels that need mapping to OpenRisk entity types. Create a file `entity_mapping.yaml`:
+Your dataset uses labels that need mapping to OpenLabels entity types. Create a file `entity_mapping.yaml`:
 
 ```yaml
-# Dataset label → OpenRisk entity type
+# Dataset label → OpenLabels entity type
 NAME: null              # Ignore generic names
 NAME_PATIENT: full_name
 NAME_PROVIDER: null     # Ignore provider names
@@ -84,7 +84,7 @@ DIAGNOSIS: diagnosis    # Add this mapping
 **Your task:**
 1. Open each JSONL file
 2. Extract all unique labels: `cat *.jsonl | jq -r '.entities[].label' | sort | uniq`
-3. Map each label to an OpenRisk entity type (or null to ignore)
+3. Map each label to an OpenLabels entity type (or null to ignore)
 4. Save as `entity_mapping.yaml`
 
 ### Step 1.3: Convert Dataset to Scoring Input
@@ -101,14 +101,14 @@ with open('entity_mapping.yaml') as f:
     ENTITY_MAP = yaml.safe_load(f)
 
 def process_sample(sample):
-    """Convert a sample to OpenRisk scoring input."""
+    """Convert a sample to OpenLabels scoring input."""
     entity_counts = Counter()
 
     for entity in sample.get('entities', []):
         label = entity['label']
-        openrisk_type = ENTITY_MAP.get(label)
-        if openrisk_type:
-            entity_counts[openrisk_type] += 1
+        openlabels_type = ENTITY_MAP.get(label)
+        if openlabels_type:
+            entity_counts[openlabels_type] += 1
 
     return {
         'id': sample['id'],
@@ -239,19 +239,19 @@ Entities: {}
 
 ### Step 3.1: Implement the Scorer
 
-Create `openrisk_scorer.py`:
+Create `openlabels_scorer.py`:
 
 ```python
 import math
 
-# Entity weights from OpenRisk spec
+# Entity weights from OpenLabels spec
 ENTITY_WEIGHTS = {
     'ssn': 9,
     'aadhaar': 9,
     'passport': 9,
-    'drivers_license': 9,
+    'drivers_license': 7,
     'tax_id': 8,
-    'credit_card': 7,
+    'credit_card': 9,
     'bank_account': 7,
     'mrn': 7,
     'diagnosis': 8,
@@ -260,11 +260,11 @@ ENTITY_WEIGHTS = {
     'lab_result': 7,
     'health_plan_id': 6,
     'full_name': 5,
-    'physical_address': 4,
-    'email': 3,
-    'phone': 3,
-    'ip_address': 3,
-    'date_of_birth': 2,
+    'physical_address': 5,
+    'email': 5,
+    'phone': 4,
+    'ip_address': 4,
+    'date_of_birth': 6,
     'age': 2,
     'gender': 2,
     'postal_code': 2,
@@ -313,7 +313,7 @@ def get_multiplier(entities):
 
 def calculate_score(entities, confidence=0.90):
     """
-    Calculate OpenRisk score.
+    Calculate OpenLabels score.
 
     entities: dict of {entity_type: count}
     confidence: assumed confidence (since ground truth has no confidence)
@@ -357,7 +357,7 @@ def score_to_tier(score):
 ```python
 import csv
 import json
-from openrisk_scorer import calculate_score, score_to_tier
+from openlabels_scorer import calculate_score, score_to_tier
 
 # Load labeled samples
 results = []
@@ -429,7 +429,7 @@ Look for patterns:
 
 ### Step 4.3: Adjust Parameters
 
-Based on your analysis, adjust in `openrisk_scorer.py`:
+Based on your analysis, adjust in `openlabels_scorer.py`:
 
 **If emails/phones score too high:**
 ```python
@@ -474,7 +474,7 @@ All samples from `negative.jsonl` should score Minimal:
 
 ```python
 import json
-from openrisk_scorer import calculate_score, score_to_tier
+from openlabels_scorer import calculate_score, score_to_tier
 
 failures = []
 with open('negative.jsonl') as f:
@@ -494,7 +494,7 @@ print(f"Negative sample failures: {len(failures)}")
 Create explicit test cases:
 
 ```python
-from openrisk_scorer import calculate_score, score_to_tier
+from openlabels_scorer import calculate_score, score_to_tier
 
 test_cases = [
     # (entities, expected_tier, description)
@@ -556,7 +556,7 @@ for adv_type, scores in by_type.items():
 Create `calibration_results.md`:
 
 ```markdown
-# OpenRisk Calibration Results
+# OpenLabels Calibration Results
 
 ## Final Parameters
 
@@ -599,7 +599,7 @@ January 2026
 
 ### Step 6.2: Commit Calibrated Parameters
 
-Once validated, update the official OpenRisk specification with your calibrated values.
+Once validated, update the official OpenLabels specification with your calibrated values.
 
 ---
 
