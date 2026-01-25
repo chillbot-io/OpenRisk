@@ -56,6 +56,8 @@ Protected Health Information under HIPAA and similar regulations.
 | `ENCOUNTER_ID` | **5** | Healthcare encounter/visit ID | visit_id |
 | `ACCESSION_ID` | **5** | Lab accession number | specimen_id |
 | `PHARMACY_ID` | **5** | Pharmacy identifiers (RXBIN, RXPCN) | rxbin, rxpcn |
+| `PATIENT_ACCOUNT` | **6** | Patient account number (context: "account", "acct") | account_number |
+| `DATE_MEDICAL` | **3** | Date in medical context (admission, discharge, service) | admission_date, discharge_date, service_date |
 
 ---
 
