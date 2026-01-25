@@ -20,14 +20,15 @@ This document defines OpenLabels, a portable format for data sensitivity labels.
 3. [Data Model](#3-data-model)
 4. [Serialization](#4-serialization)
 5. [Transport](#5-transport)
-6. [Algorithms](#6-algorithms)
-7. [Conformance](#7-conformance)
-8. [Security Considerations](#8-security-considerations)
-9. [IANA Considerations](#9-iana-considerations)
-10. [References](#10-references)
-11. [Appendix A: JSON Schema](#appendix-a-json-schema)
-12. [Appendix B: Entity Type Registry](#appendix-b-entity-type-registry)
-13. [Appendix C: Examples](#appendix-c-examples)
+6. [Index](#6-index)
+7. [Algorithms](#7-algorithms)
+8. [Conformance](#8-conformance)
+9. [Security Considerations](#9-security-considerations)
+10. [IANA Considerations](#10-iana-considerations)
+11. [References](#11-references)
+12. [Appendix A: JSON Schema](#appendix-a-json-schema)
+13. [Appendix B: Entity Type Registry](#appendix-b-entity-type-registry)
+14. [Appendix C: Examples](#appendix-c-examples)
 
 ---
 
@@ -55,21 +56,31 @@ OpenLabels separates two concerns:
 
 This separation enables cross-system correlation while respecting that risk depends on context.
 
-### 1.3 Scope
+### 1.3 Label Types
+
+OpenLabels supports two types of labels:
+
+| Type | Storage | Source of Truth |
+|------|---------|-----------------|
+| **Embedded Label** | Full label data in file's native metadata | The file itself |
+| **Virtual Label** | Pointer (labelID + hash) in extended attributes | The index |
+
+### 1.4 Scope
 
 This specification defines:
 
 - The Label data model
 - JSON serialization format
-- Transport mechanisms (trailer, sidecar, native metadata)
-- Hash computation algorithm
+- Transport mechanisms (embedded and virtual)
+- The labelID and content hash model
+- Index requirements
 - Conformance requirements
 
 This specification does NOT define:
 
 - Detection algorithms (how labels are produced)
 - Risk scoring formulas (how risk is computed from labels)
-- Index storage formats (implementation-specific)
+- Index storage implementation (database-specific)
 
 ---
 
@@ -81,33 +92,83 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 |------|------------|
 | **Label** | A single detected entity with type, confidence, detector, and hash |
 | **Label Set** | A collection of labels for a single file or data unit |
+| **labelID** | Immutable identifier assigned to a file when first labeled |
+| **Content Hash** | SHA-256 hash of file content, changes when file is modified |
+| **Embedded Label** | Full Label Set stored in file's native metadata |
+| **Virtual Label** | Pointer stored in extended attributes, resolved via index |
 | **Entity Type** | The category of sensitive data (e.g., "SSN", "CREDIT_CARD") |
 | **Confidence** | A score from 0.0 to 1.0 indicating detection certainty |
 | **Detector** | The method used to detect the entity (checksum, pattern, ml, structured) |
-| **Label Hash** | A truncated hash of the detected value for correlation |
-| **Trailer** | Label data appended to a file |
-| **Sidecar** | Label data stored in an adjacent file |
-| **Reader** | An implementation that parses Label Sets |
-| **Writer** | An implementation that produces Label Sets |
+| **Index** | Database storing label data for virtual labels |
+| **Reader** | An implementation that reads labels (embedded or virtual) |
+| **Writer** | An implementation that writes labels (embedded or virtual) |
 
 ---
 
 ## 3. Data Model
 
-### 3.1 Label Set
+### 3.1 labelID
 
-A Label Set is the top-level structure containing all labels for a data unit.
+The labelID is the immutable anchor for all label data associated with a file.
+
+#### 3.1.1 Format
+
+```
+labelID = "ol_" + random_hex(12)
+```
+
+Example: `ol_7f3a9b2c4d5e`
+
+#### 3.1.2 Properties
+
+- MUST be assigned when a file is first labeled
+- MUST NOT change for the lifetime of the labeled file
+- MUST be unique within a tenant
+- SHOULD be globally unique (collision probability negligible with 48 bits)
+
+#### 3.1.3 Generation
+
+```python
+import secrets
+
+def generate_label_id() -> str:
+    return "ol_" + secrets.token_hex(6)
+```
+
+### 3.2 Content Hash
+
+The content hash tracks file versions.
+
+#### 3.2.1 Format
+
+```
+content_hash = sha256(file_content)[:12]
+```
+
+Example: `e3b0c44298fc`
+
+#### 3.2.2 Properties
+
+- MUST be recomputed when file content changes
+- MUST use SHA-256 algorithm
+- MUST be truncated to first 12 hexadecimal characters (48 bits)
+- Used to detect file modifications and track versions
+
+### 3.3 Label Set
+
+A Label Set contains all labels for a data unit.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `v` | integer | REQUIRED | Specification version. MUST be `1` for this version. |
+| `id` | string | REQUIRED | The labelID. Format: `ol_` + 12 hex chars. |
+| `hash` | string | REQUIRED | Content hash. 12 lowercase hex characters. |
 | `labels` | array | REQUIRED | Array of Label objects. MAY be empty. |
 | `src` | string | REQUIRED | Source identifier. Format: `generator:version`. |
 | `ts` | integer | REQUIRED | Unix timestamp (seconds since epoch) when labels were generated. |
-| `file` | object | OPTIONAL | File reference. REQUIRED for sidecars. See Section 3.3. |
-| `x` | object | OPTIONAL | Extension data. See Section 3.4. |
+| `x` | object | OPTIONAL | Extension data. See Section 3.5. |
 
-### 3.2 Label
+### 3.4 Label
 
 A Label describes a single detected sensitive entity.
 
@@ -116,21 +177,11 @@ A Label describes a single detected sensitive entity.
 | `t` | string | REQUIRED | Entity type. MUST be a registered type (Appendix B) or prefixed with `x-`. |
 | `c` | number | REQUIRED | Confidence score. MUST be in range [0.0, 1.0]. |
 | `d` | string | REQUIRED | Detector type. MUST be one of: `checksum`, `pattern`, `ml`, `structured`. |
-| `h` | string | REQUIRED | Label hash. MUST be exactly 6 lowercase hexadecimal characters. |
+| `h` | string | REQUIRED | Value hash. MUST be exactly 6 lowercase hexadecimal characters. |
 | `n` | integer | OPTIONAL | Occurrence count. MUST be >= 1. Default is 1. |
-| `x` | object | OPTIONAL | Extension data. See Section 3.4. |
+| `x` | object | OPTIONAL | Extension data. See Section 3.5. |
 
-### 3.3 File Reference
-
-For sidecar transport, a file reference links the Label Set to its source file.
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | REQUIRED | Original filename (basename only, no path). |
-| `size` | integer | REQUIRED | File size in bytes. |
-| `hash` | string | OPTIONAL | File content hash. Format: `algorithm:hexdigest`. |
-
-### 3.4 Extensions
+### 3.5 Extensions
 
 Implementations MAY include additional data in the `x` field at the Label Set or Label level.
 
@@ -138,7 +189,7 @@ Implementations MAY include additional data in the `x` field at the Label Set or
 - Readers MUST ignore unrecognized extension fields
 - Writers MUST NOT require extensions for basic interoperability
 
-### 3.5 Detector Types
+### 3.6 Detector Types
 
 | Value | Description | Typical Confidence |
 |-------|-------------|-------------------|
@@ -178,168 +229,253 @@ Readers MUST ignore unrecognized fields without error. This enables forward comp
 
 ## 5. Transport
 
-Labels can be attached to files via three mechanisms.
+Labels are transported via two mechanisms based on file type capabilities.
 
-### 5.1 Trailer Format
-
-Trailers append label data to the end of a file.
-
-#### 5.1.1 Structure
+### 5.1 Decision Tree
 
 ```
-FILE = CONTENT || START_MARKER || LABEL_JSON || END_MARKER
+┌─────────────────────────────────────────┐
+│   Does file format support native       │
+│   metadata? (PDF, DOCX, images, etc.)   │
+│                                         │
+│        YES                    NO        │
+│         │                      │        │
+│         ▼                      ▼        │
+│   ┌───────────┐         ┌───────────┐  │
+│   │ Embedded  │         │ Virtual   │  │
+│   │ Label     │         │ Label     │  │
+│   │           │         │           │  │
+│   │ Full JSON │         │ xattr:    │  │
+│   │ in native │         │ id:hash   │  │
+│   │ metadata  │         │           │  │
+│   └───────────┘         └─────┬─────┘  │
+│                               │        │
+│                               ▼        │
+│                        ┌───────────┐   │
+│                        │  Index    │   │
+│                        │  (query)  │   │
+│                        └───────────┘   │
+└─────────────────────────────────────────┘
 ```
 
-Where:
+### 5.2 Embedded Labels
 
-| Component | Value | Bytes |
-|-----------|-------|-------|
-| CONTENT | Original file content | Variable |
-| START_MARKER | `\n---OPENLABEL-V1---\n` | 21 |
-| LABEL_JSON | Compact JSON Label Set | Variable |
-| END_MARKER | `\n---END-OPENLABEL---` | 21 |
+For files with native metadata support, the full Label Set is embedded.
 
-#### 5.1.2 Byte Sequences
+#### 5.2.1 PDF Files
+
+- Store in XMP metadata
+- Namespace: `http://openlabels.dev/ns/1.0/`
+- Property: `openlabels`
+- Value: Compact JSON Label Set
+
+#### 5.2.2 Office Documents (DOCX, XLSX, PPTX)
+
+- Store in Custom Document Properties
+- Property name: `openlabels`
+- Value: Compact JSON Label Set
+
+#### 5.2.3 Images (JPEG, PNG, TIFF, WebP)
+
+- Store in XMP metadata (preferred)
+- Fallback: EXIF UserComment field
+- Namespace: `http://openlabels.dev/ns/1.0/`
+- Property: `openlabels`
+
+#### 5.2.4 Requirements
+
+- Embedded labels MUST NOT alter the visual/functional content of the file
+- Writers MUST use compact JSON (no unnecessary whitespace)
+- If metadata size limit is exceeded, implementation SHOULD fall back to virtual labels
+
+#### 5.2.5 Applicable File Types
+
+| Format | Metadata Location | Size Limit |
+|--------|-------------------|------------|
+| PDF | XMP | ~100KB typical |
+| DOCX/XLSX/PPTX | Custom Properties | ~32KB |
+| JPEG | XMP or EXIF | ~64KB |
+| PNG | XMP (iTXt chunk) | ~2GB theoretical |
+| TIFF | XMP | ~100KB typical |
+| WebP | XMP | ~100KB typical |
+| MP4/MOV | XMP | Varies |
+
+### 5.3 Virtual Labels
+
+For files without native metadata support, a pointer is stored in extended attributes.
+
+#### 5.3.1 Extended Attribute Format
+
+| Platform | Attribute Name | Value Format |
+|----------|----------------|--------------|
+| Linux | `user.openlabels` | `labelID:content_hash` |
+| macOS | `com.openlabels.label` | `labelID:content_hash` |
+| Windows | NTFS ADS `openlabels` | `labelID:content_hash` |
+
+#### 5.3.2 Value Format
 
 ```
-START_MARKER (hex): 0A 2D 2D 2D 4F 50 45 4E 4C 41 42 45 4C 2D 56 31 2D 2D 2D 0A
-END_MARKER (hex):   0A 2D 2D 2D 45 4E 44 2D 4F 50 45 4E 4C 41 42 45 4C 2D 2D 2D
+xattr_value = labelID ":" content_hash
 ```
 
-#### 5.1.3 Requirements
+Example:
+```
+ol_7f3a9b2c4d5e:e3b0c44298fc
+```
 
-- LABEL_JSON MUST be compact (no newlines within JSON)
-- LABEL_JSON MUST be valid UTF-8
-- Writers MUST NOT modify CONTENT
-- The END_MARKER MUST NOT be followed by additional data
+#### 5.3.3 Operations
 
-#### 5.1.4 Reading Trailers
+**Writing:**
+```bash
+# Linux
+setfattr -n user.openlabels -v "ol_7f3a9b2c4d5e:e3b0c44298fc" file.csv
 
-To extract labels from a trailer:
+# macOS
+xattr -w com.openlabels.label "ol_7f3a9b2c4d5e:e3b0c44298fc" file.csv
 
-1. Search backward from end of file for END_MARKER
-2. If not found, file has no trailer
-3. Search backward from END_MARKER position for START_MARKER
-4. Extract bytes between START_MARKER and END_MARKER
-5. Parse as JSON Label Set
+# Windows (PowerShell)
+Set-Content -Path file.csv:openlabels -Value "ol_7f3a9b2c4d5e:e3b0c44298fc"
+```
 
-#### 5.1.5 Applicable File Types
+**Reading:**
+```bash
+# Linux
+getfattr -n user.openlabels file.csv
 
-Trailers are RECOMMENDED for text-based files:
+# macOS
+xattr -p com.openlabels.label file.csv
+
+# Windows (PowerShell)
+Get-Content -Path file.csv:openlabels
+```
+
+#### 5.3.4 Cloud Storage
+
+| Platform | Mechanism | Key |
+|----------|-----------|-----|
+| AWS S3 | Object metadata | `x-amz-meta-openlabels` |
+| Google Cloud Storage | Custom metadata | `openlabels` |
+| Azure Blob Storage | Metadata | `openlabels` |
+
+#### 5.3.5 Applicable File Types
+
+Virtual labels are used for files without native metadata:
 
 - Plain text: `.txt`, `.log`, `.md`
 - Data files: `.csv`, `.tsv`, `.json`, `.jsonl`
 - Config files: `.yaml`, `.yml`, `.xml`, `.ini`
 - Source code: `.py`, `.js`, `.java`, `.go`, etc.
 - Query files: `.sql`
-
-Trailers MUST NOT be used for:
-
-- Binary files (images, PDFs, executables)
-- Archives (`.zip`, `.tar`, `.gz`)
-- Files where appending changes semantics
-
-### 5.2 Sidecar Format
-
-Sidecars store labels in an adjacent file.
-
-#### 5.2.1 Naming Convention
-
-For a file named `example.pdf`, the sidecar MUST be named `example.pdf.openlabel.json`.
-
-```
-/data/
-├── document.pdf
-├── document.pdf.openlabel.json    ← Sidecar
-├── image.png
-└── image.png.openlabel.json       ← Sidecar
-```
-
-#### 5.2.2 Requirements
-
-- Sidecar MUST contain a valid Label Set JSON
-- Sidecar MUST include the `file` field (Section 3.3)
-- Sidecar SHOULD be in the same directory as the source file
-- Sidecar permissions SHOULD match the source file
-
-#### 5.2.3 Applicable File Types
-
-Sidecars are RECOMMENDED for:
-
-- Binary files: images, PDFs, videos
 - Archives: `.zip`, `.tar`, `.gz`, `.7z`
 - Email: `.eml`, `.msg`
-- Files where trailers are not possible
 
-### 5.3 Native Metadata
+#### 5.3.6 Resolution
 
-Labels MAY be embedded in native file metadata.
+To read a virtual label:
 
-#### 5.3.1 PDF Files
-
-- Store in XMP metadata
-- Namespace: `http://openlabels.dev/ns/1.0/`
-- Property: `openlabels:data`
-- Value: Compact JSON Label Set
-
-#### 5.3.2 Office Documents (DOCX, XLSX, PPTX)
-
-- Store in Custom Properties
-- Property name: `openlabels`
-- Value: Compact JSON Label Set
-
-#### 5.3.3 Images (JPEG, PNG, TIFF)
-
-- Store in XMP metadata (preferred) or EXIF UserComment
-- Same namespace and property as PDF
-
-#### 5.3.4 Requirements
-
-- Native metadata MUST NOT alter the visual/functional content
-- If native metadata exceeds size limits, use sidecar instead
+1. Read extended attribute from file
+2. Parse `labelID:content_hash`
+3. Query index for Label Set by labelID
+4. Optionally verify content_hash matches current file
 
 ### 5.4 Transport Priority
 
 When reading labels, implementations SHOULD check in order:
 
-1. Sidecar (if exists)
-2. Native metadata (if supported)
-3. Trailer (if applicable file type)
-
-This allows sidecars to override embedded labels when needed.
+1. Native metadata (for supported file types)
+2. Extended attributes (for all file types)
 
 ---
 
-## 6. Algorithms
+## 6. Index
 
-### 6.1 Label Hash Computation
+The index stores Label Sets for virtual labels and provides query capabilities.
 
-The label hash enables cross-system correlation without exposing sensitive values.
+### 6.1 Requirements
 
-#### 6.1.1 Algorithm
+- Index MUST NOT leave the user's tenant
+- Index MUST support lookup by labelID
+- Index MUST support lookup by content_hash
+- Index SHOULD support querying by entity type
+- Index SHOULD support querying by risk score
+
+### 6.2 Schema (Informative)
+
+Implementations MAY use any storage backend. A reference schema:
+
+```sql
+-- Core label records
+CREATE TABLE label_objects (
+    label_id      TEXT PRIMARY KEY,    -- immutable
+    tenant_id     UUID NOT NULL,
+    created_at    TIMESTAMP NOT NULL,
+
+    INDEX idx_tenant (tenant_id)
+);
+
+-- Version history
+CREATE TABLE label_versions (
+    label_id      TEXT NOT NULL REFERENCES label_objects(label_id),
+    content_hash  TEXT NOT NULL,
+    scanned_at    TIMESTAMP NOT NULL,
+    labels        JSONB NOT NULL,      -- array of label objects
+    risk_score    INTEGER,             -- computed, mutable
+    exposure      TEXT,                -- computed, mutable
+    source        TEXT NOT NULL,       -- generator:version
+
+    PRIMARY KEY (label_id, content_hash),
+    INDEX idx_hash (content_hash),
+    INDEX idx_risk (risk_score)
+);
+```
+
+### 6.3 Immutability
+
+- `label_id` is immutable once created
+- `content_hash` creates a new version record
+- `labels`, `risk_score`, `exposure` may be updated within a version
+
+### 6.4 Deployment Modes
+
+| Mode | Storage | Use Case |
+|------|---------|----------|
+| Local | SQLite | Single machine, CLI |
+| Server | PostgreSQL | Multi-node, API |
+| Cloud | Object metadata | Serverless |
+
+---
+
+## 7. Algorithms
+
+### 7.1 Value Hash Computation
+
+The value hash enables cross-system correlation without exposing sensitive values.
+
+#### 7.1.1 Algorithm
 
 ```
 INPUT: value (string) - the detected sensitive value
 OUTPUT: hash (string) - 6 character lowercase hexadecimal string
 
 PROCEDURE:
-  1. Encode value as UTF-8 bytes
-  2. Compute SHA-256 digest of bytes
-  3. Encode digest as lowercase hexadecimal
-  4. Return first 6 characters
+  1. Normalize value (see 7.1.3)
+  2. Encode as UTF-8 bytes
+  3. Compute SHA-256 digest
+  4. Return first 6 characters of hex encoding
 ```
 
-#### 6.1.2 Pseudocode
+#### 7.1.2 Pseudocode
 
 ```python
-def compute_label_hash(value: str) -> str:
-    value_bytes = value.encode('utf-8')
+def compute_value_hash(value: str) -> str:
+    normalized = normalize(value)
+    value_bytes = normalized.encode('utf-8')
     digest = sha256(value_bytes)
     hex_digest = digest.hexdigest().lower()
     return hex_digest[:6]
 ```
 
-#### 6.1.3 Normalization
+#### 7.1.3 Normalization
 
 Before hashing, values SHOULD be normalized:
 
@@ -350,21 +486,34 @@ Before hashing, values SHOULD be normalized:
 
 Implementations MUST document their normalization rules.
 
-#### 6.1.4 Properties
+#### 7.1.4 Properties
 
 - **Deterministic**: Same input always produces same hash
 - **Collision space**: 16,777,216 possible values (24 bits)
 - **Non-reversible**: Cannot recover value from hash
 
-#### 6.1.5 Examples
+### 7.2 Content Hash Computation
 
-| Input | SHA-256 (first 12 hex) | Label Hash |
-|-------|------------------------|------------|
-| `123456789` | `15e2b0d3c338...` | `15e2b0` |
-| `John Smith` | `ef61a579c907...` | `ef61a5` |
-| `4111111111111111` | `9f86d081884c...` | `9f86d0` |
+#### 7.2.1 Algorithm
 
-### 6.2 Label Merging (Informative)
+```
+INPUT: file_content (bytes)
+OUTPUT: hash (string) - 12 character lowercase hexadecimal string
+
+PROCEDURE:
+  1. Compute SHA-256 digest of file_content
+  2. Return first 12 characters of hex encoding
+```
+
+#### 7.2.2 Pseudocode
+
+```python
+def compute_content_hash(content: bytes) -> str:
+    digest = sha256(content)
+    return digest.hexdigest().lower()[:12]
+```
+
+### 7.3 Label Merging (Informative)
 
 When combining labels from multiple sources, implementations SHOULD use conservative union:
 
@@ -376,54 +525,57 @@ This is informative guidance, not a normative requirement.
 
 ---
 
-## 7. Conformance
+## 8. Conformance
 
-### 7.1 Conformance Levels
+### 8.1 Conformance Levels
 
 | Level | Requirements |
 |-------|--------------|
-| **Reader** | Parse Label Sets, extract from transport mechanisms |
-| **Writer** | Produce valid Label Sets, write to transport mechanisms |
+| **Reader** | Read embedded and virtual labels |
+| **Writer** | Write embedded and virtual labels, maintain index |
 | **Full** | Reader + Writer |
 
-### 7.2 Reader Conformance
+### 8.2 Reader Conformance
 
 A conforming OpenLabels Reader:
 
 1. MUST parse any valid Label Set JSON (Section 3, 4)
-2. MUST extract labels from trailers (Section 5.1)
-3. MUST extract labels from sidecars (Section 5.2)
-4. MUST ignore unknown fields without error (Section 4.5)
-5. MUST accept `v` value of `1`
-6. MUST validate `h` field is 6 hexadecimal characters
-7. MUST validate `c` field is in range [0.0, 1.0]
-8. SHOULD extract labels from native metadata (Section 5.3)
-9. SHOULD verify file hash when `file.hash` is present
+2. MUST read embedded labels from PDF, DOCX, and images (Section 5.2)
+3. MUST read virtual labels from extended attributes (Section 5.3)
+4. MUST resolve virtual labels via index lookup
+5. MUST ignore unknown fields without error (Section 4.5)
+6. MUST accept `v` value of `1`
+7. MUST validate `id` field matches format `ol_[a-f0-9]{12}`
+8. MUST validate `h` field is 6 hexadecimal characters
+9. MUST validate `c` field is in range [0.0, 1.0]
+10. SHOULD verify content_hash matches current file
 
-### 7.3 Writer Conformance
+### 8.3 Writer Conformance
 
 A conforming OpenLabels Writer:
 
 1. MUST produce JSON conforming to Section 3 and 4
 2. MUST set `v` field to `1`
-3. MUST compute hashes per Section 6.1
-4. MUST use compact JSON for trailers (no internal newlines)
-5. MUST include `file` field when writing sidecars
-6. MUST use registered entity types OR prefix custom types with `x-`
-7. SHOULD use detector type that reflects actual detection method
-8. SHOULD set confidence based on detection certainty
+3. MUST generate labelID per Section 3.1
+4. MUST compute content_hash per Section 7.2
+5. MUST compute value hashes per Section 7.1
+6. MUST write embedded labels for supported file types
+7. MUST write virtual labels for unsupported file types
+8. MUST store Label Sets in index for virtual labels
+9. MUST use registered entity types OR prefix custom types with `x-`
+10. SHOULD set confidence based on detection certainty
 
-### 7.4 Conformance Testing
+### 8.4 Conformance Testing
 
 Implementations SHOULD pass the OpenLabels Conformance Test Suite (published separately).
 
 ---
 
-## 8. Security Considerations
+## 9. Security Considerations
 
-### 8.1 Label Hash Privacy
+### 9.1 Value Hash Privacy
 
-The label hash is NOT encryption. It provides:
+The value hash is NOT encryption. It provides:
 
 - **Correlation**: Match same values across systems
 - **Pseudonymity**: Cannot directly read the value
@@ -435,7 +587,7 @@ It does NOT provide:
 
 Implementations SHOULD NOT rely on hash secrecy for security.
 
-### 8.2 Information Disclosure
+### 9.2 Information Disclosure
 
 Label Sets reveal metadata about file contents:
 
@@ -445,35 +597,43 @@ Label Sets reveal metadata about file contents:
 
 This metadata may itself be sensitive. Implementations SHOULD apply appropriate access controls to Label Sets.
 
-### 8.3 Trailer Injection
-
-Malicious actors could append fake trailers. Mitigations:
-
-1. Verify `file.hash` matches actual content
-2. Verify `src` is a trusted generator
-3. Use signed labels (extension, not in base spec)
-
-### 8.4 Index Security
+### 9.3 Index Security
 
 Label indexes aggregate sensitive metadata. Per the OpenLabels Constitution:
 
 - Indexes MUST NOT leave the user's tenant
-- Indexes SHOULD be protected at rest
+- Indexes SHOULD be encrypted at rest
 - Indexes SHOULD have appropriate access controls
+- Cross-tenant queries MUST be explicitly authorized
 
-### 8.5 Sidecar Synchronization
+### 9.4 Extended Attribute Persistence
 
-Sidecars can become stale if source files change. Implementations SHOULD:
+Extended attributes may not survive all file operations:
 
-- Verify `file.size` matches
-- Verify `file.hash` if present
-- Regenerate labels if source changed
+| Operation | xattr Preserved? |
+|-----------|------------------|
+| Local copy (cp -p) | Yes |
+| rsync -X | Yes |
+| Email attachment | No |
+| Upload to web app | Usually no |
+| ZIP archive | No |
+| Cross-filesystem copy | Maybe |
+
+Implementations SHOULD re-scan and re-label files when xattr loss is detected.
+
+### 9.5 labelID Confidentiality
+
+The labelID is a stable identifier that could be used to track files. Implementations SHOULD:
+
+- Treat labelID as sensitive metadata
+- Not expose labelID in logs or public interfaces
+- Regenerate labelID when file confidentiality requires it
 
 ---
 
-## 9. IANA Considerations
+## 10. IANA Considerations
 
-### 9.1 Media Type Registration
+### 10.1 Media Type Registration
 
 This specification registers the following media type:
 
@@ -483,14 +643,13 @@ Subtype name: openlabels+json
 Required parameters: none
 Optional parameters: none
 Encoding considerations: UTF-8
-Security considerations: See Section 8
-Interoperability considerations: See Section 7
+Security considerations: See Section 9
+Interoperability considerations: See Section 8
 Published specification: This document
 Applications that use this media type: Data classification tools
-File extension: .openlabel.json
 ```
 
-### 9.2 Entity Type Registry
+### 10.2 Entity Type Registry
 
 The OpenLabels Entity Type Registry is maintained at:
 
@@ -502,15 +661,15 @@ New entity types may be registered via the process defined in the registry docum
 
 ---
 
-## 10. References
+## 11. References
 
-### 10.1 Normative References
+### 11.1 Normative References
 
 - [RFC 2119] Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", BCP 14, RFC 2119, March 1997.
 - [RFC 8259] Bray, T., Ed., "The JavaScript Object Notation (JSON) Data Interchange Format", STD 90, RFC 8259, December 2017.
 - [FIPS 180-4] "Secure Hash Standard (SHS)", FIPS PUB 180-4, August 2015.
 
-### 10.2 Informative References
+### 11.2 Informative References
 
 - OpenLabels Constitution v3
 - OpenLabels Entity Registry v1
@@ -526,12 +685,22 @@ New entity types may be registered via the process defined in the registry docum
   "$id": "https://openlabels.dev/schema/v1/labelset.json",
   "title": "OpenLabels Label Set",
   "type": "object",
-  "required": ["v", "labels", "src", "ts"],
+  "required": ["v", "id", "hash", "labels", "src", "ts"],
   "properties": {
     "v": {
       "type": "integer",
       "const": 1,
       "description": "Specification version"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^ol_[a-f0-9]{12}$",
+      "description": "Immutable label ID"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{12}$",
+      "description": "Content hash"
     },
     "labels": {
       "type": "array",
@@ -547,10 +716,6 @@ New entity types may be registered via the process defined in the registry docum
       "type": "integer",
       "minimum": 0,
       "description": "Unix timestamp"
-    },
-    "file": {
-      "$ref": "#/$defs/fileRef",
-      "description": "File reference (required for sidecars)"
     },
     "x": {
       "type": "object",
@@ -581,7 +746,7 @@ New entity types may be registered via the process defined in the registry docum
         "h": {
           "type": "string",
           "pattern": "^[a-f0-9]{6}$",
-          "description": "Label hash"
+          "description": "Value hash"
         },
         "n": {
           "type": "integer",
@@ -591,27 +756,6 @@ New entity types may be registered via the process defined in the registry docum
         "x": {
           "type": "object",
           "description": "Extension data"
-        }
-      }
-    },
-    "fileRef": {
-      "type": "object",
-      "required": ["name", "size"],
-      "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Filename"
-        },
-        "size": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "File size in bytes"
-        },
-        "hash": {
-          "type": "string",
-          "pattern": "^(sha256|sha384|sha512):[a-f0-9]+$",
-          "description": "Content hash"
         }
       }
     }
@@ -695,68 +839,74 @@ See the full registry at https://openlabels.dev/registry for 300+ types.
 
 ## Appendix C: Examples
 
-### C.1 Minimal Label Set
+### C.1 Embedded Label (PDF)
 
-```json
-{"v":1,"labels":[],"src":"orscan:1.0.0","ts":1706140800}
-```
-
-### C.2 Healthcare Document
+Full Label Set stored in PDF XMP metadata:
 
 ```json
 {
   "v": 1,
+  "id": "ol_7f3a9b2c4d5e",
+  "hash": "e3b0c44298fc",
   "labels": [
     {"t": "SSN", "c": 0.99, "d": "checksum", "h": "15e2b0"},
     {"t": "NAME", "c": 0.92, "d": "pattern", "h": "ef61a5"},
-    {"t": "DATE_DOB", "c": 0.88, "d": "pattern", "h": "7c4a8d"},
-    {"t": "MRN", "c": 0.97, "d": "checksum", "h": "2c6ee2"},
-    {"t": "DIAGNOSIS", "c": 0.85, "d": "ml", "h": "8d969e"}
+    {"t": "DATE_DOB", "c": 0.88, "d": "pattern", "h": "7c4a8d"}
   ],
   "src": "orscan:1.0.0",
   "ts": 1706140800
 }
 ```
 
-### C.3 File with Trailer
+### C.2 Virtual Label (CSV)
 
-Original file content:
-```
-Patient: John Smith
-SSN: 123-45-6789
-DOB: 01/15/1980
-```
+Extended attribute on file:
 
-File with trailer:
 ```
-Patient: John Smith
-SSN: 123-45-6789
-DOB: 01/15/1980
-
----OPENLABEL-V1---
-{"v":1,"labels":[{"t":"NAME","c":0.92,"d":"pattern","h":"ef61a5"},{"t":"SSN","c":0.99,"d":"checksum","h":"15e2b0"},{"t":"DATE_DOB","c":0.88,"d":"pattern","h":"7c4a8d"}],"src":"orscan:1.0.0","ts":1706140800}
----END-OPENLABEL---
+user.openlabels = "ol_7f3a9b2c4d5e:e3b0c44298fc"
 ```
 
-### C.4 Sidecar File
+Label Set stored in index (same JSON as C.1).
 
-For `report.pdf`, sidecar `report.pdf.openlabel.json`:
+### C.3 Version History
 
+Same labelID, different content hashes (file was edited):
+
+**Version 1:**
 ```json
 {
   "v": 1,
-  "file": {
-    "name": "report.pdf",
-    "size": 1048576,
-    "hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  },
+  "id": "ol_7f3a9b2c4d5e",
+  "hash": "e3b0c44298fc",
   "labels": [
-    {"t": "CREDIT_CARD", "c": 0.99, "d": "checksum", "h": "9f86d0", "n": 47},
-    {"t": "NAME", "c": 0.90, "d": "pattern", "h": "ef61a5", "n": 47}
+    {"t": "SSN", "c": 0.99, "d": "checksum", "h": "15e2b0", "n": 3}
   ],
   "src": "orscan:1.0.0",
   "ts": 1706140800
 }
+```
+
+**Version 2 (more SSNs added):**
+```json
+{
+  "v": 1,
+  "id": "ol_7f3a9b2c4d5e",
+  "hash": "a1b2c3d4e5f6",
+  "labels": [
+    {"t": "SSN", "c": 0.99, "d": "checksum", "h": "15e2b0", "n": 5},
+    {"t": "SSN", "c": 0.99, "d": "checksum", "h": "8d969e", "n": 2}
+  ],
+  "src": "orscan:1.0.0",
+  "ts": 1706227200
+}
+```
+
+### C.4 Cloud Storage (S3)
+
+Object metadata:
+
+```
+x-amz-meta-openlabels: ol_7f3a9b2c4d5e:e3b0c44298fc
 ```
 
 ### C.5 With Extensions
@@ -764,6 +914,8 @@ For `report.pdf`, sidecar `report.pdf.openlabel.json`:
 ```json
 {
   "v": 1,
+  "id": "ol_7f3a9b2c4d5e",
+  "hash": "e3b0c44298fc",
   "labels": [
     {
       "t": "SSN",
@@ -771,8 +923,8 @@ For `report.pdf`, sidecar `report.pdf.openlabel.json`:
       "d": "checksum",
       "h": "15e2b0",
       "x": {
-        "com.example.redacted": true,
-        "com.example.page": 3
+        "com.example.page": 3,
+        "com.example.redacted": true
       }
     }
   ],
@@ -792,6 +944,7 @@ For `report.pdf`, sidecar `report.pdf.openlabel.json`:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0-draft | 2026-01 | Initial draft |
+| 1.0.0-draft | 2026-01 | Revised: removed sidecars and trailers, added virtual labels and index |
 
 ---
 
