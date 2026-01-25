@@ -15,7 +15,7 @@ that take precedence in the tier system.
 import re
 import logging
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Tuple
 
 from ..types import Span
 from ..constants import MAX_STRUCTURED_VALUE_LENGTH

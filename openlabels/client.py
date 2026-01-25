@@ -8,7 +8,7 @@ from typing import List, Optional, Union
 from pathlib import Path
 
 from .adapters.base import Adapter, NormalizedInput
-from .core.scorer import score, ScoringResult
+from .core.scorer import ScoringResult
 
 
 class Client:
@@ -27,10 +27,6 @@ class Client:
         ... )
         >>> print(f"Risk score: {result.score} ({result.tier})")
     """
-
-    def __init__(self):
-        """Initialize the client."""
-        pass
 
     def score_file(
         self,

@@ -11,7 +11,7 @@ Formula:
 Calibration: January 2026 (see calibration/CALIBRATION_RESULTS.md)
 """
 
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Dict, Set, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import math

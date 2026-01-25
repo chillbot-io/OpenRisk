@@ -2,7 +2,7 @@
 
 **The Canonical Entity Type Reference for OpenLabels Scoring**
 
-This document defines all entity types recognized by OpenLabels v1, their sensitivity weights, categories, and aliases. This registry is derived from the scrubIQ detection modules and represents the complete taxonomy for portable data sensitivity scoring.
+This document defines all entity types recognized by OpenLabels v1, their sensitivity weights, categories, and aliases. This registry represents the complete taxonomy for portable data sensitivity scoring.
 
 ---
 
@@ -766,7 +766,7 @@ sensitive_file:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 | 2026-01 | Initial registry derived from scrubIQ modules |
+| 1.0 | 2026-01 | Initial registry |
 | 1.1 | 2026-01 | Added 115 credential/secret types (AI/ML, Cloud, CI/CD, SaaS, etc.) |
 | 1.2 | 2026-01 | Added 96 entity types: Education/FERPA, Legal, Vehicle, Immigration, Insurance, Real Estate, Telecommunications, Biometric/Genetic, Military, Sensitive Files |
 

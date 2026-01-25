@@ -28,7 +28,7 @@ except ImportError:
     np = None  # type: ignore
     IntervalTree = None  # type: ignore
 
-from ..constants import MODEL_LOAD_TIMEOUT
+from .constants import MODEL_LOAD_TIMEOUT
 
 if TYPE_CHECKING:
     from PIL import Image

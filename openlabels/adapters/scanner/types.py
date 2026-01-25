@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 __all__ = [
     # Enums

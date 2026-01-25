@@ -1,7 +1,7 @@
 """Dictionary detector for context awareness using Aho-Corasick for fast matching."""
 
 from pathlib import Path
-from typing import List, Set, Optional, Dict, Tuple
+from typing import List, Set, Optional
 import logging
 
 from ..types import Span, Tier
