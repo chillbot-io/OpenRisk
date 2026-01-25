@@ -2,11 +2,11 @@
 OCR engine using RapidOCR with local ONNX models.
 
 RapidOCR is PaddleOCR's models pre-converted to ONNX, running on onnxruntime.
-This aligns with ScrubIQ's all-ONNX inference stack.
+This is an optional dependency for processing scanned documents and images.
 
 Models required in models_dir/rapidocr/:
 - det.onnx (~4.5 MB) - Text region detection
-- rec.onnx (~11 MB) - Text recognition  
+- rec.onnx (~11 MB) - Text recognition
 - cls.onnx (~1.5 MB) - Orientation classification
 """
 
@@ -16,8 +16,16 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, TYPE_CHECKING
-import numpy as np
-from intervaltree import IntervalTree
+
+# Optional dependencies for OCR
+_OCR_AVAILABLE = False
+try:
+    import numpy as np
+    from intervaltree import IntervalTree
+    _OCR_AVAILABLE = True
+except ImportError:
+    np = None  # type: ignore
+    IntervalTree = None  # type: ignore
 
 from ..constants import MODEL_LOAD_TIMEOUT
 
