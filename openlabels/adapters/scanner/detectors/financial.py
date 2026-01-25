@@ -288,18 +288,11 @@ def _validate_figi(figi: str) -> bool:
     
     if len(figi) != 12:
         return False
-    
+
     if not figi.isalnum():
         return False
-    
-    # Common prefixes
-    valid_prefixes = ['BBG', 'GGG']  # Bloomberg, others
-    if not any(figi.startswith(p) for p in valid_prefixes):
-        # Allow other prefixes but lower confidence handled elsewhere
-        pass
-    
-    # Basic check digit (Luhn-like for alphanumeric)
-    # FIGI uses a modified algorithm, simplified validation here
+
+    # FIGI uses a modified check digit algorithm, simplified validation here
     return True  # Format check only
 
 

@@ -216,20 +216,15 @@ class PDFExtractor(BaseExtractor):
         
         try:
             for i, page in enumerate(doc):
-                # Early exit if page limit exceeded (prevents DoS via large PDFs)
                 if i >= MAX_DOCUMENT_PAGES:
                     logger.warning(f"PDF exceeds {MAX_DOCUMENT_PAGES} page limit, truncating")
                     warnings.append(f"Document truncated at {MAX_DOCUMENT_PAGES} pages")
                     break
 
-                # Try to extract text layer
                 native_text = page.get_text().strip()
-                
-                # Check if this page has meaningful native text
                 has_native_text = len(native_text) >= MIN_NATIVE_TEXT_LENGTH
-                
+
                 if has_native_text:
-                    # Native text page - no visual redaction needed
                     pages_text.append(native_text)
                     enhanced_texts.append(native_text)
                     page_infos.append(PageInfo(
@@ -242,33 +237,23 @@ class PDFExtractor(BaseExtractor):
                     logger.debug(f"Page {i+1}: native text ({len(native_text)} chars)")
                     
                 elif self.ocr_engine and self.ocr_engine.is_available:
-                    # Scanned page - needs OCR and visual redaction
                     logger.debug(f"Page {i+1}: scanned, using OCR")
-                    
+
                     try:
-                        # Render page to image
                         pix = page.get_pixmap(dpi=self.RENDER_DPI)
-                        
-                        # Convert to PIL Image and numpy array
                         from PIL import Image
                         import numpy as np
-                        
+
                         img = Image.frombytes(
                             "RGB", 
                             [pix.width, pix.height], 
                             pix.samples
                         )
                         img_array = np.array(img)
-
-                        # Save to temp file if requested
                         temp_path = self._save_page_image(img, i) if save_scanned_pages else None
-
-                        # Get raw OCR with coordinates
                         ocr_result = self.ocr_engine.extract_with_coordinates(img)
-                        
-                        # Apply enhanced processing
                         enhanced_text = ocr_result.full_text
-                        
+
                         if self.enable_enhanced_processing and self.enhanced_processor and ocr_result.blocks:
                             try:
                                 enhanced_result = self.enhanced_processor.process(
@@ -323,7 +308,6 @@ class PDFExtractor(BaseExtractor):
                             temp_image_path=None,
                         ))
                 else:
-                    # No OCR available
                     pages_text.append("")
                     enhanced_texts.append("")
                     page_infos.append(PageInfo(
@@ -336,7 +320,6 @@ class PDFExtractor(BaseExtractor):
                     if not self.ocr_engine:
                         warnings.append(f"Page {i+1} is scanned but OCR not available")
             
-            # Calculate average OCR confidence
             avg_confidence = 1.0
             if ocr_confidences:
                 avg_confidence = sum(ocr_confidences) / len(ocr_confidences)

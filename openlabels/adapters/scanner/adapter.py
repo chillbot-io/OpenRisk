@@ -5,15 +5,12 @@ This is the main entry point for detecting PII/PHI in text and files.
 Part of OpenLabels - where labels are the primitive, risk is derived.
 """
 
-import logging
 import time
 from pathlib import Path
 from typing import List, Optional, Union
 
 from .types import DetectionResult
 from .config import Config
-
-logger = logging.getLogger(__name__)
 
 
 class Detector:
