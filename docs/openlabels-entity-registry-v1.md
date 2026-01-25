@@ -90,13 +90,15 @@ Communication identifiers and physical location data.
 
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
-| `EMAIL` | **4** | Email address | email_address |
+| `EMAIL` | **5** | Email address | email_address |
 | `PHONE` | **4** | Phone/fax number | telephone, fax |
 | `ADDRESS` | **5** | Physical/mailing address | street_address |
-| `ZIP` | **3** | ZIP/postal code | postal_code |
+| `ZIP` | **3** | ZIP/postal code (see Safe Harbor note) | postal_code |
 | `CITY` | **2** | City name | |
 | `STATE` | **2** | State/province name | |
-| `FACILITY` | **3** | Healthcare facility name | hospital, clinic |
+| `FACILITY` | **4** | Healthcare facility name | hospital, clinic |
+
+> **Safe Harbor Note:** Per HIPAA Safe Harbor, ZIP codes must be truncated to first 3 digits if population <20,000. Dates of birth for individuals over 89 must be aggregated to year only. These rules should be enforced at the detection/redaction layer.
 
 ---
 
