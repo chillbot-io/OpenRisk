@@ -249,7 +249,7 @@ ENTITY_WEIGHTS = {
     'ssn': 9,
     'aadhaar': 9,
     'passport': 9,
-    'drivers_license': 8,
+    'drivers_license': 7,
     'tax_id': 8,
     'credit_card': 9,
     'bank_account': 7,

@@ -31,7 +31,7 @@ Government-issued IDs that uniquely identify individuals.
 |-------------|--------|-------------|---------|
 | `SSN` | **9** | US Social Security Number | social_security, ss |
 | `PASSPORT` | **9** | Passport number (any country) | passport_number |
-| `DRIVER_LICENSE` | **8** | Driver's license number | dl, dln, drivers_license |
+| `DRIVER_LICENSE` | **7** | Driver's license number | dl, dln, drivers_license |
 | `STATE_ID` | **7** | State-issued ID card | id_card |
 | `TAX_ID` | **8** | Tax identification number | tin, ein, itin |
 | `AADHAAR` | **9** | India Aadhaar number | |
