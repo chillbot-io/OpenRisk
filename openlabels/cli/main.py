@@ -17,7 +17,8 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, Detector, Config, DetectionResult
+from openlabels import __version__
+from openlabels.adapters.scanner import Detector, Config, DetectionResult
 
 
 def setup_logging(verbose: bool = False, quiet: bool = False):

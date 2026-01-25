@@ -1,9 +1,12 @@
 """
-OpenLabels Scanner - file processing.
+OpenLabels Scanner - PII/PHI detection engine.
 
 Text extraction from various file formats with OCR support.
 """
 
+from .adapter import Detector, detect, detect_file
+from .config import Config
+from .types import DetectionResult, Span
 from .extractor import extract_text, get_extractor, ExtractionResult
 from .validators import (
     validate_file,
@@ -24,6 +27,13 @@ except ImportError:
     pass
 
 __all__ = [
+    # Core API
+    "Detector",
+    "Config",
+    "DetectionResult",
+    "Span",
+    "detect",
+    "detect_file",
     # Extraction
     "extract_text",
     "get_extractor",
