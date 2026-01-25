@@ -25,7 +25,7 @@
 10. [Normalizers](#10-normalizers)
 11. [Scanner Adapter](#11-scanner-adapter)
 12. [Scan Triggers](#12-scan-triggers)
-13. [Trailer & Sidecar Formats](#13-trailer--sidecar-formats)
+13. [Trailer Format](#13-trailer-format)
 14. [CLI & Query Language](#14-cli--query-language)
 15. [Agent (On-Prem)](#15-agent-on-prem)
 16. [SDK Reference](#16-sdk-reference)
@@ -841,43 +841,30 @@ def should_scan(entities, context) -> Tuple[bool, List[ScanTrigger]]:
 
 ---
 
-## 13. Trailer & Sidecar Formats
+## 13. Trailer Format
 
-### 13.1 Trailer Format
+### 13.1 Trailer Structure
 
 ```
 [Original file content - unchanged]
-\n---OPENLABELS-TAG-V1---\n
-{"openlabels":{"version":"1.0","score":74,...}}
-\n---END-OPENLABELS-TAG---
+\n---OPENLABEL-V1---\n
+{"v":1,"labels":[{"t":"ssn","c":0.99,"d":"checksum","h":"a1b2c3"}],"src":"orscan:0.1.0","ts":1706000000}
+\n---END-OPENLABEL---
 ```
 
 **Properties:**
 - Original content unchanged (hash verifiable)
-- Works on any file type (CSV, JSON, TXT, logs)
-- `content_length` field enables extraction of original
+- Works on any file type (CSV, JSON, TXT, logs, PDFs, images)
+- Compact JSON format (no pretty-printing)
 
-### 13.2 Sidecar Format
+### 13.2 File Type Support
 
-For binary files or when trailers are undesirable:
-
-```
-/data/
-├── document.pdf
-├── document.pdf.openlabels.json    ← Sidecar
-├── image.png
-└── image.png.openlabels.json       ← Sidecar
-```
-
-### 13.3 When to Use Each
-
-| Scenario | Recommendation |
-|----------|----------------|
-| Text files (CSV, JSON, TXT) | Trailer preferred |
-| Binary files (images, PDFs) | Sidecar required |
-| Read-only files | Sidecar required |
-| Version-controlled files | Sidecar preferred |
-| Archives (ZIP, TAR) | Sidecar required |
+| File Type | Method |
+|-----------|--------|
+| Text files (CSV, JSON, TXT) | Trailer |
+| Binary files (images, PDFs) | Native metadata (XMP/EXIF) or trailer |
+| Archives (ZIP, TAR) | Trailer (archive comment) |
+| Office documents | Native custom properties |
 
 ---
 
@@ -1102,7 +1089,7 @@ Implementations SHOULD limit:
 
 | Level | Requirements |
 |-------|--------------|
-| **Reader** | Parse valid tags, extract from trailers/sidecars, verify hash |
+| **Reader** | Parse valid tags, extract from trailers, verify hash |
 | **Writer** | Generate valid tags, use standard scoring algorithm |
 | **Full** | Reader + Writer + Trailer support + Exposure scoring |
 
@@ -1110,7 +1097,7 @@ Implementations SHOULD limit:
 
 A conforming reader MUST:
 1. Parse any valid OpenLabels tag JSON
-2. Extract tags from trailers and sidecars
+2. Extract tags from trailers
 3. Verify content_hash when requested
 4. Handle unknown fields gracefully
 

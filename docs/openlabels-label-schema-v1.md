@@ -22,15 +22,15 @@ This document defines the portable label format for OpenLabels. Labels describe 
 
 ### Compact Format (Option B)
 
-The compact format is optimized for embedding in file metadata, trailers, and sidecars.
+The compact format is optimized for embedding in file metadata and trailers.
 
 ```json
 {
   "v": 1,
   "labels": [
-    {"t": "SSN", "c": 0.99, "d": "checksum", "h": "a1b2c3"},
-    {"t": "NAME", "c": 0.87, "d": "pattern", "h": "d4e5f6"},
-    {"t": "CREDIT_CARD", "c": 0.95, "d": "checksum", "h": "e7f8g9"}
+    {"t": "ssn", "c": 0.99, "d": "checksum", "h": "a1b2c3"},
+    {"t": "name", "c": 0.87, "d": "pattern", "h": "d4e5f6"},
+    {"t": "credit_card", "c": 0.95, "d": "checksum", "h": "e7f8g9"}
   ],
   "src": "orscan:0.1.0",
   "ts": 1706000000
@@ -50,7 +50,7 @@ The compact format is optimized for embedding in file metadata, trailers, and si
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `t` | string | Yes | Entity type (e.g., "SSN", "NAME", "CREDIT_CARD") |
+| `t` | string | Yes | Entity type (e.g., "ssn", "name", "credit_card") |
 | `c` | number | Yes | Confidence score (0.0 - 1.0) |
 | `d` | string | Yes | Detector type: "checksum", "pattern", "ml", "structured" |
 | `h` | string | Yes | Hash of the detected value (for cross-system correlation) |
@@ -115,7 +115,7 @@ def compute_label_hash(detected_value: str, salt: str = "") -> str:
 
 ## File Attachment Methods
 
-Labels can be attached to files in three ways:
+Labels can be attached to files in two ways:
 
 ### 1. Native Metadata
 
@@ -136,7 +136,7 @@ For text-based files, append a trailer:
 [Original file content - unchanged]
 
 ---OPENLABEL-V1---
-{"v":1,"labels":[{"t":"SSN","c":0.99,"d":"checksum","h":"a1b2c3"}],"src":"orscan:0.1.0","ts":1706000000}
+{"v":1,"labels":[{"t":"ssn","c":0.99,"d":"checksum","h":"a1b2c3"}],"src":"orscan:0.1.0","ts":1706000000}
 ---END-OPENLABEL---
 ```
 
@@ -148,52 +148,20 @@ For text-based files, append a trailer:
 - JSON must be compact (no pretty-printing)
 - End marker has no trailing newline
 
-### 3. Sidecar Format
-
-For binary files or when trailers are not possible, use a sidecar file:
-
-```
-/data/
-├── document.pdf
-├── document.pdf.openlabel.json    ← Sidecar
-├── image.png
-└── image.png.openlabel.json       ← Sidecar
-```
-
-**Sidecar file naming:** `{original_filename}.openlabel.json`
-
-**Sidecar content includes file reference:**
-
-```json
-{
-  "v": 1,
-  "file": {
-    "name": "document.pdf",
-    "size": 1048576,
-    "hash": "sha256:abc123..."
-  },
-  "labels": [
-    {"t": "SSN", "c": 0.99, "d": "checksum", "h": "a1b2c3"}
-  ],
-  "src": "orscan:0.1.0",
-  "ts": 1706000000
-}
-```
-
 ---
 
 ## Attachment Decision Matrix
 
-| File Type | Primary Method | Fallback |
-|-----------|----------------|----------|
-| PDF | Native (XMP) | Sidecar |
-| DOCX/XLSX/PPTX | Native (custom props) | Sidecar |
-| Images (JPG, PNG, etc.) | Native (EXIF/XMP) | Sidecar |
-| TXT, CSV, JSON, MD | Trailer | Sidecar |
-| LOG, SQL, YAML, XML | Trailer | Sidecar |
-| ZIP, TAR, GZ | Sidecar only | - |
-| EML, MSG | Sidecar only | - |
-| Binary files | Sidecar only | - |
+| File Type | Method |
+|-----------|--------|
+| PDF | Native (XMP) |
+| DOCX/XLSX/PPTX | Native (custom props) |
+| Images (JPG, PNG, etc.) | Native (EXIF/XMP) |
+| TXT, CSV, JSON, MD | Trailer |
+| LOG, SQL, YAML, XML | Trailer |
+| ZIP, TAR, GZ | Trailer (append to archive comment) |
+| EML, MSG | Native (headers) |
+| Binary files | Native metadata where supported |
 
 ---
 
@@ -210,20 +178,14 @@ END_MARKER = b'\n---END-OPENLABEL---'
 
 def read_labels(filepath: str) -> dict | None:
     """
-    Read OpenLabels from a file (trailer, sidecar, or native metadata).
+    Read OpenLabels from a file (trailer or native metadata).
 
     Returns:
         Label dict if found, None otherwise
     """
     path = Path(filepath)
 
-    # Try sidecar first
-    sidecar = path.parent / f"{path.name}.openlabel.json"
-    if sidecar.exists():
-        with open(sidecar) as f:
-            return json.load(f)
-
-    # Try trailer
+    # Try trailer first
     with open(filepath, 'rb') as f:
         content = f.read()
 
@@ -253,7 +215,7 @@ def write_labels(filepath: str, labels: dict, method: str = "auto") -> None:
     Args:
         filepath: Path to the file
         labels: Label dict to write
-        method: "trailer", "sidecar", "native", or "auto"
+        method: "trailer", "native", or "auto"
     """
     path = Path(filepath)
 
@@ -262,8 +224,6 @@ def write_labels(filepath: str, labels: dict, method: str = "auto") -> None:
 
     if method == "trailer":
         _write_trailer(path, labels)
-    elif method == "sidecar":
-        _write_sidecar(path, labels)
     elif method == "native":
         _write_native_metadata(path, labels)
 
@@ -275,23 +235,6 @@ def _write_trailer(path: Path, labels: dict) -> None:
         f.write(START_MARKER)
         f.write(tag_json.encode('utf-8'))
         f.write(END_MARKER)
-
-
-def _write_sidecar(path: Path, labels: dict) -> None:
-    """Write sidecar file."""
-    # Add file reference
-    labels_with_file = {
-        **labels,
-        "file": {
-            "name": path.name,
-            "size": path.stat().st_size,
-            "hash": _compute_file_hash(path),
-        }
-    }
-
-    sidecar = path.parent / f"{path.name}.openlabel.json"
-    with open(sidecar, 'w') as f:
-        json.dump(labels_with_file, f, indent=2)
 ```
 
 ---
@@ -320,14 +263,6 @@ The label hash (`h`) is designed to enable correlation without exposing content:
 - **DON'T**: Consider hash as encryption
 - **DON'T**: Store hash → value mappings (defeats the purpose)
 
-### Sidecar Access Control
-
-Sidecar files contain metadata about sensitive content:
-
-- Match sidecar permissions to original file
-- Delete sidecar when original file is deleted
-- Include sidecar in backup/restore procedures
-
 ### Trailer Integrity
 
 When reading trailers:
@@ -347,11 +282,11 @@ When reading trailers:
 {
   "v": 1,
   "labels": [
-    {"t": "SSN", "c": 0.99, "d": "checksum", "h": "a1b2c3"},
-    {"t": "NAME", "c": 0.92, "d": "pattern", "h": "d4e5f6"},
-    {"t": "DATE_DOB", "c": 0.88, "d": "pattern", "h": "g7h8i9"},
-    {"t": "DIAGNOSIS", "c": 0.85, "d": "ml", "h": "j0k1l2"},
-    {"t": "MRN", "c": 0.97, "d": "checksum", "h": "m3n4o5"}
+    {"t": "ssn", "c": 0.99, "d": "checksum", "h": "a1b2c3"},
+    {"t": "name", "c": 0.92, "d": "pattern", "h": "d4e5f6"},
+    {"t": "date_of_birth", "c": 0.88, "d": "pattern", "h": "g7h8i9"},
+    {"t": "diagnosis", "c": 0.85, "d": "ml", "h": "j0k1l2"},
+    {"t": "mrn", "c": 0.97, "d": "checksum", "h": "m3n4o5"}
   ],
   "src": "orscan:0.1.0",
   "ts": 1706000000
@@ -364,10 +299,10 @@ When reading trailers:
 {
   "v": 1,
   "labels": [
-    {"t": "CREDIT_CARD", "c": 0.99, "d": "checksum", "h": "p6q7r8", "n": 47},
-    {"t": "BANK_ACCOUNT", "c": 0.95, "d": "pattern", "h": "s9t0u1", "n": 12},
-    {"t": "NAME", "c": 0.90, "d": "pattern", "h": "v2w3x4", "n": 47},
-    {"t": "EMAIL", "c": 0.99, "d": "pattern", "h": "y5z6a7", "n": 45}
+    {"t": "credit_card", "c": 0.99, "d": "checksum", "h": "p6q7r8", "n": 47},
+    {"t": "bank_account", "c": 0.95, "d": "pattern", "h": "s9t0u1", "n": 12},
+    {"t": "name", "c": 0.90, "d": "pattern", "h": "v2w3x4", "n": 47},
+    {"t": "email", "c": 0.99, "d": "pattern", "h": "y5z6a7", "n": 45}
   ],
   "src": "orscan:0.1.0",
   "ts": 1706000000
@@ -380,9 +315,9 @@ When reading trailers:
 {
   "v": 1,
   "labels": [
-    {"t": "AWS_ACCESS_KEY", "c": 0.99, "d": "pattern", "h": "b8c9d0"},
-    {"t": "AWS_SECRET_KEY", "c": 0.99, "d": "pattern", "h": "e1f2g3"},
-    {"t": "DATABASE_URL", "c": 0.95, "d": "structured", "h": "h4i5j6"}
+    {"t": "aws_access_key", "c": 0.99, "d": "pattern", "h": "b8c9d0"},
+    {"t": "aws_secret_key", "c": 0.99, "d": "pattern", "h": "e1f2g3"},
+    {"t": "database_url", "c": 0.95, "d": "structured", "h": "h4i5j6"}
   ],
   "src": "orscan:0.1.0",
   "ts": 1706000000
@@ -451,7 +386,7 @@ When reading trailers:
     },
     "file": {
       "type": "object",
-      "description": "File reference (sidecar only)",
+      "description": "Optional file reference for correlation",
       "properties": {
         "name": {"type": "string"},
         "size": {"type": "integer"},

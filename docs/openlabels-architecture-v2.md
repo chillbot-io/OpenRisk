@@ -1045,13 +1045,13 @@ class RiskScorer:
 
     def _score_to_level(self, score: int) -> str:
         """Convert numeric score to risk level."""
-        if score >= 90:
+        if score >= 86:
             return "CRITICAL"
-        elif score >= 70:
+        elif score >= 61:
             return "HIGH"
-        elif score >= 50:
+        elif score >= 31:
             return "MEDIUM"
-        elif score >= 25:
+        elif score >= 11:
             return "LOW"
         else:
             return "MINIMAL"
@@ -1164,7 +1164,8 @@ class ScanTrigger(Enum):
     LOW_CONFIDENCE_HIGH_RISK = "low_conf_high_risk"  # Uncertain critical finding
 
 
-CONFIDENCE_THRESHOLD = 0.80  # Single threshold, no per-type variation
+CONFIDENCE_THRESHOLD = 0.65  # Detection threshold - include detections at this confidence or higher
+RESCAN_THRESHOLD = 0.80      # Rescan threshold - uncertain high-risk entities trigger rescan
 HIGH_RISK_WEIGHT_THRESHOLD = 8  # Weight >= 8 is high risk
 
 
@@ -1199,10 +1200,10 @@ def should_scan(
     if context.staleness_days > 365:
         triggers.append(ScanTrigger.STALE_DATA)
 
-    # High-risk entity with low/medium confidence = verify
+    # High-risk entity with confidence below rescan threshold = verify
     for entity in entities:
         is_high_risk = entity.weight >= HIGH_RISK_WEIGHT_THRESHOLD
-        is_uncertain = entity.confidence < CONFIDENCE_THRESHOLD
+        is_uncertain = entity.confidence < RESCAN_THRESHOLD
 
         if is_high_risk and is_uncertain:
             triggers.append(ScanTrigger.LOW_CONFIDENCE_HIGH_RISK)
@@ -1220,7 +1221,7 @@ def should_scan(
 | Labels exist, **public** | ✓ | Exposure too high to trust |
 | Labels exist, **no encryption** | ✓ | Protection gap |
 | Labels exist, **stale >1yr** | ✓ | Verify still accurate |
-| Labels: **SSN @ 0.65 confidence** | ✓ | High risk + uncertain |
+| Labels: **ssn @ 0.75 confidence** | ✓ | High risk + below rescan threshold (0.80) |
 | Labels: **EMAIL @ 0.35 confidence** | ✗ | Lower risk, trust it |
 | Labels: **CREDIT_CARD @ 0.90 confidence** | ✗ | High confidence, trust it |
 
@@ -1957,21 +1958,21 @@ class ScoringResult:
 
 ### Structure
 
-OpenLabels tags can be attached to any file via trailers or sidecars:
+OpenLabels tags can be attached to any file via trailers:
 
 ```
 [Original file content - unchanged]
-\n---OPENLABELS-TAG-V1---\n
+\n---OPENLABEL-V1---\n
 {"openlabels":{"version":"0.2","score":74,...}}
-\n---END-OPENLABELS-TAG---
+\n---END-OPENLABEL---
 ```
 
 ### Markers
 
 | Marker | Bytes | Purpose |
 |--------|-------|---------|
-| Start marker | `\n---OPENLABELS-TAG-V1---\n` | Signals beginning of trailer |
-| End marker | `\n---END-OPENLABELS-TAG---` | Signals end of trailer |
+| Start marker | `\n---OPENLABEL-V1---\n` | Signals beginning of trailer |
+| End marker | `\n---END-OPENLABEL---` | Signals end of trailer |
 
 ### Content Requirements
 
@@ -1983,8 +1984,8 @@ OpenLabels tags can be attached to any file via trailers or sidecars:
 ### Trailer Operations
 
 ```python
-START_MARKER = b'\n---OPENLABELS-TAG-V1---\n'
-END_MARKER = b'\n---END-OPENLABELS-TAG---'
+START_MARKER = b'\n---OPENLABEL-V1---\n'
+END_MARKER = b'\n---END-OPENLABEL---'
 
 def write_trailer(filepath: str, tag: dict) -> None:
     """Append OpenLabels trailer to file."""
@@ -2027,26 +2028,6 @@ def read_trailer(filepath: str) -> tuple[bytes, dict | None]:
 
     return original, tag
 ```
-
-### Sidecar Format
-
-For binary files or when trailers are undesirable:
-
-```
-/data/
-├── document.pdf
-├── document.pdf.openlabels.json    ← Sidecar
-├── image.png
-└── image.png.openlabels.json       ← Sidecar
-```
-
-| Scenario | Recommendation |
-|----------|----------------|
-| Text files (CSV, JSON, TXT) | Trailer preferred |
-| Binary files (images, PDFs) | Sidecar required |
-| Read-only files | Sidecar required |
-| Version-controlled files | Sidecar preferred |
-| Archives (ZIP, TAR) | Sidecar required |
 
 ---
 
@@ -2269,7 +2250,7 @@ Implementations SHOULD limit:
 
 | Level | Requirements |
 |-------|--------------|
-| **Reader** | Parse valid tags, extract from trailers/sidecars, verify hash |
+| **Reader** | Parse valid tags, extract from trailers, verify hash |
 | **Writer** | Generate valid tags, use standard scoring algorithm |
 | **Full** | Reader + Writer + Trailer support + Exposure scoring |
 
@@ -2278,7 +2259,7 @@ Implementations SHOULD limit:
 A conforming reader MUST:
 1. Parse any valid OpenLabels tag JSON
 2. Extract tags from trailers
-3. Extract tags from sidecars
+3. Verify content_hash when requested
 4. Verify content_hash when requested
 5. Handle unknown fields gracefully (ignore, don't error)
 
