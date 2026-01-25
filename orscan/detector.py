@@ -2,6 +2,7 @@
 orscan Detector - the core detection engine.
 
 This is the main entry point for detecting PII/PHI in text and files.
+Part of OpenLabels - where labels are the primitive, risk is derived.
 """
 
 import logging

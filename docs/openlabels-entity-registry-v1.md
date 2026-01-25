@@ -1,8 +1,8 @@
-# OpenRisk Entity Registry v1.0
+# OpenLabels Entity Registry v1.0
 
-**The Canonical Entity Type Reference for OpenRisk Scoring**
+**The Canonical Entity Type Reference for OpenLabels Scoring**
 
-This document defines all entity types recognized by OpenRisk v1, their sensitivity weights, categories, and aliases. This registry is derived from the scrubIQ detection modules and represents the complete taxonomy for portable data sensitivity scoring.
+This document defines all entity types recognized by OpenLabels v1, their sensitivity weights, categories, and aliases. This registry is derived from the scrubIQ detection modules and represents the complete taxonomy for portable data sensitivity scoring.
 
 ---
 
@@ -770,7 +770,7 @@ sensitive_file:
 
 ## Contributing New Entity Types
 
-New entity types can be proposed via PR to the OpenRisk repository. Requirements:
+New entity types can be proposed via PR to the OpenLabels repository. Requirements:
 
 1. **Justification** - Why is this entity type needed?
 2. **Detection pattern** - Regex or algorithm for detection
@@ -782,4 +782,4 @@ Entity types should be added to the pattern modules and this registry simultaneo
 
 ---
 
-*This registry is the authoritative source for OpenRisk entity types. All adapters (Macie, Presidio, DLP, Purview) must map to these canonical types.*
+*This registry is the authoritative source for OpenLabels entity types. All adapters (Macie, Presidio, DLP, Purview) must map to these canonical types.*

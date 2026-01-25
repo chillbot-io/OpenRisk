@@ -1,4 +1,4 @@
-# OpenRisk Framework 1.0
+# OpenLabels Framework 1.0
 
 **A Universal Standard for Data Sensitivity Risk Scoring**
 
@@ -15,7 +15,7 @@
 
 1. [Executive Summary](#1-executive-summary)
 2. [Problem Statement](#2-problem-statement)
-3. [The OpenRisk Solution](#3-the-openrisk-solution)
+3. [The OpenLabels Solution](#3-the-openlabels-solution)
 4. [Core Value Proposition](#4-core-value-proposition)
 5. [System Architecture](#5-system-architecture)
 6. [Tag Schema Specification](#6-tag-schema-specification)
@@ -38,20 +38,20 @@
 
 ## 1. Executive Summary
 
-OpenRisk is a universal, portable standard for expressing data sensitivity risk. It solves a fundamental problem in data security: when files move between systems, their classification metadata is lost.
+OpenLabels is a universal, portable standard for expressing data sensitivity risk. It solves a fundamental problem in data security: when files move between systems, their classification metadata is lost.
 
 ### The Core Insight
 
 ```
 Macie tells you WHAT's in your data.
-OpenRisk tells you HOW RISKY that data actually is, given WHERE it lives.
+OpenLabels tells you HOW RISKY that data actually is, given WHERE it lives.
 ```
 
 An SSN in a private, encrypted bucket ≠ an SSN in a public, unencrypted bucket.
 
-**Same content, different risk. Only OpenRisk captures this.**
+**Same content, different risk. Only OpenLabels captures this.**
 
-### What OpenRisk Provides
+### What OpenLabels Provides
 
 | Component | Description |
 |-----------|-------------|
@@ -63,7 +63,7 @@ An SSN in a private, encrypted bucket ≠ an SSN in a public, unencrypted bucket
 | **CLI** | Risk-aware data management with quarantine, find, move commands |
 | **SDK** | Python SDK for reading, writing, and scoring |
 
-### What OpenRisk Is NOT
+### What OpenLabels Is NOT
 
 - **Not a scanner** (though it includes one as an adapter)
 - **Not a replacement for Macie/DLP/Purview** (it consumes their output)
@@ -123,11 +123,11 @@ Every major platform has data classification:
 
 ---
 
-## 3. The OpenRisk Solution
+## 3. The OpenLabels Solution
 
 ### 3.1 Design Philosophy
 
-OpenRisk combines **content sensitivity** (what entities are present) with **exposure context** (how it's stored and who can access it) into a single **portable 0-100 risk score**.
+OpenLabels combines **content sensitivity** (what entities are present) with **exposure context** (how it's stored and who can access it) into a single **portable 0-100 risk score**.
 
 ```
 Risk = Content × Exposure
@@ -163,7 +163,7 @@ final_score = min(100, content_score × exposure_multiplier)
 | Need | Solution |
 |------|----------|
 | Cross-platform comparison | Same score formula everywhere |
-| Content + Context risk | Only OpenRisk combines both |
+| Content + Context risk | Only OpenLabels combines both |
 | Already have Macie/DLP | Use vendor adapter → get portable score |
 | Want more granularity | Add scanner adapter → standardized detection |
 | Want portability | Scanner works anywhere (on-prem, any cloud) |
@@ -209,7 +209,7 @@ final_score = min(100, content_score × exposure_multiplier)
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              OPENRISK CORE                                  │
+│                              OPENLABELS CORE                                  │
 │                                                                             │
 │    ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐        │
 │    │   Merger     │───►│    Scorer    │───►│   Output Generator   │        │
@@ -284,7 +284,7 @@ ANYWAY     LABELS              │
 
 ```json
 {
-  "openrisk": {
+  "openlabels": {
     "version": "1.0",
     "score": 74,
     "tier": "High",
@@ -322,13 +322,13 @@ ANYWAY     LABELS              │
       "classification_source": "macie+scanner"
     },
     "scoring": {
-      "algorithm": "openrisk-v1.0-standard",
+      "algorithm": "openlabels-v1.0-standard",
       "confidence_threshold": 0.8,
       "mode": "strict"
     },
     "provenance": {
-      "generator": "openrisk-sdk/1.0.0",
-      "generator_org": "openrisk",
+      "generator": "openlabels-sdk/1.0.0",
+      "generator_org": "openlabels",
       "generated_at": "2026-01-24T14:32:00Z",
       "adapters_used": ["macie", "scanner"],
       "scan_duration_ms": 1247
@@ -391,7 +391,7 @@ ANYWAY     LABELS              │
 
 ### 7.1 Algorithm Identifier
 
-The current algorithm is identified as `openrisk-v1.0-standard`.
+The current algorithm is identified as `openlabels-v1.0-standard`.
 
 ### 7.2 Complete Formula
 
@@ -415,7 +415,7 @@ EXPOSURE_MULTIPLIERS = {
 
 def calculate_score(entities, context):
     """
-    OpenRisk scoring algorithm.
+    OpenLabels scoring algorithm.
 
     Formula:
         content_score = Σ(weight × (1 + ln(count)) × confidence)
@@ -542,7 +542,7 @@ The complete entity registry includes 300+ types across 20 categories. Key examp
 | `aws_access_key` | credential.api_key | 9 | AWS access key ID |
 | `private_key` | credential.certificate | 9 | Private key material |
 
-See `openrisk-entity-registry-v1.md` for the complete registry.
+See `openlabels-entity-registry-v1.md` for the complete registry.
 
 ---
 
@@ -696,7 +696,7 @@ class MetadataNormalizer:
 
 ### 10.2 Entity Type Normalization
 
-Maps vendor entity types to canonical OpenRisk types:
+Maps vendor entity types to canonical OpenLabels types:
 
 ```python
 class EntityNormalizer:
@@ -847,9 +847,9 @@ def should_scan(entities, context) -> Tuple[bool, List[ScanTrigger]]:
 
 ```
 [Original file content - unchanged]
-\n---OPENRISK-TAG-V1---\n
-{"openrisk":{"version":"1.0","score":74,...}}
-\n---END-OPENRISK-TAG---
+\n---OPENLABELS-TAG-V1---\n
+{"openlabels":{"version":"1.0","score":74,...}}
+\n---END-OPENLABELS-TAG---
 ```
 
 **Properties:**
@@ -864,9 +864,9 @@ For binary files or when trailers are undesirable:
 ```
 /data/
 ├── document.pdf
-├── document.pdf.openrisk.json    ← Sidecar
+├── document.pdf.openlabels.json    ← Sidecar
 ├── image.png
-└── image.png.openrisk.json       ← Sidecar
+└── image.png.openlabels.json       ← Sidecar
 ```
 
 ### 13.3 When to Use Each
@@ -887,22 +887,22 @@ For binary files or when trailers are undesirable:
 
 ```bash
 # Scan and score
-openrisk scan <path>
-openrisk scan s3://bucket/prefix
-openrisk scan gs://bucket/prefix
+openlabels scan <path>
+openlabels scan s3://bucket/prefix
+openlabels scan gs://bucket/prefix
 
 # Find with filters
-openrisk find <path> --where "<filter>"
+openlabels find <path> --where "<filter>"
 
 # Actions
-openrisk quarantine <path> --where "<filter>" --to <dest>
-openrisk move <path> --where "<filter>" --to <dest>
-openrisk delete <path> --where "<filter>" --confirm
-openrisk encrypt <path> --where "<filter>" --key <kms-key>
+openlabels quarantine <path> --where "<filter>" --to <dest>
+openlabels move <path> --where "<filter>" --to <dest>
+openlabels delete <path> --where "<filter>" --confirm
+openlabels encrypt <path> --where "<filter>" --key <kms-key>
 
 # Reporting
-openrisk report <path> --format json|csv|html
-openrisk heatmap <path>
+openlabels report <path> --format json|csv|html
+openlabels heatmap <path>
 ```
 
 ### 14.2 Filter Grammar
@@ -926,16 +926,16 @@ openrisk heatmap <path>
 
 ```bash
 # Quarantine high-risk stale data
-openrisk quarantine s3://prod-bucket \
+openlabels quarantine s3://prod-bucket \
   --where "score > 75 AND last_accessed > 5y" \
   --to s3://quarantine-bucket
 
 # Find public SSNs
-openrisk find s3://data-lake \
+openlabels find s3://data-lake \
   --where "exposure = public AND has(SSN)"
 
 # Complex query
-openrisk find . --where "
+openlabels find . --where "
   score > 75
   AND exposure >= over_exposed
   AND last_accessed > 1y
@@ -951,7 +951,7 @@ openrisk find . --where "
 For local/on-prem file systems:
 
 ```python
-class OpenRiskAgent:
+class OpenLabelsAgent:
     def __init__(self, scanner: ScannerAdapter):
         self.scanner = scanner
         self.is_windows = platform.system() == "Windows"
@@ -987,13 +987,13 @@ class OpenRiskAgent:
 ### 16.1 Installation
 
 ```bash
-pip install openrisk
+pip install openlabels
 ```
 
 ### 16.2 Basic Usage
 
 ```python
-from openrisk import RiskScorer
+from openlabels import RiskScorer
 
 scorer = RiskScorer()
 scorer.add_detection("ssn", count=3, confidence=0.94)
@@ -1012,8 +1012,8 @@ print(tag.tier)   # "High"
 ### 16.3 Using Adapters
 
 ```python
-from openrisk import Client
-from openrisk.adapters import macie, scanner
+from openlabels import Client
+from openlabels.adapters import macie, scanner
 
 client = Client()
 
@@ -1034,7 +1034,7 @@ result = client.score(
 ### 16.4 Programmatic Filtering
 
 ```python
-from openrisk import Client, Filter
+from openlabels import Client, Filter
 
 client = Client()
 
@@ -1065,7 +1065,7 @@ Optional signature field for verifying authenticity:
 
 ```json
 {
-  "openrisk": {
+  "openlabels": {
     ...
     "signature": "ed25519:base64-encoded-signature"
   }
@@ -1074,7 +1074,7 @@ Optional signature field for verifying authenticity:
 
 ### 17.2 Information Disclosure
 
-OpenRisk tags reveal metadata about file contents:
+OpenLabels tags reveal metadata about file contents:
 - Entity types present
 - Approximate counts
 - Overall sensitivity level
@@ -1109,7 +1109,7 @@ Implementations SHOULD limit:
 ### 18.2 Reader Requirements
 
 A conforming reader MUST:
-1. Parse any valid OpenRisk tag JSON
+1. Parse any valid OpenLabels tag JSON
 2. Extract tags from trailers and sidecars
 3. Verify content_hash when requested
 4. Handle unknown fields gracefully
@@ -1153,11 +1153,11 @@ A conforming writer MUST:
 
 ### Appendix A: JSON Schema
 
-See `openrisk-architecture-v2.md` for the complete JSON schema.
+See `openlabels-architecture-v2.md` for the complete JSON schema.
 
 ### Appendix B: Complete Entity Registry
 
-See `openrisk-entity-registry-v1.md` for all 300+ entity types.
+See `openlabels-entity-registry-v1.md` for all 300+ entity types.
 
 ### Appendix C: Scoring Examples
 
@@ -1225,6 +1225,6 @@ Tier: "Low"
 
 ---
 
-**End of OpenRisk Framework 1.0**
+**End of OpenLabels Framework 1.0**
 
-*This document is the authoritative reference for OpenRisk. All implementations should conform to this specification.*
+*This document is the authoritative reference for OpenLabels. All implementations should conform to this specification.*

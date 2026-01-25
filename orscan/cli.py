@@ -1,5 +1,7 @@
 """
-orscan CLI - Command-line interface for the OpenRisk content scanner.
+orscan CLI - Command-line interface for the OpenLabels content scanner.
+
+Labels are the primitive. Risk is derived.
 
 Usage:
     orscan detect "text to scan"
@@ -187,7 +189,7 @@ def main(argv: Optional[List[str]] = None):
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         prog="orscan",
-        description="OpenRisk Content Scanner - Detect PII/PHI in text and files",
+        description="OpenLabels Content Scanner - Detect PII/PHI in text and files",
     )
     parser.add_argument(
         "--version", "-V",

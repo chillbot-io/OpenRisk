@@ -1,8 +1,10 @@
 """
-orscan - The OpenRisk Content Scanner
+orscan - The OpenLabels Content Scanner
 
 A fast, accurate PII/PHI detection engine for unstructured data.
-Part of the OpenRisk universal risk scoring standard.
+Part of the OpenLabels universal data labeling standard.
+
+Labels are the primitive. Risk is derived.
 
 Quick Start:
     >>> from orscan import detect

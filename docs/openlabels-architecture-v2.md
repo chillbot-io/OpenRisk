@@ -1,8 +1,8 @@
-# OpenRisk Architecture v2.0
+# OpenLabels Architecture v2.0
 
 **The Universal Data Risk Scoring Standard**
 
-This document is the ground truth for OpenRisk architecture. It captures the complete design, including the SDK, adapters, scanner, CLI, and scoring methodology.
+This document is the ground truth for OpenLabels architecture. It captures the complete design, including the SDK, adapters, scanner, CLI, and scoring methodology.
 
 ---
 
@@ -27,15 +27,15 @@ This document is the ground truth for OpenRisk architecture. It captures the com
 
 ## Vision & Identity
 
-### What OpenRisk Is
+### What OpenLabels Is
 
-OpenRisk is a **universal risk scoring standard** that combines:
+OpenLabels is a **universal risk scoring standard** that combines:
 - **Content sensitivity** (what data is present)
 - **Exposure context** (how it's stored and who can access it)
 
 Into a single **portable 0-100 risk score** that works across any platform.
 
-### What OpenRisk Is NOT
+### What OpenLabels Is NOT
 
 - **Not a scanner** (though it includes one as an adapter)
 - **Not a replacement for Macie/DLP/Purview** (it consumes their output)
@@ -45,12 +45,12 @@ Into a single **portable 0-100 risk score** that works across any platform.
 
 ```
 Macie tells you WHAT's in your data.
-OpenRisk tells you HOW RISKY that data actually is, given WHERE it lives.
+OpenLabels tells you HOW RISKY that data actually is, given WHERE it lives.
 ```
 
 An SSN in a private, encrypted bucket ≠ an SSN in a public, unencrypted bucket.
 
-Same content, different risk. Only OpenRisk captures this.
+Same content, different risk. Only OpenLabels captures this.
 
 ---
 
@@ -59,7 +59,7 @@ Same content, different risk. Only OpenRisk captures this.
 | Need | Solution |
 |------|----------|
 | Cross-platform comparison | Same score formula everywhere |
-| Content + Context risk | Only OpenRisk combines both |
+| Content + Context risk | Only OpenLabels combines both |
 | Already have Macie/DLP | Use vendor adapter → get portable score |
 | Want more granularity | Add scanner adapter → standardized detection |
 | Want portability | Scanner works anywhere (on-prem, any cloud) |
@@ -110,7 +110,7 @@ Same content, different risk. Only OpenRisk captures this.
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              OPENRISK CORE                                  │
+│                              OPENLABELS CORE                                  │
 │                                                                             │
 │    ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐        │
 │    │   Merger     │───►│    Scorer    │───►│   Output Generator   │        │
@@ -219,7 +219,7 @@ class ExposureLevel(Enum):
 @dataclass
 class Entity:
     """A detected sensitive entity."""
-    type: str              # Canonical OpenRisk type (e.g., "SSN")
+    type: str              # Canonical OpenLabels type (e.g., "SSN")
     count: int             # Number of occurrences
     confidence: float      # 0.0 - 1.0
     weight: int            # From entity registry (1-10)
@@ -258,7 +258,7 @@ class NormalizedContext:
 
 @dataclass
 class NormalizedInput:
-    """Standard input to the OpenRisk scorer."""
+    """Standard input to the OpenLabels scorer."""
     entities: List[Entity]
     context: NormalizedContext
 
@@ -277,7 +277,7 @@ class Adapter(Protocol):
 class MacieAdapter:
     """AWS Macie + S3 metadata adapter."""
 
-    # Entity type mapping: Macie → OpenRisk
+    # Entity type mapping: Macie → OpenLabels
     ENTITY_MAP = {
         "AWS_CREDENTIALS": "AWS_ACCESS_KEY",
         "CREDIT_CARD_NUMBER": "CREDIT_CARD",
@@ -525,11 +525,11 @@ class PurviewAdapter:
 
 ### Entity Type Normalizer
 
-Maps vendor entity types to canonical OpenRisk types.
+Maps vendor entity types to canonical OpenLabels types.
 
 ```python
 class EntityNormalizer:
-    """Maps vendor entity types to OpenRisk canonical types."""
+    """Maps vendor entity types to OpenLabels canonical types."""
 
     # Master mapping table
     MAPPINGS = {
@@ -554,7 +554,7 @@ class EntityNormalizer:
     }
 
     def normalize(self, vendor_type: str, source: str) -> str:
-        """Normalize a vendor entity type to OpenRisk canonical type."""
+        """Normalize a vendor entity type to OpenLabels canonical type."""
 
         # Try exact match first
         if vendor_type in self.MAPPINGS:
@@ -898,7 +898,7 @@ class ScoringResult:
 
 class RiskScorer:
     """
-    OpenRisk scoring engine.
+    OpenLabels scoring engine.
 
     Formula:
         content_score = Σ(weight × (1 + ln(count)) × confidence)
@@ -1337,7 +1337,7 @@ from typing import Optional
 from datetime import datetime
 
 
-class OpenRiskAgent:
+class OpenLabelsAgent:
     """
     Agent for on-prem / local file systems.
 
@@ -1462,28 +1462,28 @@ class OpenRiskAgent:
 
 ```bash
 # Scan and score
-openrisk scan <path>
-openrisk scan s3://bucket/prefix
-openrisk scan gs://bucket/prefix
-openrisk scan azure://container/path
+openlabels scan <path>
+openlabels scan s3://bucket/prefix
+openlabels scan gs://bucket/prefix
+openlabels scan azure://container/path
 
 # Find with filters
-openrisk find <path> --where "<filter>"
+openlabels find <path> --where "<filter>"
 
 # Actions
-openrisk quarantine <path> --where "<filter>" --to <dest>
-openrisk move <path> --where "<filter>" --to <dest>
-openrisk delete <path> --where "<filter>" --confirm
-openrisk tag <path> --where "<filter>"
-openrisk encrypt <path> --where "<filter>" --key <kms-key>
-openrisk restrict <path> --where "<filter>" --acl private
+openlabels quarantine <path> --where "<filter>" --to <dest>
+openlabels move <path> --where "<filter>" --to <dest>
+openlabels delete <path> --where "<filter>" --confirm
+openlabels tag <path> --where "<filter>"
+openlabels encrypt <path> --where "<filter>" --key <kms-key>
+openlabels restrict <path> --where "<filter>" --acl private
 
 # Reporting
-openrisk report <path> --format json|csv|html
-openrisk heatmap <path>
+openlabels report <path> --format json|csv|html
+openlabels heatmap <path>
 
 # Interactive
-openrisk shell <path>
+openlabels shell <path>
 ```
 
 ### Filter Grammar
@@ -1509,21 +1509,21 @@ openrisk shell <path>
 
 ```bash
 # Quarantine high-risk stale data
-openrisk quarantine s3://prod-bucket \
+openlabels quarantine s3://prod-bucket \
   --where "score > 75 AND last_accessed > 5y" \
   --to s3://quarantine-bucket
 
 # Find public SSNs
-openrisk find s3://data-lake \
+openlabels find s3://data-lake \
   --where "exposure = public AND has(SSN)"
 
 # Delete old low-value data (with preview)
-openrisk delete /mnt/fileshare \
+openlabels delete /mnt/fileshare \
   --where "score < 20 AND last_accessed > 7y" \
   --dry-run
 
 # Complex query
-openrisk find . --where "
+openlabels find . --where "
   score > 75
   AND exposure >= over_exposed
   AND last_accessed > 1y
@@ -1541,7 +1541,7 @@ from typing import Optional
 
 @click.group()
 def cli():
-    """OpenRisk - Universal Data Risk Scoring"""
+    """OpenLabels - Universal Data Risk Scoring"""
     pass
 
 
@@ -1552,7 +1552,7 @@ def cli():
 def find(path: str, where: Optional[str], recursive: bool):
     """Find objects matching filter criteria."""
 
-    client = OpenRiskClient()
+    client = OpenLabelsClient()
     filter = Filter.parse(where) if where else None
 
     for result in client.find(path, filter=filter, recursive=recursive):
@@ -1567,7 +1567,7 @@ def find(path: str, where: Optional[str], recursive: bool):
 def quarantine(source: str, where: str, dest: str, dry_run: bool):
     """Move matching objects to quarantine location."""
 
-    client = OpenRiskClient()
+    client = OpenLabelsClient()
     filter = Filter.parse(where)
 
     matches = list(client.find(source, filter=filter))
@@ -1594,7 +1594,7 @@ def quarantine(source: str, where: str, dest: str, dry_run: bool):
 def report(path: str, fmt: str, output: Optional[str]):
     """Generate risk report."""
 
-    client = OpenRiskClient()
+    client = OpenLabelsClient()
     results = client.scan(path, recursive=True)
 
     if fmt == "json":
@@ -1618,7 +1618,7 @@ def report(path: str, fmt: str, output: Optional[str]):
 def heatmap(path: str):
     """Display risk heatmap of directory structure."""
 
-    client = OpenRiskClient()
+    client = OpenLabelsClient()
     tree = client.scan_tree(path)
 
     click.echo(render_heatmap(tree))
@@ -1653,8 +1653,8 @@ def score_to_bar(score: int, width: int = 20) -> str:
 ### SDK Usage
 
 ```python
-from openrisk import Client, Filter
-from openrisk.adapters import macie, scanner
+from openlabels import Client, Filter
+from openlabels.adapters import macie, scanner
 
 # Initialize client
 client = Client()
@@ -1706,20 +1706,20 @@ client.quarantine(
 ## Repository Structure
 
 ```
-openrisk/
+openlabels/
 ├── pyproject.toml
 ├── README.md
 ├── LICENSE                          # Apache 2.0
 │
 ├── docs/
-│   ├── openrisk-specification-v0.2.md
-│   ├── openrisk-architecture-v2.md      # This document
-│   ├── openrisk-scoring-methodology.md
-│   ├── openrisk-entity-registry-v1.md
-│   ├── openrisk-international-entities.md
+│   ├── openlabels-specification-v0.2.md
+│   ├── openlabels-architecture-v2.md      # This document
+│   ├── openlabels-scoring-methodology.md
+│   ├── openlabels-entity-registry-v1.md
+│   ├── openlabels-international-entities.md
 │   └── calibration-plan.md
 │
-├── openrisk/
+├── openlabels/
 │   ├── __init__.py
 │   ├── client.py                    # High-level client API
 │   │
@@ -1783,7 +1783,7 @@ openrisk/
 │   │
 │   └── output/
 │       ├── __init__.py
-│       ├── trailer.py               # OpenRisk trailer format
+│       ├── trailer.py               # OpenLabels trailer format
 │       └── report.py                # Report generators
 │
 ├── tests/
@@ -1809,7 +1809,7 @@ openrisk/
 
 ```python
 class Client:
-    """High-level OpenRisk client."""
+    """High-level OpenLabels client."""
 
     def score(
         self,
@@ -1957,21 +1957,21 @@ class ScoringResult:
 
 ### Structure
 
-OpenRisk tags can be attached to any file via trailers or sidecars:
+OpenLabels tags can be attached to any file via trailers or sidecars:
 
 ```
 [Original file content - unchanged]
-\n---OPENRISK-TAG-V1---\n
-{"openrisk":{"version":"0.2","score":74,...}}
-\n---END-OPENRISK-TAG---
+\n---OPENLABELS-TAG-V1---\n
+{"openlabels":{"version":"0.2","score":74,...}}
+\n---END-OPENLABELS-TAG---
 ```
 
 ### Markers
 
 | Marker | Bytes | Purpose |
 |--------|-------|---------|
-| Start marker | `\n---OPENRISK-TAG-V1---\n` | Signals beginning of trailer |
-| End marker | `\n---END-OPENRISK-TAG---` | Signals end of trailer |
+| Start marker | `\n---OPENLABELS-TAG-V1---\n` | Signals beginning of trailer |
+| End marker | `\n---END-OPENLABELS-TAG---` | Signals end of trailer |
 
 ### Content Requirements
 
@@ -1983,17 +1983,17 @@ OpenRisk tags can be attached to any file via trailers or sidecars:
 ### Trailer Operations
 
 ```python
-START_MARKER = b'\n---OPENRISK-TAG-V1---\n'
-END_MARKER = b'\n---END-OPENRISK-TAG---'
+START_MARKER = b'\n---OPENLABELS-TAG-V1---\n'
+END_MARKER = b'\n---END-OPENLABELS-TAG---'
 
 def write_trailer(filepath: str, tag: dict) -> None:
-    """Append OpenRisk trailer to file."""
+    """Append OpenLabels trailer to file."""
     with open(filepath, 'rb') as f:
         original = f.read()
 
     # Verify hash matches
     actual_hash = "sha256:" + hashlib.sha256(original).hexdigest()
-    if tag["openrisk"]["content_hash"] != actual_hash:
+    if tag["openlabels"]["content_hash"] != actual_hash:
         raise ValueError("Content hash mismatch")
 
     # Build trailer
@@ -2006,7 +2006,7 @@ def write_trailer(filepath: str, tag: dict) -> None:
         f.write(trailer)
 
 def read_trailer(filepath: str) -> tuple[bytes, dict | None]:
-    """Read file and extract OpenRisk trailer if present."""
+    """Read file and extract OpenLabels trailer if present."""
     with open(filepath, 'rb') as f:
         content = f.read()
 
@@ -2022,7 +2022,7 @@ def read_trailer(filepath: str) -> tuple[bytes, dict | None]:
     tag_json = content[tag_start:end_pos]
     tag = json.loads(tag_json.decode('utf-8'))
 
-    content_length = tag['openrisk']['content_length']
+    content_length = tag['openlabels']['content_length']
     original = content[:content_length]
 
     return original, tag
@@ -2035,9 +2035,9 @@ For binary files or when trailers are undesirable:
 ```
 /data/
 ├── document.pdf
-├── document.pdf.openrisk.json    ← Sidecar
+├── document.pdf.openlabels.json    ← Sidecar
 ├── image.png
-└── image.png.openrisk.json       ← Sidecar
+└── image.png.openlabels.json       ← Sidecar
 ```
 
 | Scenario | Recommendation |
@@ -2054,7 +2054,7 @@ For binary files or when trailers are undesirable:
 
 ### Hash Algorithm
 
-OpenRisk uses SHA-256 as the default hash algorithm:
+OpenLabels uses SHA-256 as the default hash algorithm:
 
 Format: `sha256:<64-character-hex-digest>`
 
@@ -2084,7 +2084,7 @@ Tags can include an optional signature for authenticity verification:
 
 ```json
 {
-  "openrisk": {
+  "openlabels": {
     ...
     "signature": "ed25519:base64-encoded-signature"
   }
@@ -2098,12 +2098,12 @@ Tags can include an optional signature for authenticity verification:
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://openrisk.dev/schema/v2.0/tag.json",
-  "title": "OpenRisk Tag",
+  "$id": "https://openlabels.dev/schema/v2.0/tag.json",
+  "title": "OpenLabels Tag",
   "type": "object",
-  "required": ["openrisk"],
+  "required": ["openlabels"],
   "properties": {
-    "openrisk": {
+    "openlabels": {
       "type": "object",
       "required": [
         "version",
@@ -2240,7 +2240,7 @@ When signatures are present, verify using the generator's public key before trus
 
 ### Information Disclosure
 
-OpenRisk tags reveal metadata about file contents:
+OpenLabels tags reveal metadata about file contents:
 - Entity types present
 - Approximate counts
 - Overall sensitivity level
@@ -2276,7 +2276,7 @@ Implementations SHOULD limit:
 ### Reader Requirements
 
 A conforming reader MUST:
-1. Parse any valid OpenRisk tag JSON
+1. Parse any valid OpenLabels tag JSON
 2. Extract tags from trailers
 3. Extract tags from sidecars
 4. Verify content_hash when requested
@@ -2295,9 +2295,9 @@ A conforming writer MUST:
 
 ## References
 
-- [OpenRisk Entity Registry v1](./openrisk-entity-registry-v1.md)
-- [OpenRisk International Entities](./openrisk-international-entities.md)
+- [OpenLabels Entity Registry v1](./openlabels-entity-registry-v1.md)
+- [OpenLabels International Entities](./openlabels-international-entities.md)
 
 ---
 
-*This document is the authoritative architecture reference for OpenRisk v2. All implementation should align with this specification.*
+*This document is the authoritative architecture reference for OpenLabels v2. All implementation should align with this specification.*
