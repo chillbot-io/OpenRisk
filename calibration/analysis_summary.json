@@ -1,0 +1,55 @@
+{
+  "total_samples": 57821,
+  "tier_distribution": {
+    "Minimal": 37227,
+    "Low": 19970,
+    "High": 406,
+    "Medium": 218
+  },
+  "source_distribution": {
+    "ai4privacy_adversarial": 723,
+    "ai4privacy": 2000,
+    "claude_adversarial": 12400,
+    "claude": 29940,
+    "corpus": 1000,
+    "negative_numbers_context": 1208,
+    "negative_near_miss": 2900,
+    "negative_format_matching": 1474,
+    "negative_brand_names": 1361,
+    "negative_instructional": 368,
+    "negative_clean_text": 232,
+    "template": 3000,
+    "template_adversarial": 1215
+  },
+  "score_deciles": {
+    "0-9": 36263,
+    "10-19": 20394,
+    "20-29": 538,
+    "30-39": 2,
+    "40-49": 3,
+    "50-59": 215,
+    "60-69": 204,
+    "70-79": 202
+  },
+  "entity_type_frequency": {
+    "full_name": 14575,
+    "date_of_birth": 10458,
+    "ssn": 10134,
+    "phone": 10077,
+    "email": 9153,
+    "bank_account": 9104,
+    "physical_address": 8454,
+    "credit_card": 4808,
+    "drivers_license": 4508,
+    "passport": 4407,
+    "ip_address": 4053,
+    "mrn": 609,
+    "age": 200
+  },
+  "entity_count_distribution": {
+    "1-2": 33800,
+    "3-5": 12797,
+    "0": 10798,
+    "6+": 426
+  }
+}
