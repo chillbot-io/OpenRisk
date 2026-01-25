@@ -7,7 +7,7 @@ Text extraction from various file formats with OCR support.
 from .adapter import Detector, detect, detect_file
 from .config import Config
 from .types import DetectionResult, Span
-from .extractor import extract_text, get_extractor, ExtractionResult
+from .extractors import extract_text, get_extractor, ExtractionResult
 from .validators import (
     validate_file,
     validate_uploaded_file,

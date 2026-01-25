@@ -33,7 +33,7 @@ MAX_CONCURRENT_DETECTIONS = 10
 MAX_QUEUE_DEPTH = 50
 from .base import BaseDetector
 from .checksum import ChecksumDetector
-from .patterns import PatternDetector
+from .patterns import PatternDetector  # patterns/ module
 from .additional_patterns import AdditionalPatternDetector
 from .dictionaries import DictionaryDetector
 from .structured import extract_structured_phi, post_process_ocr, map_span_to_original

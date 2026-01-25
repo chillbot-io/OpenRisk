@@ -128,7 +128,7 @@ class Detector:
         Returns:
             DetectionResult containing detected spans and extracted text.
         """
-        from .extractor import extract_text
+        from .extractors import extract_text
 
         start_time = time.perf_counter()
         path = Path(path)
@@ -136,8 +136,10 @@ class Detector:
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
 
-        # Extract text from file
-        text = extract_text(path, ocr_enabled=self.config.enable_ocr)
+        # Read file and extract text
+        content = path.read_bytes()
+        extraction_result = extract_text(content, path.name)
+        text = extraction_result.text
 
         if extract_text_only:
             elapsed_ms = (time.perf_counter() - start_time) * 1000
