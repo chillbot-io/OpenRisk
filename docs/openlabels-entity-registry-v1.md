@@ -46,12 +46,12 @@ Protected Health Information under HIPAA and similar regulations.
 
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
-| `MRN` | **7** | Medical Record Number | medical_record, chart_number |
-| `HEALTH_PLAN_ID` | **7** | Insurance member/subscriber ID | member_id, subscriber_id |
-| `NPI` | **6** | National Provider Identifier | |
+| `MRN` | **8** | Medical Record Number | medical_record, chart_number |
+| `HEALTH_PLAN_ID` | **8** | Insurance member/subscriber ID | member_id, subscriber_id |
+| `NPI` | **7** | National Provider Identifier | |
 | `DEA` | **7** | DEA registration number | dea_number |
 | `DIAGNOSIS` | **8** | Medical diagnosis/condition | icd_code, condition |
-| `MEDICATION` | **7** | Prescription/drug name | drug, prescription |
+| `MEDICATION` | **6** | Prescription/drug name | drug, prescription |
 | `LAB_TEST` | **5** | Laboratory test name | |
 | `ENCOUNTER_ID` | **5** | Healthcare encounter/visit ID | visit_id |
 | `ACCESSION_ID` | **5** | Lab accession number | specimen_id |
