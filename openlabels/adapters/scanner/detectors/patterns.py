@@ -766,7 +766,7 @@ add_pattern(r'(?:ZIP|Postal|Zip\s*Code)[:\s]+(\d{5}(?:-\d{4})?)', 'ZIP', 0.95, 1
 # === HIPAA Safe Harbor Restricted ZIP Prefixes ===
 # These 17 prefixes have populations < 20,000 and MUST be detected even without labels
 # Per 45 CFR §164.514(b)(2)(i)(B), they get replaced with "000" in safe harbor output
-# Ref: orscan pipeline for the transformation logic
+# Ref: scanner pipeline for the transformation logic
 
 # Vermont (036, 059)
 add_pattern(r'\b(036\d{2}(?:-\d{4})?)\b', 'ZIP', 0.88, 1)

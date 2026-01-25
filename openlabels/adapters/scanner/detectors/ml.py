@@ -30,11 +30,11 @@ def get_device(device_config: str = "auto", cuda_device_id: int = 0) -> int:
         - 0, 1, 2... = CUDA device index
     
     Environment variables:
-        SCRUBIQ_DEVICE: Override device ("auto", "cuda", "cpu")
+        OPENLABELS_SCANNER_DEVICE: Override device ("auto", "cuda", "cpu")
         CUDA_VISIBLE_DEVICES: Standard CUDA device selection
     """
     # Environment override takes priority
-    env_device = os.environ.get("SCRUBIQ_DEVICE", "").lower()
+    env_device = os.environ.get("OPENLABELS_SCANNER_DEVICE", "").lower()
     if env_device in ("cpu", "cuda", "auto"):
         device_config = env_device
     

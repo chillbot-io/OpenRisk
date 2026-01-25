@@ -1,13 +1,13 @@
 """
-orscan CLI - Command-line interface for the OpenLabels content scanner.
+OpenLabels CLI - Command-line interface.
 
 Labels are the primitive. Risk is derived.
 
 Usage:
-    orscan detect "text to scan"
-    orscan detect-file document.pdf
-    orscan detect-dir ./data --recursive
-    orscan --version
+    openlabels scan "text to scan"
+    openlabels scan-file document.pdf
+    openlabels scan-dir ./data --recursive
+    openlabels --version
 """
 
 import argparse
@@ -181,14 +181,14 @@ def cmd_detect_dir(args):
 
 def cmd_version(args):
     """Show version information."""
-    print(f"orscan {__version__}")
+    print(f"openlabels {__version__}")
     print("OpenRisk Content Scanner")
 
 
 def main(argv: Optional[List[str]] = None):
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        prog="orscan",
+        prog="openlabels",
         description="OpenLabels Content Scanner - Detect PII/PHI in text and files",
     )
     parser.add_argument(

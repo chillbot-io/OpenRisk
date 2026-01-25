@@ -1,5 +1,5 @@
 """
-Central constants for orscan.
+Central constants for the OpenLabels Scanner.
 
 All magic numbers, timeouts, and limits defined here.
 Import from this module rather than hardcoding values.

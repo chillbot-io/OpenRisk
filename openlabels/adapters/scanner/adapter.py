@@ -1,5 +1,5 @@
 """
-orscan Detector - the core detection engine.
+OpenLabels Scanner - the core detection engine.
 
 This is the main entry point for detecting PII/PHI in text and files.
 Part of OpenLabels - where labels are the primitive, risk is derived.
@@ -20,12 +20,11 @@ class Detector:
     """
     Content scanner for PII/PHI detection.
 
-    This is the main interface for orscan. It orchestrates multiple detection
-    engines (patterns, checksums, structured extraction) to find sensitive
-    data in text or files.
+    Orchestrates multiple detection engines (patterns, checksums, structured
+    extraction) to find sensitive data in text or files.
 
     Example:
-        >>> from orscan import Detector
+        >>> from openlabels.adapters.scanner import Detector
         >>> detector = Detector()
         >>> result = detector.detect("Patient John Smith, SSN 123-45-6789")
         >>> for span in result.spans:
@@ -199,7 +198,7 @@ def detect(text: str, **config_kwargs) -> DetectionResult:
         DetectionResult with detected spans.
 
     Example:
-        >>> from orscan import detect
+        >>> from openlabels.adapters.scanner import detect
         >>> result = detect("Call me at 555-123-4567")
         >>> print(result.entity_counts)
         {'PHONE': 1}

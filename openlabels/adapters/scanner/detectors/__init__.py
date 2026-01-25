@@ -1,5 +1,5 @@
 """
-orscan detection engines.
+OpenLabels Scanner detection engines.
 
 Pattern-based, checksum-validated, and structured detectors for PII/PHI.
 """

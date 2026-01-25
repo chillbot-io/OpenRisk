@@ -2,7 +2,7 @@
 OCR engine using RapidOCR with local ONNX models.
 
 RapidOCR is PaddleOCR's models pre-converted to ONNX, running on onnxruntime.
-This aligns with ScrubIQ's all-ONNX inference stack.
+Uses all-ONNX inference for portability.
 
 Models required in models_dir/rapidocr/:
 - det.onnx (~4.5 MB) - Text region detection

@@ -1,8 +1,8 @@
 """
-orscan Exceptions.
+OpenLabels Scanner Exceptions.
 
 Exception Hierarchy:
-    OrscanError (base)
+    ScannerError (base)
     ├── ConfigurationError
     ├── DetectionError
     └── ProcessingError
@@ -10,7 +10,7 @@ Exception Hierarchy:
 """
 
 __all__ = [
-    "OrscanError",
+    "ScannerError",
     "ConfigurationError",
     "DetectionError",
     "ProcessingError",
@@ -18,22 +18,22 @@ __all__ = [
 ]
 
 
-class OrscanError(Exception):
-    """Base exception for all orscan errors."""
+class ScannerError(Exception):
+    """Base exception for all scanner errors."""
     pass
 
 
-class ConfigurationError(OrscanError):
+class ConfigurationError(ScannerError):
     """Configuration or initialization error."""
     pass
 
 
-class DetectionError(OrscanError):
+class DetectionError(ScannerError):
     """Error during PII/PHI detection."""
     pass
 
 
-class ProcessingError(OrscanError):
+class ProcessingError(ScannerError):
     """Error during file/text processing."""
     pass
 

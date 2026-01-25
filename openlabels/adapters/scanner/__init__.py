@@ -1,5 +1,5 @@
 """
-orscan file processing.
+OpenLabels Scanner - file processing.
 
 Text extraction from various file formats with OCR support.
 """

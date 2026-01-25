@@ -1,4 +1,4 @@
-"""Core data types for orscan - the OpenRisk content scanner."""
+"""Core data types for the OpenLabels Scanner."""
 
 from dataclasses import dataclass, field
 from enum import IntEnum

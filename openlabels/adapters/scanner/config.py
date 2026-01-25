@@ -1,4 +1,4 @@
-"""Configuration for orscan - the OpenRisk content scanner."""
+"""Configuration for the OpenLabels Scanner."""
 
 import os
 from dataclasses import dataclass, field
@@ -28,7 +28,7 @@ FORBIDDEN_PATHS = frozenset([
 
 def validate_data_path(path: Path) -> bool:
     """Validate data directory path is safe."""
-    testing_mode = os.environ.get("ORSCAN_TESTING", "").lower() in ("1", "true", "yes")
+    testing_mode = os.environ.get("OPENLABELS_SCANNER_TESTING", "").lower() in ("1", "true", "yes")
     resolved = path.resolve()
     path_str = str(resolved)
 
@@ -52,30 +52,30 @@ def validate_data_path(path: Path) -> bool:
 def default_data_dir() -> Path:
     """
     Default data directory, checked in order:
-    1. ORSCAN_HOME env var (if set)
-    2. .orscan/ in current working directory (project-local)
-    3. ~/.orscan (user home fallback)
+    1. OPENLABELS_SCANNER_HOME env var (if set)
+    2. .openlabels/ in current working directory (project-local)
+    3. ~/.openlabels (user home fallback)
     """
-    env_dir = os.environ.get("ORSCAN_HOME")
+    env_dir = os.environ.get("OPENLABELS_SCANNER_HOME")
     if env_dir:
         path = Path(env_dir).expanduser()
         if not validate_data_path(path):
-            logger.warning(f"ORSCAN_HOME={env_dir} failed validation, using default")
+            logger.warning(f"OPENLABELS_SCANNER_HOME={env_dir} failed validation, using default")
         else:
             return path
 
-    local_dir = Path.cwd() / ".orscan"
+    local_dir = Path.cwd() / ".openlabels"
     if local_dir.exists() and local_dir.is_dir():
         if validate_data_path(local_dir):
             logger.debug(f"Using local data directory: {local_dir}")
             return local_dir
 
-    return Path.home() / ".orscan"
+    return Path.home() / ".openlabels"
 
 
 @dataclass
 class Config:
-    """orscan configuration."""
+    """OpenLabels Scanner configuration."""
 
     # Paths
     data_dir: Path = field(default_factory=default_data_dir)
@@ -86,7 +86,7 @@ class Config:
         """Directory for ML models (OCR, etc.)."""
         if self._models_dir_override is not None:
             return self._models_dir_override
-        env_models = os.environ.get("ORSCAN_MODELS_DIR")
+        env_models = os.environ.get("OPENLABELS_SCANNER_MODELS_DIR")
         if env_models:
             return Path(env_models).expanduser()
         return self.data_dir / "models"
@@ -173,16 +173,16 @@ class Config:
         """Create config from environment variables."""
         config = cls()
 
-        if env_conf := os.environ.get("ORSCAN_MIN_CONFIDENCE"):
+        if env_conf := os.environ.get("OPENLABELS_SCANNER_MIN_CONFIDENCE"):
             config.min_confidence = float(env_conf)
 
-        if env_device := os.environ.get("ORSCAN_DEVICE"):
+        if env_device := os.environ.get("OPENLABELS_SCANNER_DEVICE"):
             config.device = env_device.lower()
 
-        if env_ocr := os.environ.get("ORSCAN_ENABLE_OCR"):
+        if env_ocr := os.environ.get("OPENLABELS_SCANNER_ENABLE_OCR"):
             config.enable_ocr = env_ocr.lower() in ("1", "true", "yes")
 
-        if env_workers := os.environ.get("ORSCAN_MAX_WORKERS"):
+        if env_workers := os.environ.get("OPENLABELS_SCANNER_MAX_WORKERS"):
             config.max_workers = int(env_workers)
 
         return config

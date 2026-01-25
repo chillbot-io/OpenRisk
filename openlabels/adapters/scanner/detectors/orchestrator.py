@@ -91,7 +91,7 @@ try:
 except ImportError:
     pass
 
-# LLM verification removed - not needed for orscan
+# LLM verification not included in scanner - detection only
 LLMVerifier = None
 create_verifier = None
 
@@ -272,7 +272,7 @@ class DetectorOrchestrator:
             except Exception as e:
                 logger.debug(f"Context Enhancer not available: {e}")
 
-        # LLM verifier removed in orscan - detection only, no LLM calls
+        # LLM verifier not included - detection only, no LLM calls
         self._llm_verifier = None
 
     @property

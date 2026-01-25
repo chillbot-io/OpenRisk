@@ -94,7 +94,7 @@ class SecureTempDir:
             return self._path
         
         # Create unique directory name
-        dir_name = f"orscan_{self.job_id}_{uuid.uuid4().hex[:8]}"
+        dir_name = f"openlabels_scan_{self.job_id}_{uuid.uuid4().hex[:8]}"
         self._path = self.base_dir / dir_name
         
         # Create with restricted permissions

@@ -1,6 +1,6 @@
 """Canonical label mappings for ML detectors.
 
-Maps model output labels to ScrubIQ's entity type taxonomy.
+Maps model output labels to the OpenLabels entity type taxonomy.
 Used by both PyTorch (ml.py) and ONNX (ml_onnx.py) detectors.
 """
 
