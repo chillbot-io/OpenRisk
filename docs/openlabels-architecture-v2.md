@@ -2304,9 +2304,9 @@ Mitigations:
 ### Denial of Service
 
 Implementations SHOULD limit:
-- Maximum tag size: 1 MB
+- Maximum label set size: 1 MB
 - Maximum entities count: 10,000
-- Trailer search timeout: 5 seconds
+- Metadata read timeout: 5 seconds
 
 ---
 
