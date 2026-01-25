@@ -671,11 +671,20 @@ class ImageExtractor(BaseExtractor):
                 logger.warning(f"Could not initialize EnhancedOCRProcessor: {e}")
                 self.enable_enhanced_processing = False
         return self._enhanced_processor
-    
+
+    def _save_page_image(self, img, page_num: int) -> Optional[str]:
+        """Save a PIL Image to temp directory if available. Returns path or None."""
+        if not self.temp_dir:
+            return None
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, format='PNG')
+        temp_path = self.temp_dir.write_page(page_num, img_buffer.getvalue())
+        return str(temp_path)
+
     def can_handle(self, content_type: str, extension: str) -> bool:
         return (
             content_type.startswith("image/") or
-            extension in (".jpg", ".jpeg", ".png", ".tiff", ".tif", 
+            extension in (".jpg", ".jpeg", ".png", ".tiff", ".tif",
                          ".heic", ".heif", ".gif", ".bmp", ".webp")
         )
     
