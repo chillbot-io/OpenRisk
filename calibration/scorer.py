@@ -23,51 +23,55 @@ class RiskTier(Enum):
 # CALIBRATION PARAMETERS - Adjust these based on calibration results
 # =============================================================================
 
-# Entity weights: How sensitive is this data type? (1-10 scale)
+# Entity weights calibrated so:
+# - Single SSN/CC → Medium (score ~35)
+# - SSN + health → High (score ~65+)
+# - Bulk sensitive → Critical (score 86+)
+# Math: weight × 1.0 × 0.9 = base score for single entity
 ENTITY_WEIGHTS = {
-    # Direct Identifiers (can uniquely identify)
-    'ssn': 9,
-    'passport': 9,
-    'drivers_license': 7,
-    'tax_id': 8,
+    # Direct Identifiers - single instance should be Medium
+    'ssn': 40,           # 40 × 0.9 = 36 → Medium
+    'passport': 38,
+    'drivers_license': 32,
+    'tax_id': 36,
 
-    # Financial (direct fraud risk)
-    'credit_card': 9,
-    'bank_account': 7,
-    'routing_number': 5,
+    # Financial - single CC should be Medium
+    'credit_card': 40,   # 40 × 0.9 = 36 → Medium
+    'bank_account': 25,
+    'routing_number': 15,
 
-    # Medical/Health (HIPAA)
-    'mrn': 7,
-    'diagnosis': 8,
-    'medication': 7,
-    'procedure': 7,
-    'lab_result': 7,
-    'health_plan_id': 6,
+    # Medical/Health - important for HIPAA combos
+    'mrn': 28,
+    'diagnosis': 25,
+    'medication': 20,
+    'procedure': 20,
+    'lab_result': 22,
+    'health_plan_id': 18,
 
-    # Personal Identifiers
-    'full_name': 5,
-    'physical_address': 5,
-    'email': 4,
-    'phone': 4,
-    'ip_address': 3,
-    'date_of_birth': 6,
+    # Personal Identifiers - single should be Low
+    'full_name': 12,     # 12 × 0.9 = 10.8 → Minimal (needs combo)
+    'physical_address': 15,
+    'email': 10,         # Slightly lower - common, less risky alone
+    'phone': 10,
+    'ip_address': 8,
+    'date_of_birth': 18,
 
-    # Quasi-identifiers (low individual risk)
-    'age': 2,
-    'gender': 2,
-    'postal_code': 2,
-    'ethnicity': 3,
+    # Quasi-identifiers - minimal risk alone
+    'age': 5,
+    'gender': 4,
+    'postal_code': 6,
+    'ethnicity': 8,
 
-    # Secrets/Credentials (access risk)
-    'api_key': 9,
-    'password': 9,
-    'private_key': 10,
-    'access_token': 8,
-    'aws_key': 9,
+    # Secrets/Credentials - single should be High
+    'api_key': 70,       # 70 × 0.9 = 63 → High
+    'password': 70,
+    'private_key': 80,
+    'access_token': 65,
+    'aws_key': 75,
 }
 
 # Default weight for unknown entity types
-DEFAULT_WEIGHT = 3
+DEFAULT_WEIGHT = 10
 
 # Entity categories for co-occurrence rules
 ENTITY_CATEGORIES = {
@@ -122,11 +126,15 @@ CO_OCCURRENCE_RULES: List[Tuple[Set[str], float]] = [
 ]
 
 # Tier thresholds (score -> tier)
+# Calibrated so:
+# - Single direct ID (SSN, CC) = Medium (~36)
+# - Direct ID + personal = High (~55+)
+# - HIPAA/bulk = Critical (80+)
 TIER_THRESHOLDS = {
-    'critical': 86,
-    'high': 61,
-    'medium': 31,
-    'low': 11,
+    'critical': 80,      # HIPAA violations, bulk data, credentials
+    'high': 55,          # Direct ID + context, or multiple high-risk
+    'medium': 31,        # Single direct ID
+    'low': 11,           # Personal info without direct ID
     # Below 11 = Minimal
 }
 
