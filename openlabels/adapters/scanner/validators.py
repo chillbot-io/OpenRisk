@@ -274,44 +274,28 @@ def validate_magic_bytes(
     return False
 
 
-def _validate_text_content(content: bytes, sample_size: int = 8192) -> bool:
-    """
-    Validate that bytes content is actually text (UTF-8 or ASCII).
-    
-    Checks for:
-    - Valid UTF-8 encoding
-    - No null bytes (binary indicator)
-    - Reasonable character distribution
-    
-    Args:
-        content: Raw bytes to validate
-        sample_size: Bytes to sample for validation
-        
-    Returns:
-        True if content appears to be valid text
-    """
+def _validate_text_content(content: bytes, sample_size: int = 8192, source_name: str = "") -> bool:
+    """Validate that bytes content is actually text (UTF-8 or ASCII)."""
     sample = content[:sample_size]
-    
+
     if not sample:
-        return True  # Empty content is valid text
-    
-    # Check for null bytes (strong binary indicator)
+        return True
+
     if b"\x00" in sample:
-        logger.warning("Null bytes found in alleged text content")
+        if source_name:
+            logger.warning(f"Null bytes found in alleged text: {source_name}")
         return False
-    
-    # Try to decode as UTF-8
+
     try:
         sample.decode("utf-8")
         return True
     except UnicodeDecodeError:
-        # Try Latin-1 as fallback (accepts any byte sequence)
         try:
             sample.decode("latin-1")
-            # Check for high ratio of non-printable characters
             non_printable = sum(1 for b in sample if b < 32 and b not in (9, 10, 13))
-            if non_printable / len(sample) > 0.1:  # >10% non-printable
-                logger.warning("High non-printable ratio in text content")
+            if non_printable / len(sample) > 0.1:
+                if source_name:
+                    logger.warning(f"High non-printable ratio in text: {source_name}")
                 return False
             return True
         except (UnicodeDecodeError, LookupError):
@@ -319,51 +303,11 @@ def _validate_text_content(content: bytes, sample_size: int = 8192) -> bool:
 
 
 def _validate_text_file(file_path: Path, sample_size: int = 8192) -> bool:
-    """
-    Validate that a file is actually text (UTF-8 or ASCII).
-    
-    Reads a sample of the file and checks for:
-    - Valid UTF-8 encoding
-    - No null bytes (binary indicator)
-    - Reasonable character distribution
-    
-    Args:
-        file_path: Path to file
-        sample_size: Bytes to sample for validation
-        
-    Returns:
-        True if file appears to be valid text
-    """
+    """Validate that a file is actually text (UTF-8 or ASCII)."""
     try:
         with open(file_path, "rb") as f:
-            sample = f.read(sample_size)
-        
-        if not sample:
-            return True  # Empty file is valid text
-        
-        # Check for null bytes (strong binary indicator)
-        if b"\x00" in sample:
-            logger.warning(f"Null bytes found in alleged text file: {file_path.name}")
-            return False
-        
-        # Try to decode as UTF-8
-        try:
-            sample.decode("utf-8")
-            return True
-        except UnicodeDecodeError:
-            # Try Latin-1 as fallback (accepts any byte sequence)
-            # But warn - could be binary
-            try:
-                sample.decode("latin-1")
-                # Check for high ratio of non-printable characters
-                non_printable = sum(1 for b in sample if b < 32 and b not in (9, 10, 13))
-                if non_printable / len(sample) > 0.1:  # >10% non-printable
-                    logger.warning(f"High non-printable ratio in text file: {file_path.name}")
-                    return False
-                return True
-            except (UnicodeDecodeError, LookupError):
-                return False
-                
+            content = f.read(sample_size)
+        return _validate_text_content(content, sample_size, file_path.name)
     except IOError as e:
         raise FileValidationError(f"Cannot read file for text validation: {e}")
 

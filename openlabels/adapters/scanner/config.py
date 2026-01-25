@@ -106,15 +106,6 @@ class Config:
     entity_types: Optional[List[str]] = None  # None = detect all types
     exclude_types: Optional[List[str]] = None  # Types to never detect
 
-    @property
-    def confidence_threshold(self) -> float:
-        """Alias for min_confidence."""
-        return self.min_confidence
-
-    @confidence_threshold.setter
-    def confidence_threshold(self, value: float):
-        self.min_confidence = value
-
     # Device / GPU Configuration
     device: str = "auto"  # "auto", "cuda", "cpu"
     cuda_device_id: int = 0

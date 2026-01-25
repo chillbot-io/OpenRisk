@@ -563,13 +563,11 @@ class OCREngine:
         # Build offset map for the properly-spaced text
         offset_map = []
         current_offset = 0
-        line_idx = 0
-        block_in_line = 0
-        
+
         for i, block in enumerate(blocks):
             y_top = min(p[1] for p in block.bbox)
             line_group = int(y_top / 20)
-            
+
             # Check if we've moved to a new line
             if i > 0:
                 prev_y_top = min(p[1] for p in blocks[i-1].bbox)
@@ -577,7 +575,6 @@ class OCREngine:
                 if line_group != prev_line_group:
                     # New line - add newline offset
                     current_offset += 1  # for \n
-                    block_in_line = 0
                 else:
                     # Same line - add space offset
                     current_offset += 1  # for space

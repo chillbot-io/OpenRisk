@@ -17,8 +17,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 
-from ..types import Span
-from ..constants import MAX_STRUCTURED_VALUE_LENGTH
+from ...types import Span
+from ...constants import MAX_STRUCTURED_VALUE_LENGTH
 
 logger = logging.getLogger(__name__)
 
@@ -1148,28 +1148,24 @@ def extract_value(text: str, label: DetectedLabel, next_label: Optional[Detected
     # Try type-specific pattern first
     value = None
     raw_value = None  # Value before stripping
-    value_match_end = 0  # Position where match ended in candidate
-    
+
     if label.phi_type in VALUE_PATTERNS:
         pattern = VALUE_PATTERNS[label.phi_type]
         match = pattern.match(candidate)
         if match:
             raw_value = match.group(1)
             value = raw_value.strip()
-            value_match_end = match.end(1)
-    
+
     # Fall back to generic extraction (up to next field or terminator)
     if value is None:
         term_match = GENERIC_TERMINATOR.search(candidate)
         if term_match:
             raw_value = candidate[:term_match.start()]
             value = raw_value.strip()
-            value_match_end = term_match.start()
         else:
             # Take up to max length or end of candidate
             raw_value = candidate.rstrip()
             value = raw_value.strip()
-            value_match_end = len(raw_value)
     
     if not value:
         return None
