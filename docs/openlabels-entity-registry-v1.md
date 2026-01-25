@@ -11,7 +11,7 @@ This document defines all entity types recognized by OpenLabels v1, their sensit
 | Weight | Sensitivity Level | Description |
 |--------|-------------------|-------------|
 | **10** | Critical | Immediate exploitation risk (credentials, complete identity) |
-| **9** | Very High | Direct identifier enabling fraud/theft (SSN, passport) |
+| **10** | Very High | Direct identifier enabling fraud/theft (SSN, passport) |
 | **8** | High | Sensitive identifier or protected data (credit card, health) |
 | **7** | High-Medium | Financial/healthcare IDs requiring protection |
 | **6** | Medium-High | Semi-direct identifiers |
@@ -29,12 +29,12 @@ Government-issued IDs that uniquely identify individuals.
 
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
-| `SSN` | **9** | US Social Security Number | social_security, ss |
-| `PASSPORT` | **9** | Passport number (any country) | passport_number |
+| `SSN` | **10** | US Social Security Number | social_security, ss |
+| `PASSPORT` | **10** | Passport number (any country) | passport_number |
 | `DRIVER_LICENSE` | **7** | Driver's license number | dl, dln, drivers_license |
 | `STATE_ID` | **7** | State-issued ID card | id_card |
 | `TAX_ID` | **8** | Tax identification number | tin, ein, itin |
-| `AADHAAR` | **9** | India Aadhaar number | |
+| `AADHAAR` | **10** | India Aadhaar number | |
 | `NHS_NUMBER` | **8** | UK NHS number | |
 | `MEDICARE_ID` | **8** | US Medicare Beneficiary ID (MBI) | mbi |
 
@@ -108,7 +108,7 @@ Payment instruments and financial identifiers.
 
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
-| `CREDIT_CARD` | **9** | Credit/debit card number | cc, card_number |
+| `CREDIT_CARD` | **10** | Credit/debit card number | cc, card_number |
 | `BANK_ACCOUNT` | **7** | Bank account number | account_number |
 | `BANK_ROUTING` | **6** | ABA routing number | aba, routing_number |
 | `IBAN` | **7** | International Bank Account Number | |
@@ -130,7 +130,7 @@ Payment instruments and financial identifiers.
 |-------------|--------|-------------|---------|
 | `BITCOIN_ADDRESS` | **8** | Bitcoin wallet address | btc_address |
 | `ETHEREUM_ADDRESS` | **8** | Ethereum wallet address | eth_address |
-| `CRYPTO_SEED_PHRASE` | **9** | BIP-39 mnemonic seed phrase | seed_phrase, mnemonic |
+| `CRYPTO_SEED_PHRASE` | **10** | BIP-39 mnemonic seed phrase | seed_phrase, mnemonic |
 | `SOLANA_ADDRESS` | **8** | Solana wallet address | |
 | `CARDANO_ADDRESS` | **8** | Cardano wallet address | |
 | `LITECOIN_ADDRESS` | **8** | Litecoin wallet address | |
@@ -165,11 +165,11 @@ Authentication tokens and sensitive credentials. **All credentials trigger criti
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
 | `PASSWORD` | **10** | Password or passphrase | passwd, pwd |
-| `API_KEY` | **9** | Generic API key | |
-| `SECRET` | **9** | Generic secret/token | |
+| `API_KEY` | **10** | Generic API key | |
+| `SECRET` | **10** | Generic secret/token | |
 | `PRIVATE_KEY` | **10** | PEM-encoded private key | |
 | `JWT` | **8** | JSON Web Token | |
-| `BASIC_AUTH` | **9** | Basic authentication header | |
+| `BASIC_AUTH` | **10** | Basic authentication header | |
 | `BEARER_TOKEN` | **8** | Bearer authentication token | |
 | `DATABASE_URL` | **10** | Connection string with credentials | |
 
@@ -179,14 +179,14 @@ Authentication tokens and sensitive credentials. **All credentials trigger criti
 |-------------|--------|-------------|---------|
 | `AWS_ACCESS_KEY` | **10** | AWS access key ID | akia |
 | `AWS_SECRET_KEY` | **10** | AWS secret access key | |
-| `AWS_SESSION_TOKEN` | **9** | AWS temporary session token | |
+| `AWS_SESSION_TOKEN` | **10** | AWS temporary session token | |
 | `AZURE_STORAGE_KEY` | **10** | Azure storage account key | |
 | `AZURE_CONNECTION_STRING` | **10** | Azure connection string | |
 | `AZURE_SAS_TOKEN` | **8** | Azure SAS token | |
-| `GOOGLE_API_KEY` | **9** | Google API key | |
+| `GOOGLE_API_KEY` | **10** | Google API key | |
 | `GOOGLE_OAUTH_ID` | **6** | Google OAuth client ID | |
-| `GOOGLE_OAUTH_SECRET` | **9** | Google OAuth client secret | |
-| `FIREBASE_KEY` | **9** | Firebase API key | |
+| `GOOGLE_OAUTH_SECRET` | **10** | Google OAuth client secret | |
+| `FIREBASE_KEY` | **10** | Firebase API key | |
 
 ### AI/ML Platform Keys (P0 - High Leak Risk)
 
@@ -194,65 +194,65 @@ Authentication tokens and sensitive credentials. **All credentials trigger criti
 |-------------|--------|-------------|--------------|
 | `OPENAI_API_KEY` | **10** | OpenAI API key | `sk-[a-zA-Z0-9]{48}` |
 | `ANTHROPIC_API_KEY` | **10** | Anthropic/Claude API key | `sk-ant-api03-[a-zA-Z0-9\-_]{93}` |
-| `HUGGINGFACE_TOKEN` | **9** | Hugging Face access token | `hf_[a-zA-Z0-9]{34}` |
-| `COHERE_API_KEY` | **9** | Cohere API key | Context-based |
-| `REPLICATE_TOKEN` | **9** | Replicate API token | `r8_[a-zA-Z0-9]{40}` |
-| `STABILITY_API_KEY` | **9** | Stability AI key | Context-based |
-| `MISTRAL_API_KEY` | **9** | Mistral AI key | Context-based |
-| `TOGETHER_API_KEY` | **9** | Together AI key | Context-based |
-| `GROQ_API_KEY` | **9** | Groq API key | `gsk_[a-zA-Z0-9]{52}` |
+| `HUGGINGFACE_TOKEN` | **10** | Hugging Face access token | `hf_[a-zA-Z0-9]{34}` |
+| `COHERE_API_KEY` | **10** | Cohere API key | Context-based |
+| `REPLICATE_TOKEN` | **10** | Replicate API token | `r8_[a-zA-Z0-9]{40}` |
+| `STABILITY_API_KEY` | **10** | Stability AI key | Context-based |
+| `MISTRAL_API_KEY` | **10** | Mistral AI key | Context-based |
+| `TOGETHER_API_KEY` | **10** | Together AI key | Context-based |
+| `GROQ_API_KEY` | **10** | Groq API key | `gsk_[a-zA-Z0-9]{52}` |
 
 ### Additional Cloud Providers
 
 | Entity Type | Weight | Description | Pattern Hint |
 |-------------|--------|-------------|--------------|
 | `GCP_SERVICE_ACCOUNT` | **10** | GCP service account JSON | JSON with `"type": "service_account"` |
-| `GCP_API_KEY` | **9** | GCP API key | Context-based |
+| `GCP_API_KEY` | **10** | GCP API key | Context-based |
 | `DIGITALOCEAN_TOKEN` | **10** | DigitalOcean API token | `dop_v1_[a-f0-9]{64}` |
-| `LINODE_TOKEN` | **9** | Linode API token | Context-based |
-| `VULTR_API_KEY` | **9** | Vultr API key | Context-based |
+| `LINODE_TOKEN` | **10** | Linode API token | Context-based |
+| `VULTR_API_KEY` | **10** | Vultr API key | Context-based |
 | `ALIBABA_ACCESS_KEY` | **10** | Alibaba Cloud access key | `LTAI[a-zA-Z0-9]{12,20}` |
-| `ORACLE_CLOUD_KEY` | **9** | Oracle Cloud API key | Context-based |
-| `IBM_CLOUD_KEY` | **9** | IBM Cloud API key | Context-based |
-| `CLOUDFLARE_API_KEY` | **9** | Cloudflare API key | Context-based |
-| `CLOUDFLARE_TOKEN` | **9** | Cloudflare API token | Context-based |
+| `ORACLE_CLOUD_KEY` | **10** | Oracle Cloud API key | Context-based |
+| `IBM_CLOUD_KEY` | **10** | IBM Cloud API key | Context-based |
+| `CLOUDFLARE_API_KEY` | **10** | Cloudflare API key | Context-based |
+| `CLOUDFLARE_TOKEN` | **10** | Cloudflare API token | Context-based |
 
 ### CI/CD Platform Tokens
 
 | Entity Type | Weight | Description | Pattern Hint |
 |-------------|--------|-------------|--------------|
-| `CIRCLECI_TOKEN` | **9** | CircleCI API token | 40-char hex |
-| `TRAVIS_TOKEN` | **9** | Travis CI token | Context-based |
-| `JENKINS_TOKEN` | **9** | Jenkins API token | Context-based |
-| `AZURE_DEVOPS_PAT` | **9** | Azure DevOps personal access token | 52-char base64 |
-| `BITBUCKET_TOKEN` | **9** | Bitbucket app password/token | Context-based |
-| `VERCEL_TOKEN` | **9** | Vercel API token | Context-based |
-| `NETLIFY_TOKEN` | **9** | Netlify access token | Context-based |
-| `RENDER_API_KEY` | **9** | Render API key | `rnd_[a-zA-Z0-9]+` |
-| `RAILWAY_TOKEN` | **9** | Railway API token | Context-based |
-| `FLY_TOKEN` | **9** | Fly.io API token | Context-based |
+| `CIRCLECI_TOKEN` | **10** | CircleCI API token | 40-char hex |
+| `TRAVIS_TOKEN` | **10** | Travis CI token | Context-based |
+| `JENKINS_TOKEN` | **10** | Jenkins API token | Context-based |
+| `AZURE_DEVOPS_PAT` | **10** | Azure DevOps personal access token | 52-char base64 |
+| `BITBUCKET_TOKEN` | **10** | Bitbucket app password/token | Context-based |
+| `VERCEL_TOKEN` | **10** | Vercel API token | Context-based |
+| `NETLIFY_TOKEN` | **10** | Netlify access token | Context-based |
+| `RENDER_API_KEY` | **10** | Render API key | `rnd_[a-zA-Z0-9]+` |
+| `RAILWAY_TOKEN` | **10** | Railway API token | Context-based |
+| `FLY_TOKEN` | **10** | Fly.io API token | Context-based |
 
 ### Container Registry Tokens
 
 | Entity Type | Weight | Description | Pattern Hint |
 |-------------|--------|-------------|--------------|
-| `DOCKER_HUB_TOKEN` | **9** | Docker Hub access token | `dckr_pat_[a-zA-Z0-9\-_]{56}` |
-| `QUAY_TOKEN` | **9** | Quay.io robot token | Context-based |
-| `ECR_TOKEN` | **9** | AWS ECR token | Context-based |
-| `GCR_TOKEN` | **9** | Google Container Registry | Context-based |
-| `ACR_TOKEN` | **9** | Azure Container Registry | Context-based |
-| `HARBOR_TOKEN` | **9** | Harbor registry token | Context-based |
+| `DOCKER_HUB_TOKEN` | **10** | Docker Hub access token | `dckr_pat_[a-zA-Z0-9\-_]{56}` |
+| `QUAY_TOKEN` | **10** | Quay.io robot token | Context-based |
+| `ECR_TOKEN` | **10** | AWS ECR token | Context-based |
+| `GCR_TOKEN` | **10** | Google Container Registry | Context-based |
+| `ACR_TOKEN` | **10** | Azure Container Registry | Context-based |
+| `HARBOR_TOKEN` | **10** | Harbor registry token | Context-based |
 
 ### Communication Platform Tokens
 
 | Entity Type | Weight | Description | Pattern Hint |
 |-------------|--------|-------------|--------------|
-| `TELEGRAM_BOT_TOKEN` | **9** | Telegram bot token | `[0-9]{9,10}:[a-zA-Z0-9_-]{35}` |
+| `TELEGRAM_BOT_TOKEN` | **10** | Telegram bot token | `[0-9]{9,10}:[a-zA-Z0-9_-]{35}` |
 | `TEAMS_WEBHOOK` | **8** | Microsoft Teams webhook | `https://.*\.webhook\.office\.com/.*` |
-| `ZOOM_JWT` | **9** | Zoom JWT token | JWT with zoom context |
-| `WEBEX_TOKEN` | **9** | Cisco Webex token | Context-based |
-| `TWITCH_TOKEN` | **9** | Twitch OAuth token | `oauth:[a-z0-9]{30}` |
-| `WHATSAPP_TOKEN` | **9** | WhatsApp Business API | Context-based |
+| `ZOOM_JWT` | **10** | Zoom JWT token | JWT with zoom context |
+| `WEBEX_TOKEN` | **10** | Cisco Webex token | Context-based |
+| `TWITCH_TOKEN` | **10** | Twitch OAuth token | `oauth:[a-z0-9]{30}` |
+| `WHATSAPP_TOKEN` | **10** | WhatsApp Business API | Context-based |
 
 ### Payment Processor Tokens
 
@@ -260,69 +260,69 @@ Authentication tokens and sensitive credentials. **All credentials trigger criti
 |-------------|--------|-------------|--------------|
 | `PAYPAL_CLIENT_ID` | **8** | PayPal client ID | Context-based |
 | `PAYPAL_SECRET` | **10** | PayPal client secret | Context-based |
-| `BRAINTREE_TOKEN` | **9** | Braintree API token | Context-based |
+| `BRAINTREE_TOKEN` | **10** | Braintree API token | Context-based |
 | `PLAID_CLIENT_ID` | **8** | Plaid client ID | Context-based |
 | `PLAID_SECRET` | **10** | Plaid secret | Context-based |
 | `ADYEN_API_KEY` | **10** | Adyen API key | `AQE...` prefix |
-| `KLARNA_TOKEN` | **9** | Klarna API token | Context-based |
+| `KLARNA_TOKEN` | **10** | Klarna API token | Context-based |
 
 ### SaaS API Tokens
 
 | Entity Type | Weight | Description | Pattern Hint |
 |-------------|--------|-------------|--------------|
-| `ATLASSIAN_TOKEN` | **9** | Atlassian/Jira/Confluence | Variable length |
-| `NOTION_TOKEN` | **9** | Notion API token | `secret_[a-zA-Z0-9]{43}` |
-| `AIRTABLE_KEY` | **9** | Airtable API key | `key[a-zA-Z0-9]{14}` or `pat...` |
-| `LINEAR_TOKEN` | **9** | Linear API key | `lin_api_[a-zA-Z0-9]{40}` |
-| `FIGMA_TOKEN` | **9** | Figma access token | `figd_[a-zA-Z0-9\-_]{40}` |
-| `ASANA_TOKEN` | **9** | Asana personal access token | Context-based |
-| `MONDAY_TOKEN` | **9** | Monday.com API token | Context-based |
-| `ZENDESK_TOKEN` | **9** | Zendesk API token | Context-based |
-| `INTERCOM_TOKEN` | **9** | Intercom access token | Context-based |
-| `SEGMENT_KEY` | **9** | Segment write key | Context-based |
+| `ATLASSIAN_TOKEN` | **10** | Atlassian/Jira/Confluence | Variable length |
+| `NOTION_TOKEN` | **10** | Notion API token | `secret_[a-zA-Z0-9]{43}` |
+| `AIRTABLE_KEY` | **10** | Airtable API key | `key[a-zA-Z0-9]{14}` or `pat...` |
+| `LINEAR_TOKEN` | **10** | Linear API key | `lin_api_[a-zA-Z0-9]{40}` |
+| `FIGMA_TOKEN` | **10** | Figma access token | `figd_[a-zA-Z0-9\-_]{40}` |
+| `ASANA_TOKEN` | **10** | Asana personal access token | Context-based |
+| `MONDAY_TOKEN` | **10** | Monday.com API token | Context-based |
+| `ZENDESK_TOKEN` | **10** | Zendesk API token | Context-based |
+| `INTERCOM_TOKEN` | **10** | Intercom access token | Context-based |
+| `SEGMENT_KEY` | **10** | Segment write key | Context-based |
 | `MIXPANEL_TOKEN` | **8** | Mixpanel project token | Context-based |
 | `AMPLITUDE_KEY` | **8** | Amplitude API key | Context-based |
-| `LAUNCHDARKLY_KEY` | **9** | LaunchDarkly SDK key | `sdk-[a-f0-9\-]{36}` |
+| `LAUNCHDARKLY_KEY` | **10** | LaunchDarkly SDK key | `sdk-[a-f0-9\-]{36}` |
 | `SENTRY_DSN` | **8** | Sentry DSN | `https://[a-f0-9]+@...sentry.io/...` |
-| `PAGERDUTY_KEY` | **9** | PagerDuty API key | `u+[a-zA-Z0-9]{18}` |
-| `OPSGENIE_KEY` | **9** | Opsgenie API key | Context-based |
+| `PAGERDUTY_KEY` | **10** | PagerDuty API key | `u+[a-zA-Z0-9]{18}` |
+| `OPSGENIE_KEY` | **10** | Opsgenie API key | Context-based |
 | `ROLLBAR_TOKEN` | **8** | Rollbar access token | Context-based |
 
 ### Database & Data Platform Tokens
 
 | Entity Type | Weight | Description | Pattern Hint |
 |-------------|--------|-------------|--------------|
-| `SUPABASE_KEY` | **9** | Supabase API key | `sbp_[a-f0-9]{40}` |
-| `PLANETSCALE_TOKEN` | **9** | PlanetScale token | `pscale_tkn_[a-zA-Z0-9\-_]{43}` |
-| `NEON_TOKEN` | **9** | Neon database token | Context-based |
-| `COCKROACHDB_TOKEN` | **9** | CockroachDB token | Context-based |
-| `SNOWFLAKE_TOKEN` | **9** | Snowflake access token | Context-based |
-| `DATABRICKS_TOKEN` | **9** | Databricks access token | `dapi[a-f0-9]{32}` |
-| `ELASTICSEARCH_KEY` | **9** | Elasticsearch API key | Context-based |
-| `ALGOLIA_KEY` | **9** | Algolia admin API key | 32-char hex |
-| `REDIS_URL` | **9** | Redis connection URL | `redis://...` with password |
-| `GRAFANA_TOKEN` | **9** | Grafana API token | `glc_[a-zA-Z0-9\-_]{32,}` |
+| `SUPABASE_KEY` | **10** | Supabase API key | `sbp_[a-f0-9]{40}` |
+| `PLANETSCALE_TOKEN` | **10** | PlanetScale token | `pscale_tkn_[a-zA-Z0-9\-_]{43}` |
+| `NEON_TOKEN` | **10** | Neon database token | Context-based |
+| `COCKROACHDB_TOKEN` | **10** | CockroachDB token | Context-based |
+| `SNOWFLAKE_TOKEN` | **10** | Snowflake access token | Context-based |
+| `DATABRICKS_TOKEN` | **10** | Databricks access token | `dapi[a-f0-9]{32}` |
+| `ELASTICSEARCH_KEY` | **10** | Elasticsearch API key | Context-based |
+| `ALGOLIA_KEY` | **10** | Algolia admin API key | 32-char hex |
+| `REDIS_URL` | **10** | Redis connection URL | `redis://...` with password |
+| `GRAFANA_TOKEN` | **10** | Grafana API token | `glc_[a-zA-Z0-9\-_]{32,}` |
 
 ### Email Service Tokens
 
 | Entity Type | Weight | Description | Pattern Hint |
 |-------------|--------|-------------|--------------|
-| `POSTMARK_TOKEN` | **9** | Postmark server token | GUID format |
-| `MAILGUN_KEY` | **9** | Mailgun API key | `key-[a-f0-9]{32}` |
-| `RESEND_KEY` | **9** | Resend API key | `re_[a-zA-Z0-9]{32}` |
-| `SPARKPOST_KEY` | **9** | SparkPost API key | Context-based |
-| `SES_CREDENTIALS` | **9** | Amazon SES SMTP credentials | Context-based |
+| `POSTMARK_TOKEN` | **10** | Postmark server token | GUID format |
+| `MAILGUN_KEY` | **10** | Mailgun API key | `key-[a-f0-9]{32}` |
+| `RESEND_KEY` | **10** | Resend API key | `re_[a-zA-Z0-9]{32}` |
+| `SPARKPOST_KEY` | **10** | SparkPost API key | Context-based |
+| `SES_CREDENTIALS` | **10** | Amazon SES SMTP credentials | Context-based |
 
 ### SMS/Voice Service Tokens
 
 | Entity Type | Weight | Description | Pattern Hint |
 |-------------|--------|-------------|--------------|
-| `VONAGE_KEY` | **9** | Vonage/Nexmo API key | Context-based |
-| `VONAGE_SECRET` | **9** | Vonage/Nexmo API secret | Context-based |
+| `VONAGE_KEY` | **10** | Vonage/Nexmo API key | Context-based |
+| `VONAGE_SECRET` | **10** | Vonage/Nexmo API secret | Context-based |
 | `PLIVO_AUTH_ID` | **8** | Plivo Auth ID | Context-based |
-| `PLIVO_TOKEN` | **9** | Plivo Auth Token | Context-based |
-| `MESSAGEBIRD_KEY` | **9** | MessageBird API key | Context-based |
-| `BANDWIDTH_TOKEN` | **9** | Bandwidth API credentials | Context-based |
+| `PLIVO_TOKEN` | **10** | Plivo Auth Token | Context-based |
+| `MESSAGEBIRD_KEY` | **10** | MessageBird API key | Context-based |
+| `BANDWIDTH_TOKEN` | **10** | Bandwidth API credentials | Context-based |
 
 ### Legacy Service Provider Tokens
 
@@ -330,26 +330,26 @@ Authentication tokens and sensitive credentials. **All credentials trigger criti
 |-------------|--------|-------------|---------|
 | `GITHUB_TOKEN` | **10** | GitHub personal access token | ghp, gho, ghs, ghu |
 | `GITLAB_TOKEN` | **10** | GitLab access token | glpat |
-| `SLACK_TOKEN` | **9** | Slack bot/user token | xoxb, xoxp |
+| `SLACK_TOKEN` | **10** | Slack bot/user token | xoxb, xoxp |
 | `SLACK_WEBHOOK` | **8** | Slack webhook URL | |
-| `DISCORD_TOKEN` | **9** | Discord bot token | |
+| `DISCORD_TOKEN` | **10** | Discord bot token | |
 | `DISCORD_WEBHOOK` | **7** | Discord webhook URL | |
 | `STRIPE_KEY` | **10** | Stripe API key | sk_live, pk_live |
 | `TWILIO_ACCOUNT_SID` | **7** | Twilio account SID | |
-| `TWILIO_KEY` | **9** | Twilio API key | |
-| `TWILIO_TOKEN` | **9** | Twilio auth token | |
-| `SENDGRID_KEY` | **9** | SendGrid API key | |
+| `TWILIO_KEY` | **10** | Twilio API key | |
+| `TWILIO_TOKEN` | **10** | Twilio auth token | |
+| `SENDGRID_KEY` | **10** | SendGrid API key | |
 | `MAILCHIMP_KEY` | **8** | Mailchimp API key | |
-| `SQUARE_TOKEN` | **9** | Square access token | |
-| `SQUARE_SECRET` | **9** | Square OAuth secret | |
-| `SHOPIFY_TOKEN` | **9** | Shopify access token | |
+| `SQUARE_TOKEN` | **10** | Square access token | |
+| `SQUARE_SECRET` | **10** | Square OAuth secret | |
+| `SHOPIFY_TOKEN` | **10** | Shopify access token | |
 | `SHOPIFY_KEY` | **8** | Shopify API key | |
-| `SHOPIFY_SECRET` | **9** | Shopify shared secret | |
-| `HEROKU_KEY` | **9** | Heroku API key | |
+| `SHOPIFY_SECRET` | **10** | Shopify shared secret | |
+| `HEROKU_KEY` | **10** | Heroku API key | |
 | `DATADOG_KEY` | **8** | Datadog API/app key | |
 | `NEWRELIC_KEY` | **8** | New Relic API key | |
-| `NPM_TOKEN` | **9** | NPM access token | |
-| `PYPI_TOKEN` | **9** | PyPI API token | |
+| `NPM_TOKEN` | **10** | NPM access token | |
+| `PYPI_TOKEN` | **10** | PyPI API token | |
 | `NUGET_KEY` | **8** | NuGet API key | |
 
 ---
@@ -363,8 +363,8 @@ Security classifications and government identifiers.
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
 | `CLASSIFICATION_LEVEL` | **8** | Classification level (TS, S, C, U) | |
-| `CLASSIFICATION_MARKING` | **9** | Full classification line with caveats | |
-| `SCI_MARKING` | **9** | Sensitive Compartmented Information | |
+| `CLASSIFICATION_MARKING` | **10** | Full classification line with caveats | |
+| `SCI_MARKING` | **10** | Sensitive Compartmented Information | |
 | `DISSEMINATION_CONTROL` | **8** | NOFORN, REL TO, ORCON, etc. | |
 | `CLEARANCE_LEVEL` | **7** | Security clearance reference | |
 | `ITAR_MARKING` | **8** | ITAR export control marking | |
@@ -446,10 +446,10 @@ Immigration and visa-related identifiers.
 
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
-| `A_NUMBER` | **9** | USCIS Alien Registration Number | alien_number |
+| `A_NUMBER` | **10** | USCIS Alien Registration Number | alien_number |
 | `VISA_NUMBER` | **8** | Visa foil number | |
 | `I94_NUMBER` | **8** | I-94 arrival/departure number | |
-| `GREEN_CARD_NUMBER` | **9** | Permanent resident card number | |
+| `GREEN_CARD_NUMBER` | **10** | Permanent resident card number | |
 | `EAD_NUMBER` | **8** | Employment Authorization Document | work_permit |
 | `SEVIS_ID` | **7** | Student visa SEVIS identifier | |
 | `TRAVEL_DOCUMENT_NUMBER` | **8** | Refugee travel document | |
@@ -519,15 +519,15 @@ Biometric templates and genetic identifiers.
 
 | Entity Type | Weight | Description | Aliases |
 |-------------|--------|-------------|---------|
-| `FINGERPRINT_TEMPLATE` | **9** | Fingerprint minutiae data | |
-| `FACE_TEMPLATE` | **9** | Facial recognition template | face_encoding |
-| `IRIS_TEMPLATE` | **9** | Iris scan template | |
+| `FINGERPRINT_TEMPLATE` | **10** | Fingerprint minutiae data | |
+| `FACE_TEMPLATE` | **10** | Facial recognition template | face_encoding |
+| `IRIS_TEMPLATE` | **10** | Iris scan template | |
 | `VOICE_PRINT` | **8** | Voice biometric template | |
-| `RETINAL_SCAN` | **9** | Retinal scan data | |
+| `RETINAL_SCAN` | **10** | Retinal scan data | |
 | `PALM_PRINT` | **8** | Palm print template | |
 | `GAIT_SIGNATURE` | **7** | Gait analysis data | |
 | `DNA_SEQUENCE` | **10** | DNA/genetic sequence data | |
-| `GENETIC_MARKER` | **9** | Genetic marker/SNP data | snp |
+| `GENETIC_MARKER` | **10** | Genetic marker/SNP data | snp |
 | `ANCESTRY_ID` | **7** | Genetic ancestry service ID | |
 | `BIOBANK_ID` | **8** | Biobank specimen identifier | |
 
@@ -547,8 +547,8 @@ Military and defense-related identifiers.
 | `MOS_CODE` | **3** | Military Occupational Specialty | |
 | `UNIT_IDENTIFICATION` | **4** | Military unit identifier | uic |
 | `SECURITY_BADGE_ID` | **6** | Facility security badge | |
-| `SIPR_TOKEN` | **9** | SIPRNet token identifier | |
-| `CAC_PIN` | **9** | CAC card PIN | |
+| `SIPR_TOKEN` | **10** | SIPRNet token identifier | |
+| `CAC_PIN` | **10** | CAC card PIN | |
 
 ---
 
@@ -558,20 +558,20 @@ File patterns and contextual indicators of sensitive content.
 
 | Entity Type | Weight | Description | Detection Pattern |
 |-------------|--------|-------------|-------------------|
-| `DOTENV_FILE` | **9** | Environment variable file | `.env`, `.env.local`, `.env.prod` |
+| `DOTENV_FILE` | **10** | Environment variable file | `.env`, `.env.local`, `.env.prod` |
 | `KUBECONFIG` | **10** | Kubernetes configuration | `kubeconfig`, `.kube/config` |
 | `SSH_CONFIG` | **8** | SSH configuration file | `.ssh/config`, `ssh_config` |
 | `DOCKER_CONFIG` | **8** | Docker credentials | `.docker/config.json` |
-| `NPM_RC` | **9** | NPM registry credentials | `.npmrc` with auth tokens |
-| `PYPIRC` | **9** | PyPI credentials | `.pypirc` |
+| `NPM_RC` | **10** | NPM registry credentials | `.npmrc` with auth tokens |
+| `PYPIRC` | **10** | PyPI credentials | `.pypirc` |
 | `AWS_CREDENTIALS` | **10** | AWS credentials file | `.aws/credentials` |
-| `NETRC` | **9** | FTP/HTTP credentials | `.netrc` |
+| `NETRC` | **10** | FTP/HTTP credentials | `.netrc` |
 | `HTPASSWD` | **8** | Apache password file | `.htpasswd` |
 | `PGP_PRIVATE` | **10** | PGP private key file | `*.asc`, `secring.gpg` |
-| `TERRAFORM_STATE` | **9** | Terraform state (may contain secrets) | `*.tfstate` |
+| `TERRAFORM_STATE` | **10** | Terraform state (may contain secrets) | `*.tfstate` |
 | `ANSIBLE_VAULT` | **8** | Ansible encrypted content | Contains `$ANSIBLE_VAULT` |
 | `CERTIFICATE_BUNDLE` | **7** | Certificate with private key | PFX, P12, combined PEM |
-| `KEYSTORE` | **9** | Java keystore | `.jks`, `.keystore` |
+| `KEYSTORE` | **10** | Java keystore | `.jks`, `.keystore` |
 | `WALLET_FILE` | **10** | Cryptocurrency wallet | `wallet.dat`, keystore JSON |
 | `HISTORY_FILE` | **6** | Shell command history | `.bash_history`, `.zsh_history` |
 | `SHADOW_FILE` | **10** | Unix shadow passwords | `/etc/shadow` format |
