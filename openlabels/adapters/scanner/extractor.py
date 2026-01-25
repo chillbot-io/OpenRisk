@@ -993,3 +993,91 @@ class RTFExtractor(BaseExtractor):
                 pages=1,
                 warnings=[f"RTF extraction failed: {e}"],
             )
+
+
+# =============================================================================
+# Extractor Registry and Convenience Functions
+# =============================================================================
+
+# Registry of all available extractors
+_EXTRACTORS: List[BaseExtractor] = []
+
+
+def _init_extractors() -> List[BaseExtractor]:
+    """Initialize extractor registry lazily."""
+    global _EXTRACTORS
+    if not _EXTRACTORS:
+        _EXTRACTORS = [
+            PDFExtractor(),
+            DOCXExtractor(),
+            XLSXExtractor(),
+            ImageExtractor(),
+            TextExtractor(),
+            RTFExtractor(),
+        ]
+    return _EXTRACTORS
+
+
+def get_extractor(content_type: str, extension: str) -> Optional[BaseExtractor]:
+    """
+    Get the appropriate extractor for a file based on content type and extension.
+
+    Args:
+        content_type: MIME type of the file
+        extension: File extension (including dot, e.g., ".pdf")
+
+    Returns:
+        Matching extractor or None if no extractor can handle the file
+    """
+    extractors = _init_extractors()
+    for extractor in extractors:
+        if extractor.can_handle(content_type, extension):
+            return extractor
+    return None
+
+
+def extract_text(
+    content: bytes,
+    filename: str,
+    content_type: Optional[str] = None,
+) -> ExtractionResult:
+    """
+    Extract text from file content.
+
+    Args:
+        content: File content as bytes
+        filename: Original filename (used for extension detection)
+        content_type: Optional MIME type (will be detected if not provided)
+
+    Returns:
+        ExtractionResult with extracted text and metadata
+    """
+    import mimetypes
+
+    # Get extension
+    extension = Path(filename).suffix.lower()
+
+    # Detect content type if not provided
+    if content_type is None:
+        content_type, _ = mimetypes.guess_type(filename)
+        content_type = content_type or "application/octet-stream"
+
+    # Find extractor
+    extractor = get_extractor(content_type, extension)
+
+    if extractor is None:
+        return ExtractionResult(
+            text="",
+            pages=0,
+            warnings=[f"No extractor available for {content_type} / {extension}"],
+        )
+
+    try:
+        return extractor.extract(content, filename)
+    except Exception as e:
+        logger.error(f"Extraction failed for {filename}: {e}")
+        return ExtractionResult(
+            text="",
+            pages=0,
+            warnings=[f"Extraction failed: {e}"],
+        )

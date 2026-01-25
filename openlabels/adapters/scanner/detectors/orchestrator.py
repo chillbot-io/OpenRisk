@@ -8,17 +8,10 @@ Detectors are organized by domain:
 - financial.py: Security identifiers (CUSIP, ISIN, SWIFT) and crypto
 - government.py: Classification markings, CAGE codes, contracts
 - dictionaries.py: Dictionary-based detection
-- ml.py / ml_onnx.py: ML-based detection (PHI-BERT, PII-BERT)
 
 Concurrency Model:
-    Uses ThreadPoolExecutor (not ProcessPoolExecutor) because:
-    1. ONNX Runtime releases the GIL during inference - true parallelism
-    2. NumPy operations release the GIL - true parallelism
-    3. Pattern matching (regex) is fast enough that GIL isn't a bottleneck
-    4. ProcessPoolExecutor would add IPC overhead for large text serialization
-
-    For CPU-bound Python code, consider moving to C extensions or using
-    ProcessPoolExecutor for batch processing of many documents.
+    Uses ThreadPoolExecutor for parallel pattern matching across domains.
+    Pattern matching is I/O-bound (regex on text) so GIL isn't a bottleneck.
 """
 
 import atexit
@@ -49,26 +42,6 @@ from .structured import extract_structured_phi, StructuredExtractionResult, post
 from .secrets import SecretsDetector
 from .financial import FinancialDetector
 from .government import GovernmentDetector
-
-# ML detectors - optional (require numpy, onnx, or torch)
-PHIBertDetector = None
-PIIBertDetector = None
-PHIBertONNXDetector = None
-PIIBertONNXDetector = None
-_ML_AVAILABLE = False
-
-try:
-    from .ml_onnx import PHIBertONNXDetector, PIIBertONNXDetector
-    _ML_AVAILABLE = True
-except ImportError:
-    pass
-
-if not _ML_AVAILABLE:
-    try:
-        from .ml import PHIBertDetector, PIIBertDetector
-        _ML_AVAILABLE = True
-    except ImportError:
-        pass
 
 # Pipeline imports - with fallbacks
 try:
@@ -163,23 +136,19 @@ class DetectorOrchestrator:
     1. Structured extractor (OCR post-processing + label-based extraction)
     2. All other detectors in parallel on processed text
     3. Combine results with structured spans getting higher tier
-    4. LLM verification (optional) - filters false positives
+    4. Context enhancement (optional) - filters obvious false positives
 
     Detector Categories:
     - Core PII/PHI: ChecksumDetector, PatternDetector, AdditionalPatternDetector, DictionaryDetector
-    - ML Models: PHIBertDetector, PIIBertDetector (ONNX preferred)
     - Secrets: SecretsDetector (API keys, tokens, credentials)
     - Financial: FinancialDetector (CUSIP, ISIN, crypto)
     - Government: GovernmentDetector (classification, contracts)
-    - LLM Verifier: Optional Qwen2.5/Phi-3 verification via Ollama
 
     Features:
     - Parallel execution via shared ThreadPoolExecutor
     - Timeout per detector (graceful degradation)
     - Failures don't affect other detectors
-    - Prefers ONNX models (fast) over PyTorch (slow)
     - Selective detector enablement via config
-    - LLM verification for precision (optional, filters false positives)
     """
 
     def __init__(
@@ -190,8 +159,6 @@ class DetectorOrchestrator:
         enable_secrets: bool = True,
         enable_financial: bool = True,
         enable_government: bool = True,
-        enable_llm_verification: Optional[bool] = None,
-        llm_model: Optional[str] = None,
     ):
         """
         Initialize the detector orchestrator.
@@ -203,8 +170,6 @@ class DetectorOrchestrator:
             enable_secrets: Enable secrets detection (API keys, tokens)
             enable_financial: Enable financial identifier detection (CUSIP, crypto)
             enable_government: Enable government/classification detection
-            enable_llm_verification: Enable LLM verification to filter false positives (default: from config)
-            llm_model: LLM model for verification (default: qwen2.5:3b)
         """
         self.config = config or Config()
         self.parallel = parallel
@@ -235,9 +200,6 @@ class DetectorOrchestrator:
         if enable_government and "government" not in disabled:
             self._detectors.append(GovernmentDetector())
             logger.info("GovernmentDetector enabled (classification, contracts)")
-
-        # Add ML detectors - prefer ONNX over PyTorch
-        self._add_ml_detectors()
 
         # Add dictionary detector if dictionaries exist
         if "dictionaries" not in disabled and self.config.dictionaries_dir.exists():
@@ -279,80 +241,6 @@ class DetectorOrchestrator:
     def active_detector_names(self) -> List[str]:
         """Get names of available detectors."""
         return [d.name for d in self._available_detectors]
-
-    def _add_ml_detectors(self):
-        """Add ML detectors, preferring ONNX over PyTorch."""
-        # Skip if ML not available
-        if not _ML_AVAILABLE:
-            logger.debug("ML detectors not available (numpy/onnx/torch not installed)")
-            return
-
-        disabled = self.config.disabled_detectors if self.config else set()
-        models_dir = self.config.models_dir
-        device = self.config.device
-        cuda_device_id = self.config.cuda_device_id
-
-        # PHI-BERT: Try ONNX first, then PyTorch
-        if "phi_bert" not in disabled:
-            phi_bert_added = False
-            phi_onnx_exists = (
-                (models_dir / "phi_bert.onnx").exists() or
-                (models_dir / "phi_bert_int8.onnx").exists()
-            )
-            if phi_onnx_exists and PHIBertONNXDetector is not None:
-                try:
-                    detector = PHIBertONNXDetector(models_dir)
-                    if detector.load() and detector.is_available():
-                        self._detectors.append(detector)
-                        phi_bert_added = True
-                        logger.info("PHI-BERT: Using ONNX model (fast)")
-                except Exception as e:
-                    logger.debug(f"PHI-BERT ONNX load failed: {e}")
-
-            if not phi_bert_added and PHIBertDetector is not None:
-                if hasattr(self.config, 'phi_bert_path') and self.config.phi_bert_path.exists():
-                    try:
-                        detector = PHIBertDetector(
-                            self.config.phi_bert_path,
-                            device=device,
-                            cuda_device_id=cuda_device_id,
-                        )
-                        if detector.load() and detector.is_available():
-                            self._detectors.append(detector)
-                            logger.info(f"PHI-BERT: Using PyTorch model on {detector.get_device_used()}")
-                    except Exception as e:
-                        logger.debug(f"PHI-BERT PyTorch load failed: {e}")
-
-        # PII-BERT: Try ONNX first, then PyTorch
-        if "pii_bert" not in disabled:
-            pii_bert_added = False
-            pii_onnx_exists = (
-                (models_dir / "pii_bert.onnx").exists() or
-                (models_dir / "pii_bert_int8.onnx").exists()
-            )
-            if pii_onnx_exists and PIIBertONNXDetector is not None:
-                try:
-                    detector = PIIBertONNXDetector(models_dir)
-                    if detector.load() and detector.is_available():
-                        self._detectors.append(detector)
-                        pii_bert_added = True
-                        logger.info("PII-BERT: Using ONNX model (fast)")
-                except Exception as e:
-                    logger.debug(f"PII-BERT ONNX load failed: {e}")
-
-            if not pii_bert_added and PIIBertDetector is not None:
-                if hasattr(self.config, 'pii_bert_path') and self.config.pii_bert_path.exists():
-                    try:
-                        detector = PIIBertDetector(
-                            self.config.pii_bert_path,
-                            device=device,
-                            cuda_device_id=cuda_device_id,
-                        )
-                        if detector.load() and detector.is_available():
-                            self._detectors.append(detector)
-                            logger.info(f"PII-BERT: Using PyTorch model on {detector.get_device_used()}")
-                    except Exception as e:
-                        logger.debug(f"PII-BERT PyTorch load failed: {e}")
 
     def _detect_known_entities(
         self,
@@ -791,7 +679,6 @@ def detect_all(
     enable_secrets: bool = True,
     enable_financial: bool = True,
     enable_government: bool = True,
-    enable_llm_verification: Optional[bool] = None,
 ) -> List[Span]:
     """
     Convenience function to detect all PHI/PII.
@@ -804,7 +691,6 @@ def detect_all(
         enable_secrets: Enable API key/token detection
         enable_financial: Enable financial identifier detection
         enable_government: Enable classification/government detection
-        enable_llm_verification: Enable LLM verification to filter false positives (default: from config)
 
     Returns:
         List of detected spans
@@ -814,6 +700,5 @@ def detect_all(
         enable_secrets=enable_secrets,
         enable_financial=enable_financial,
         enable_government=enable_government,
-        enable_llm_verification=enable_llm_verification,
     )
     return orchestrator.detect(text)

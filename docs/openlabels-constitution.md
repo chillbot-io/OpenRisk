@@ -83,7 +83,7 @@ OpenLabels is a universal, portable standard for data sensitivity **labels** tha
 │                                                                             │
 │  9. CLI ENABLES RISK-AWARE DATA MANAGEMENT                                  │
 │     quarantine, find, move, delete based on risk + filters.                 │
-│     "openlabels find s3://bucket --where 'risk > 75 AND stale > 5y'"        │
+│     "orscan find s3://bucket --where 'risk > 75 AND stale > 5y'"            │
 │     This is the operational value. Not just labeling, but action.           │
 │                                                                             │
 │  10. TWO DEPLOYMENT MODES: LOCAL AND SERVER                                 │
@@ -204,17 +204,21 @@ openlabels/
 
 ### 5. Label Portability
 
-**Decision:** Labels travel with files via trailers or native metadata.
+**Decision:** Labels travel with files via embedded labels or virtual labels.
 
-**Approaches by file type:**
-- **Native metadata**: PDF, DOCX, images (XMP/EXIF) - embed label JSON
-- **Text files**: Append trailer (`---OPENLABEL-V1---`)
-- **Binary/Archives**: Use trailer or native metadata where supported
+**Two transport mechanisms:**
+- **Embedded labels**: For files with native metadata (PDF, DOCX, images)
+  - Full Label Set JSON stored in XMP/EXIF/custom properties
+  - Source of truth: the file itself
+- **Virtual labels**: For files without native metadata (CSV, TXT, JSON, archives)
+  - Extended attribute stores `labelID:content_hash` pointer
+  - Source of truth: the index
 
-**Hash enables correlation:**
-- Each label includes a hash
-- When file moves to new tenant, hash survives
-- New tenant's index can correlate without exposing content
+**Immutable labelID enables correlation:**
+- Each file gets a unique labelID on first scan
+- labelID never changes, even when file content changes
+- When file moves to new tenant, labelID + hash travel via xattr
+- New tenant's index registers the file under same labelID
 
 ---
 
@@ -230,7 +234,7 @@ openlabels/
 - Agent for on-prem (NTFS, POSIX)
 - Entity registry (300+ types)
 - Local SQLite index
-- Label trailer formats
+- Virtual label transport (extended attributes)
 
 ### Deferred (v2+)
 
@@ -309,9 +313,9 @@ Do not suggest:
 │                         ▼                                              │
 │   ┌─────────────────────────────────────────┐                          │
 │   │         LABEL WRITER                     │                          │
-│   │   • Portable label JSON                  │                          │
-│   │   • Hash for correlation                 │                          │
-│   │   • Trailer / Native metadata            │                          │
+│   │   • Embedded labels (native metadata)    │                          │
+│   │   • Virtual labels (xattr + index)       │                          │
+│   │   • Immutable labelID for correlation    │                          │
 │   └─────────────────────┬───────────────────┘                          │
 │                         │                                              │
 │                         ▼                                              │
@@ -342,6 +346,7 @@ Do not suggest:
 | 1.0 | 2026-01 | Initial constitution (scanner separate) |
 | 2.0 | 2026-01 | Major rewrite: scanner as adapter, exposure multipliers |
 | 3.0 | 2026-01 | Rebrand to OpenLabels. Labels are primitive, risk is derived. |
+| 3.1 | 2026-01 | Revised transport: embedded labels + virtual labels. Removed trailers/sidecars. |
 
 ---
 

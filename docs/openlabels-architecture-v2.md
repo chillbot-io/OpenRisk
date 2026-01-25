@@ -1045,13 +1045,13 @@ class RiskScorer:
 
     def _score_to_level(self, score: int) -> str:
         """Convert numeric score to risk level."""
-        if score >= 86:
+        if score >= 90:
             return "CRITICAL"
-        elif score >= 61:
+        elif score >= 70:
             return "HIGH"
-        elif score >= 31:
+        elif score >= 50:
             return "MEDIUM"
-        elif score >= 11:
+        elif score >= 25:
             return "LOW"
         else:
             return "MINIMAL"
@@ -1164,8 +1164,7 @@ class ScanTrigger(Enum):
     LOW_CONFIDENCE_HIGH_RISK = "low_conf_high_risk"  # Uncertain critical finding
 
 
-CONFIDENCE_THRESHOLD = 0.65  # Detection threshold - include detections at this confidence or higher
-RESCAN_THRESHOLD = 0.80      # Rescan threshold - uncertain high-risk entities trigger rescan
+CONFIDENCE_THRESHOLD = 0.80  # Single threshold, no per-type variation
 HIGH_RISK_WEIGHT_THRESHOLD = 8  # Weight >= 8 is high risk
 
 
@@ -1200,10 +1199,10 @@ def should_scan(
     if context.staleness_days > 365:
         triggers.append(ScanTrigger.STALE_DATA)
 
-    # High-risk entity with confidence below rescan threshold = verify
+    # High-risk entity with low/medium confidence = verify
     for entity in entities:
         is_high_risk = entity.weight >= HIGH_RISK_WEIGHT_THRESHOLD
-        is_uncertain = entity.confidence < RESCAN_THRESHOLD
+        is_uncertain = entity.confidence < CONFIDENCE_THRESHOLD
 
         if is_high_risk and is_uncertain:
             triggers.append(ScanTrigger.LOW_CONFIDENCE_HIGH_RISK)
@@ -1221,7 +1220,7 @@ def should_scan(
 | Labels exist, **public** | ✓ | Exposure too high to trust |
 | Labels exist, **no encryption** | ✓ | Protection gap |
 | Labels exist, **stale >1yr** | ✓ | Verify still accurate |
-| Labels: **ssn @ 0.75 confidence** | ✓ | High risk + below rescan threshold (0.80) |
+| Labels: **SSN @ 0.65 confidence** | ✓ | High risk + uncertain |
 | Labels: **EMAIL @ 0.35 confidence** | ✗ | Lower risk, trust it |
 | Labels: **CREDIT_CARD @ 0.90 confidence** | ✗ | High confidence, trust it |
 
@@ -1784,7 +1783,8 @@ openlabels/
 │   │
 │   └── output/
 │       ├── __init__.py
-│       ├── trailer.py               # OpenLabels trailer format
+│       ├── embed.py                 # Embedded label writer (native metadata)
+│       ├── virtual.py               # Virtual label writer (xattr + index)
 │       └── report.py                # Report generators
 │
 ├── tests/
@@ -1954,80 +1954,136 @@ class ScoringResult:
 
 ---
 
-## Trailer Format
+## Label Transport
 
-### Structure
+### Overview
 
-OpenLabels tags can be attached to any file via trailers:
+OpenLabels uses two transport mechanisms based on file type capabilities:
 
 ```
-[Original file content - unchanged]
-\n---OPENLABEL-V1---\n
-{"openlabels":{"version":"0.2","score":74,...}}
-\n---END-OPENLABEL---
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│   Does file format support native metadata?             │
+│   (PDF, DOCX, images, etc.)                            │
+│                                                         │
+│        YES                         NO                   │
+│         │                           │                   │
+│         ▼                           ▼                   │
+│   ┌───────────┐              ┌─────────────────┐       │
+│   │ Embedded  │              │ Virtual Label   │       │
+│   │ Label     │              │                 │       │
+│   │           │              │ xattr stores:   │       │
+│   │ Full JSON │              │ labelID:hash    │       │
+│   │ in native │              │                 │       │
+│   │ metadata  │              │ Index stores:   │       │
+│   └───────────┘              │ full Label Set  │       │
+│                              └─────────────────┘       │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Markers
+### Embedded Labels
 
-| Marker | Bytes | Purpose |
-|--------|-------|---------|
-| Start marker | `\n---OPENLABEL-V1---\n` | Signals beginning of trailer |
-| End marker | `\n---END-OPENLABEL---` | Signals end of trailer |
+For files with native metadata support, the full Label Set is embedded directly.
 
-### Content Requirements
+| Format | Metadata Location |
+|--------|-------------------|
+| PDF | XMP metadata (`http://openlabels.dev/ns/1.0/`) |
+| DOCX/XLSX/PPTX | Custom Document Properties |
+| JPEG/PNG/TIFF | XMP metadata or EXIF UserComment |
+| MP4/MOV | XMP metadata |
 
-1. Tag JSON MUST be compact (no pretty-printing, no newlines within JSON)
-2. Tag JSON MUST be valid UTF-8
-3. `content_hash` MUST be computed on original content (excluding trailer)
-4. `content_length` MUST equal original content length (excluding trailer)
+### Virtual Labels
 
-### Trailer Operations
+For files without native metadata, a pointer is stored in extended attributes:
+
+```
+xattr value = labelID:content_hash
+Example:     ol_7f3a9b2c4d5e:e3b0c44298fc
+```
+
+| Platform | Attribute Name |
+|----------|----------------|
+| Linux | `user.openlabels` |
+| macOS | `com.openlabels.label` |
+| Windows | NTFS ADS `openlabels` |
+| S3 | `x-amz-meta-openlabels` |
+| GCS | `openlabels` metadata |
+| Azure Blob | `openlabels` metadata |
+
+### Label Operations
 
 ```python
-START_MARKER = b'\n---OPENLABEL-V1---\n'
-END_MARKER = b'\n---END-OPENLABEL---'
+import os
+import secrets
+import hashlib
+from typing import Optional
 
-def write_trailer(filepath: str, tag: dict) -> None:
-    """Append OpenLabels trailer to file."""
-    with open(filepath, 'rb') as f:
-        original = f.read()
+def generate_label_id() -> str:
+    """Generate immutable label ID."""
+    return "ol_" + secrets.token_hex(6)
 
-    # Verify hash matches
-    actual_hash = "sha256:" + hashlib.sha256(original).hexdigest()
-    if tag["openlabels"]["content_hash"] != actual_hash:
-        raise ValueError("Content hash mismatch")
+def compute_content_hash(content: bytes) -> str:
+    """Compute content hash for version tracking."""
+    return hashlib.sha256(content).hexdigest()[:12]
 
-    # Build trailer
-    tag_json = json.dumps(tag, separators=(',', ':'))
-    trailer = START_MARKER + tag_json.encode('utf-8') + END_MARKER
+def write_virtual_label(filepath: str, label_id: str, content_hash: str) -> None:
+    """Write virtual label to extended attribute."""
+    import subprocess
+    value = f"{label_id}:{content_hash}"
+    # Linux
+    subprocess.run(["setfattr", "-n", "user.openlabels", "-v", value, filepath])
 
-    # Write original + trailer
-    with open(filepath, 'wb') as f:
-        f.write(original)
-        f.write(trailer)
-
-def read_trailer(filepath: str) -> tuple[bytes, dict | None]:
-    """Read file and extract OpenLabels trailer if present."""
-    with open(filepath, 'rb') as f:
-        content = f.read()
-
-    end_pos = content.rfind(END_MARKER)
-    if end_pos == -1:
-        return content, None
-
-    start_pos = content.rfind(START_MARKER)
-    if start_pos == -1:
-        return content, None
-
-    tag_start = start_pos + len(START_MARKER)
-    tag_json = content[tag_start:end_pos]
-    tag = json.loads(tag_json.decode('utf-8'))
-
-    content_length = tag['openlabels']['content_length']
-    original = content[:content_length]
-
-    return original, tag
+def read_virtual_label(filepath: str) -> Optional[tuple[str, str]]:
+    """Read virtual label from extended attribute."""
+    import subprocess
+    result = subprocess.run(
+        ["getfattr", "-n", "user.openlabels", "--only-values", filepath],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        return None
+    parts = result.stdout.strip().split(":")
+    if len(parts) != 2:
+        return None
+    return parts[0], parts[1]  # label_id, content_hash
 ```
+
+### The Index
+
+Virtual labels require an index to resolve the full Label Set:
+
+```sql
+-- Core identity (immutable)
+CREATE TABLE label_objects (
+    label_id    TEXT PRIMARY KEY,
+    tenant_id   UUID NOT NULL,
+    created_at  TIMESTAMP NOT NULL
+);
+
+-- Version history (append-only)
+CREATE TABLE label_versions (
+    label_id      TEXT REFERENCES label_objects(label_id),
+    content_hash  TEXT NOT NULL,
+    scanned_at    TIMESTAMP NOT NULL,
+    labels        JSONB NOT NULL,
+    risk_score    INTEGER,
+    exposure      TEXT,
+    source        TEXT NOT NULL,
+
+    PRIMARY KEY (label_id, content_hash)
+);
+```
+
+### File Type Matrix
+
+| File Type | Transport | Source of Truth |
+|-----------|-----------|-----------------|
+| PDF, DOCX, images | Embedded | The file |
+| CSV, JSON, TXT | Virtual (xattr) | The index |
+| Archives (ZIP, TAR) | Virtual (xattr) | The index |
+| Email (EML, MSG) | Virtual (xattr) | The index |
+| Source code | Virtual (xattr) | The index |
 
 ---
 
@@ -2228,19 +2284,29 @@ OpenLabels tags reveal metadata about file contents:
 
 Consider whether this metadata should be protected in your environment.
 
-### Trailer Injection
+### Extended Attribute Security
 
-Mitigations for fake trailers:
-1. **Verify content_hash**: Fake trailers can't produce valid hashes
-2. **Verify signatures**: If signatures are used, validate them
-3. **Trust boundaries**: Only trust tags from known generators
+Extended attributes may not survive all operations:
+
+| Operation | xattr Preserved? |
+|-----------|------------------|
+| Local copy (cp -p) | Yes |
+| rsync -X | Yes |
+| Email attachment | No |
+| Upload to web app | Usually no |
+| ZIP archive | No |
+
+Mitigations:
+1. **Re-scan on xattr loss**: Detect missing xattr, re-scan file
+2. **Verify content_hash**: If xattr present, verify file hasn't changed
+3. **Index as backup**: Virtual labels can be recovered from index
 
 ### Denial of Service
 
 Implementations SHOULD limit:
-- Maximum tag size: 1 MB
+- Maximum label set size: 1 MB
 - Maximum entities count: 10,000
-- Trailer search timeout: 5 seconds
+- Metadata read timeout: 5 seconds
 
 ---
 
@@ -2250,18 +2316,19 @@ Implementations SHOULD limit:
 
 | Level | Requirements |
 |-------|--------------|
-| **Reader** | Parse valid tags, extract from trailers, verify hash |
-| **Writer** | Generate valid tags, use standard scoring algorithm |
-| **Full** | Reader + Writer + Trailer support + Exposure scoring |
+| **Reader** | Parse valid Label Sets, read embedded labels, resolve virtual labels via index |
+| **Writer** | Generate valid Label Sets, write embedded/virtual labels, maintain index |
+| **Full** | Reader + Writer + Exposure scoring |
 
 ### Reader Requirements
 
 A conforming reader MUST:
-1. Parse any valid OpenLabels tag JSON
-2. Extract tags from trailers
-3. Verify content_hash when requested
-4. Verify content_hash when requested
-5. Handle unknown fields gracefully (ignore, don't error)
+1. Parse any valid OpenLabels Label Set JSON
+2. Read embedded labels from native metadata (PDF, DOCX, images)
+3. Read virtual labels from extended attributes
+4. Resolve virtual labels via index lookup
+5. Verify content_hash when requested
+6. Handle unknown fields gracefully (ignore, don't error)
 
 ### Writer Requirements
 
