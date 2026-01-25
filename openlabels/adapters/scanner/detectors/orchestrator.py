@@ -43,18 +43,9 @@ from .secrets import SecretsDetector
 from .financial import FinancialDetector
 from .government import GovernmentDetector
 
-# Pipeline imports - with fallbacks
-try:
-    from ..pipeline.merger import filter_tracking_numbers
-except ImportError:
-    def filter_tracking_numbers(spans, text):
-        return spans
-
-try:
-    from ..pipeline.confidence import normalize_spans_confidence
-except ImportError:
-    def normalize_spans_confidence(spans, text):
-        return spans
+# Pipeline imports
+from ..pipeline.merger import filter_tracking_numbers
+from ..pipeline.confidence import normalize_spans_confidence
 
 # Context enhancement - optional
 ContextEnhancer = None
@@ -63,10 +54,6 @@ try:
     from .context_enhancer import ContextEnhancer, create_enhancer
 except ImportError:
     pass
-
-# LLM verification not included in scanner - detection only
-LLMVerifier = None
-create_verifier = None
 
 
 logger = logging.getLogger(__name__)

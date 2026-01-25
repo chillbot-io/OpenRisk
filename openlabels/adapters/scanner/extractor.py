@@ -24,7 +24,6 @@ from .constants import (
 if TYPE_CHECKING:
     from .ocr import OCREngine, OCRResult
     from .temp_storage import SecureTempDir
-    from .document_templates import DocumentType
 
 logger = logging.getLogger(__name__)
 
@@ -130,18 +129,18 @@ class PDFExtractor(BaseExtractor):
     RENDER_DPI = 150
     
     def __init__(
-        self, 
+        self,
         ocr_engine: Optional["OCREngine"] = None,
         temp_dir: Optional["SecureTempDir"] = None,
-        enable_enhanced_processing: bool = True,
+        enable_enhanced_processing: bool = False,
     ):
         """
         Initialize PDF extractor.
-        
+
         Args:
             ocr_engine: OCR engine for scanned pages
             temp_dir: Secure temp directory for page images (optional)
-            enable_enhanced_processing: Use EnhancedOCRProcessor for document intelligence
+            enable_enhanced_processing: Reserved for future EnhancedOCRProcessor support
         """
         self.ocr_engine = ocr_engine
         self.temp_dir = temp_dir
@@ -642,18 +641,18 @@ class ImageExtractor(BaseExtractor):
     """
     
     def __init__(
-        self, 
+        self,
         ocr_engine: Optional["OCREngine"] = None,
         temp_dir: Optional["SecureTempDir"] = None,
-        enable_enhanced_processing: bool = True,
+        enable_enhanced_processing: bool = False,
     ):
         """
         Initialize image extractor.
-        
+
         Args:
             ocr_engine: OCR engine for text extraction
             temp_dir: Secure temp directory for page images (optional)
-            enable_enhanced_processing: Use EnhancedOCRProcessor for document intelligence
+            enable_enhanced_processing: Reserved for future EnhancedOCRProcessor support
         """
         self.ocr_engine = ocr_engine
         self.temp_dir = temp_dir
