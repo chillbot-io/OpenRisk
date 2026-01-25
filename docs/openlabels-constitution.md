@@ -83,7 +83,7 @@ OpenLabels is a universal, portable standard for data sensitivity **labels** tha
 │                                                                             │
 │  9. CLI ENABLES RISK-AWARE DATA MANAGEMENT                                  │
 │     quarantine, find, move, delete based on risk + filters.                 │
-│     "orscan find s3://bucket --where 'risk > 75 AND stale > 5y'"            │
+│     "openlabels find s3://bucket --where 'risk > 75 AND stale > 5y'"        │
 │     This is the operational value. Not just labeling, but action.           │
 │                                                                             │
 │  10. TWO DEPLOYMENT MODES: LOCAL AND SERVER                                 │
@@ -204,12 +204,12 @@ openlabels/
 
 ### 5. Label Portability
 
-**Decision:** Labels travel with files via trailers, sidecars, or native metadata.
+**Decision:** Labels travel with files via trailers or native metadata.
 
 **Approaches by file type:**
 - **Native metadata**: PDF, DOCX, images (XMP/EXIF) - embed label JSON
 - **Text files**: Append trailer (`---OPENLABEL-V1---`)
-- **Binary/Archives**: Use sidecar file (`.openlabel.json`)
+- **Binary/Archives**: Use trailer or native metadata where supported
 
 **Hash enables correlation:**
 - Each label includes a hash
@@ -230,7 +230,7 @@ openlabels/
 - Agent for on-prem (NTFS, POSIX)
 - Entity registry (300+ types)
 - Local SQLite index
-- Label trailer/sidecar formats
+- Label trailer formats
 
 ### Deferred (v2+)
 
@@ -311,7 +311,7 @@ Do not suggest:
 │   │         LABEL WRITER                     │                          │
 │   │   • Portable label JSON                  │                          │
 │   │   • Hash for correlation                 │                          │
-│   │   • Trailer / Sidecar / Native metadata  │                          │
+│   │   • Trailer / Native metadata            │                          │
 │   └─────────────────────┬───────────────────┘                          │
 │                         │                                              │
 │                         ▼                                              │

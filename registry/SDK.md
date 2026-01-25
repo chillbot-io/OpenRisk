@@ -1,23 +1,23 @@
-# ScrubIQ SDK
+# OpenLabels SDK
 
 > Privacy Infrastructure That Just Works
 
 ## Installation
 
 ```bash
-pip install scrubiq
+pip install openlabels
 
 # With ML models (recommended)
-pip install scrubiq[ml]
+pip install openlabels[ml]
 
 # Everything
-pip install scrubiq[all]
+pip install openlabels[all]
 ```
 
 ## Quick Start
 
 ```python
-from scrubiq import redact
+from openlabels import redact
 
 result = redact("Patient John Smith, SSN 123-45-6789")
 print(result)  # "Patient [NAME_1], SSN [SSN_1]"
@@ -46,14 +46,14 @@ result.mapping        # Token → value dict
 
 ### Level 0: Just works
 ```python
-from scrubiq import redact
+from openlabels import redact
 
 safe_text = redact("Patient John Smith")
 ```
 
 ### Level 1: I want control
 ```python
-from scrubiq import Redactor
+from openlabels import Redactor
 
 r = Redactor(confidence_threshold=0.9)
 result = r.redact(text)
@@ -61,10 +61,10 @@ result = r.redact(text)
 
 ### Level 2: I want everything
 ```python
-from scrubiq import Redactor
+from openlabels import Redactor
 
 r = Redactor(
-    confidence_threshold=0.85,
+    confidence_threshold=0.65,
     thresholds={"NAME": 0.7, "SSN": 0.99},
     entity_types=["NAME", "SSN", "DOB"],
     exclude_types=["EMAIL"],
@@ -101,7 +101,7 @@ original = result.restore()
 # "Patient John Smith, SSN 123-45-6789"
 
 # Or use the standalone function
-from scrubiq import restore
+from openlabels import restore
 original = restore(result.text, result.mapping)
 
 # JSON serialization
@@ -126,7 +126,7 @@ for entity in result.entities:
 ## Scanning Without Tokenization
 
 ```python
-from scrubiq import scan
+from openlabels import scan
 
 result = scan("Patient John Smith")
 
@@ -139,7 +139,7 @@ if result.has_phi:
 ## Chat with LLM
 
 ```python
-from scrubiq import chat
+from openlabels import chat
 
 # Automatically: redact → send to LLM → restore
 result = chat("Summarize John Smith's condition")
@@ -157,14 +157,14 @@ result = chat(
 ### Via Environment Variables
 
 ```bash
-export SCRUBIQ_THRESHOLD=0.9
-export SCRUBIQ_DEVICE=cuda
-export SCRUBIQ_WORKERS=4
-export SCRUBIQ_SAFE_HARBOR=true
-export SCRUBIQ_COREFERENCE=true
-export SCRUBIQ_ALLOWLIST="Mayo Clinic,Tylenol"
-export SCRUBIQ_ENTITY_TYPES="NAME,SSN,DOB"
-export SCRUBIQ_EXCLUDE_TYPES="EMAIL"
+export OPENLABELS_THRESHOLD=0.9
+export OPENLABELS_DEVICE=cuda
+export OPENLABELS_WORKERS=4
+export OPENLABELS_SAFE_HARBOR=true
+export OPENLABELS_COREFERENCE=true
+export OPENLABELS_ALLOWLIST="Mayo Clinic,Tylenol"
+export OPENLABELS_ENTITY_TYPES="NAME,SSN,DOB"
+export OPENLABELS_EXCLUDE_TYPES="EMAIL"
 ```
 
 ### Via Constructor
@@ -172,7 +172,7 @@ export SCRUBIQ_EXCLUDE_TYPES="EMAIL"
 ```python
 r = Redactor(
     # Thresholds
-    confidence_threshold=0.85,
+    confidence_threshold=0.65,
     thresholds={"NAME": 0.7, "SSN": 0.99},
     
     # What to detect
@@ -285,7 +285,7 @@ restored = await r.arestore(text, mapping)
 For faster first requests in server environments:
 
 ```python
-from scrubiq import preload
+from openlabels import preload
 
 # At startup
 preload()  # Blocks until models loaded
@@ -301,13 +301,13 @@ await preload_async()
 
 ```bash
 # Start headless server
-scrubiq-server
+openlabels-server
 
 # With options
-scrubiq-server --host 0.0.0.0 --port 8080 --workers 4
+openlabels-server --host 0.0.0.0 --port 8080 --workers 4
 
 # Via environment
-SCRUBIQ_WORKERS=4 scrubiq-server
+OPENLABELS_WORKERS=4 openlabels-server
 ```
 
 ## API Reference
@@ -390,12 +390,12 @@ with Redactor() as r:
 
 ## For Persistent Storage
 
-The SDK uses `ScrubIQ` internally for token persistence and audit logging. For direct access:
+The SDK uses `OpenLabels` internally for token persistence and audit logging. For direct access:
 
 ```python
-from scrubiq import ScrubIQ
+from openlabels import OpenLabels
 
-with ScrubIQ(key_material="your-secret-key") as cr:
+with OpenLabels(key_material="your-secret-key") as cr:
     result = cr.redact(text)
     # Tokens persist across sessions
     # Audit log maintained
@@ -405,14 +405,14 @@ with ScrubIQ(key_material="your-secret-key") as cr:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SCRUBIQ_THRESHOLD` | `0.85` | Confidence threshold |
-| `SCRUBIQ_DEVICE` | `auto` | `auto`, `cuda`, `cpu` |
-| `SCRUBIQ_WORKERS` | `1` | Parallel workers |
-| `SCRUBIQ_SAFE_HARBOR` | `true` | HIPAA Safe Harbor |
-| `SCRUBIQ_COREFERENCE` | `true` | Resolve pronouns |
-| `SCRUBIQ_ALLOWLIST` | | Comma-separated values |
-| `SCRUBIQ_ENTITY_TYPES` | | Types to detect |
-| `SCRUBIQ_EXCLUDE_TYPES` | | Types to skip |
-| `SCRUBIQ_REVIEW_THRESHOLD` | `0.7` | Flag uncertain detections |
-| `SCRUBIQ_DATA_DIR` | | Storage directory |
+| `OPENLABELS_THRESHOLD` | `0.65` | Confidence threshold |
+| `OPENLABELS_DEVICE` | `auto` | `auto`, `cuda`, `cpu` |
+| `OPENLABELS_WORKERS` | `1` | Parallel workers |
+| `OPENLABELS_SAFE_HARBOR` | `true` | HIPAA Safe Harbor |
+| `OPENLABELS_COREFERENCE` | `true` | Resolve pronouns |
+| `OPENLABELS_ALLOWLIST` | | Comma-separated values |
+| `OPENLABELS_ENTITY_TYPES` | | Types to detect |
+| `OPENLABELS_EXCLUDE_TYPES` | | Types to skip |
+| `OPENLABELS_REVIEW_THRESHOLD` | `0.7` | Flag uncertain detections |
+| `OPENLABELS_DATA_DIR` | | Storage directory |
 | `ANTHROPIC_API_KEY` | | For chat() function |
