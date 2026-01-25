@@ -131,7 +131,7 @@ class Detector:
         Returns:
             DetectionResult containing detected spans and extracted text.
         """
-        from .files.extractor import extract_text
+        from .extractor import extract_text
 
         start_time = time.perf_counter()
         path = Path(path)
@@ -185,7 +185,15 @@ class Detector:
         return results
 
 
-# Convenience function for simple usage
+def _make_config(**kwargs) -> Config:
+    """Create Config with optional overrides."""
+    config = Config()
+    for key, value in kwargs.items():
+        if hasattr(config, key):
+            setattr(config, key, value)
+    return config
+
+
 def detect(text: str, **config_kwargs) -> DetectionResult:
     """
     Quick detection without explicitly creating a Detector.
@@ -203,13 +211,7 @@ def detect(text: str, **config_kwargs) -> DetectionResult:
         >>> print(result.entity_counts)
         {'PHONE': 1}
     """
-    config = Config()
-    for key, value in config_kwargs.items():
-        if hasattr(config, key):
-            setattr(config, key, value)
-
-    detector = Detector(config=config)
-    return detector.detect(text)
+    return Detector(config=_make_config(**config_kwargs)).detect(text)
 
 
 def detect_file(path: Union[str, Path], **config_kwargs) -> DetectionResult:
@@ -223,10 +225,4 @@ def detect_file(path: Union[str, Path], **config_kwargs) -> DetectionResult:
     Returns:
         DetectionResult with detected spans.
     """
-    config = Config()
-    for key, value in config_kwargs.items():
-        if hasattr(config, key):
-            setattr(config, key, value)
-
-    detector = Detector(config=config)
-    return detector.detect_file(path)
+    return Detector(config=_make_config(**config_kwargs)).detect_file(path)

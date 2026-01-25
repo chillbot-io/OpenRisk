@@ -793,6 +793,25 @@ def trim_name_at_non_name_words(spans: List[Span], text: str) -> List[Span]:
     return result
 
 
+def _is_word_char(c: str) -> bool:
+    """Check if character is part of a word (not a boundary)."""
+    return bool(c) and not _WORD_BOUNDARY.match(c)
+
+
+def _find_word_start(text: str, pos: int) -> int:
+    """Find the start of the word containing position."""
+    while pos > 0 and _is_word_char(text[pos - 1]):
+        pos -= 1
+    return pos
+
+
+def _find_word_end(text: str, pos: int) -> int:
+    """Find the end of the word containing position."""
+    while pos < len(text) and _is_word_char(text[pos]):
+        pos += 1
+    return pos
+
+
 def snap_to_word_boundaries(spans: List[Span], text: str) -> List[Span]:
     """
     Snap span boundaries to word edges to prevent partial word tokenization.
@@ -802,11 +821,6 @@ def snap_to_word_boundaries(spans: List[Span], text: str) -> List[Span]:
     - "r[NAME_4]" → end of "our" shouldn't be tokenized
     - "5D[NAME_3]23" → partial document ID
 
-    Algorithm:
-    - If span starts mid-word, expand left to word start
-    - If span ends mid-word, expand right to word end
-    - Word boundaries: whitespace, punctuation, or string edges
-
     Args:
         spans: Spans to adjust
         text: Original text for boundary detection
@@ -814,22 +828,6 @@ def snap_to_word_boundaries(spans: List[Span], text: str) -> List[Span]:
     Returns:
         Adjusted spans (new span objects, originals not modified)
     """
-    def is_word_char(c: str) -> bool:
-        """Check if character is part of a word (not a boundary)."""
-        return bool(c) and not _WORD_BOUNDARY.match(c)
-    
-    def find_word_start(pos: int) -> int:
-        """Find the start of the word containing position."""
-        while pos > 0 and is_word_char(text[pos - 1]):
-            pos -= 1
-        return pos
-    
-    def find_word_end(pos: int) -> int:
-        """Find the end of the word containing position."""
-        while pos < len(text) and is_word_char(text[pos]):
-            pos += 1
-        return pos
-    
     adjusted = []
     for span in spans:
         new_start = span.start
@@ -842,21 +840,21 @@ def snap_to_word_boundaries(spans: List[Span], text: str) -> List[Span]:
         
         # Check if we're starting mid-word
         # Need: char before exists, is word char, AND current char is word char
-        if (span.start > 0 and 
-            span.start < len(text) and 
-            is_word_char(text[span.start - 1]) and 
-            is_word_char(text[span.start])):
+        if (span.start > 0 and
+            span.start < len(text) and
+            _is_word_char(text[span.start - 1]) and
+            _is_word_char(text[span.start])):
             # We're in the middle of a word - expand to word start
-            new_start = find_word_start(span.start)
-        
-        # Check if we're ending mid-word  
+            new_start = _find_word_start(text, span.start)
+
+        # Check if we're ending mid-word
         # Need: char at end exists, is word char, AND char before end is word char
-        if (span.end > 0 and 
-            span.end < len(text) and 
-            is_word_char(text[span.end]) and 
-            is_word_char(text[span.end - 1])):
+        if (span.end > 0 and
+            span.end < len(text) and
+            _is_word_char(text[span.end]) and
+            _is_word_char(text[span.end - 1])):
             # We're in the middle of a word - expand to word end
-            new_end = find_word_end(span.end)
+            new_end = _find_word_end(text, span.end)
         
         # Only adjust if boundaries changed and the expansion is reasonable
         if new_start != span.start or new_end != span.end:
@@ -1435,17 +1433,7 @@ def merge_spans(spans: List[Span], min_confidence: float = 0.50, text: str = Non
     spans = fix_misclassified_emails(spans)
 
     # Step 7: Exact dedup - group by (start, end, type), keep highest tier
-    groups: Dict[tuple, List[Span]] = {}
-    for span in spans:
-        key = (span.start, span.end, span.entity_type)
-        if key not in groups:
-            groups[key] = []
-        groups[key].append(span)
-
-    deduped = []
-    for group in groups.values():
-        best = max(group, key=lambda s: (s.tier, s.confidence))
-        deduped.append(best)
+    deduped = _dedup_by_position_type(spans)
 
     # Step 8: Remove contained spans (e.g., "K." inside "K. Edwards, DNP")
     deduped = remove_contained_spans(deduped)
@@ -1467,21 +1455,7 @@ def merge_spans(spans: List[Span], min_confidence: float = 0.50, text: str = Non
     deduped.sort(key=lambda s: (s.tier, s.confidence, len(s)), reverse=True)
 
     # Step 14: Greedy select non-overlapping spans
-    selected = []
-
-    if _INTERVALTREE_AVAILABLE and len(deduped) > INTERVALTREE_THRESHOLD:
-        # O(n log n) with IntervalTree for large span counts
-        tree = IntervalTree()
-        for span in deduped:
-            if not tree.overlaps(span.start, span.end):
-                selected.append(span)
-                # IntervalTree uses half-open intervals [start, end)
-                tree.addi(span.start, max(span.end, span.start + 1), span)
-    else:
-        # O(n²) fallback for small span counts
-        for span in deduped:
-            if not any(span.overlaps(s) for s in selected):
-                selected.append(span)
+    selected = _select_non_overlapping(deduped)
 
     # Step 15: Sort by position
     selected.sort(key=lambda s: s.start)

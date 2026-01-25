@@ -24,7 +24,6 @@ from .constants import (
 if TYPE_CHECKING:
     from .ocr import OCREngine, OCRResult
     from .temp_storage import SecureTempDir
-    from .document_templates import DocumentType
 
 logger = logging.getLogger(__name__)
 
@@ -130,18 +129,18 @@ class PDFExtractor(BaseExtractor):
     RENDER_DPI = 150
     
     def __init__(
-        self, 
+        self,
         ocr_engine: Optional["OCREngine"] = None,
         temp_dir: Optional["SecureTempDir"] = None,
-        enable_enhanced_processing: bool = True,
+        enable_enhanced_processing: bool = False,
     ):
         """
         Initialize PDF extractor.
-        
+
         Args:
             ocr_engine: OCR engine for scanned pages
             temp_dir: Secure temp directory for page images (optional)
-            enable_enhanced_processing: Use EnhancedOCRProcessor for document intelligence
+            enable_enhanced_processing: Reserved for future EnhancedOCRProcessor support
         """
         self.ocr_engine = ocr_engine
         self.temp_dir = temp_dir
@@ -162,10 +161,19 @@ class PDFExtractor(BaseExtractor):
     
     def can_handle(self, content_type: str, extension: str) -> bool:
         return (
-            content_type == "application/pdf" or 
+            content_type == "application/pdf" or
             extension == ".pdf"
         )
-    
+
+    def _save_page_image(self, img, page_num: int) -> Optional[str]:
+        """Save a PIL Image to temp directory if available. Returns path or None."""
+        if not self.temp_dir:
+            return None
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, format='PNG')
+        temp_path = self.temp_dir.write_page(page_num, img_buffer.getvalue())
+        return str(temp_path)
+
     def extract(
         self, 
         content: bytes, 
@@ -251,19 +259,10 @@ class PDFExtractor(BaseExtractor):
                             pix.samples
                         )
                         img_array = np.array(img)
-                        
+
                         # Save to temp file if requested
-                        temp_path = None
-                        if save_scanned_pages and self.temp_dir:
-                            # Convert to PNG bytes
-                            img_buffer = io.BytesIO()
-                            img.save(img_buffer, format='PNG')
-                            img_bytes = img_buffer.getvalue()
-                            
-                            # Write to temp dir
-                            temp_path_obj = self.temp_dir.write_page(i, img_bytes)
-                            temp_path = str(temp_path_obj)
-                        
+                        temp_path = self._save_page_image(img, i) if save_scanned_pages else None
+
                         # Get raw OCR with coordinates
                         ocr_result = self.ocr_engine.extract_with_coordinates(img)
                         
@@ -642,18 +641,18 @@ class ImageExtractor(BaseExtractor):
     """
     
     def __init__(
-        self, 
+        self,
         ocr_engine: Optional["OCREngine"] = None,
         temp_dir: Optional["SecureTempDir"] = None,
-        enable_enhanced_processing: bool = True,
+        enable_enhanced_processing: bool = False,
     ):
         """
         Initialize image extractor.
-        
+
         Args:
             ocr_engine: OCR engine for text extraction
             temp_dir: Secure temp directory for page images (optional)
-            enable_enhanced_processing: Use EnhancedOCRProcessor for document intelligence
+            enable_enhanced_processing: Reserved for future EnhancedOCRProcessor support
         """
         self.ocr_engine = ocr_engine
         self.temp_dir = temp_dir
@@ -736,15 +735,10 @@ class ImageExtractor(BaseExtractor):
             
             # Convert to numpy array for enhanced processing
             img_array = np.array(img)
-            
+
             # Save to temp if requested
-            temp_path = None
-            if save_pages and self.temp_dir:
-                img_buffer = io.BytesIO()
-                img.save(img_buffer, format='PNG')
-                temp_path_obj = self.temp_dir.write_page(0, img_buffer.getvalue())
-                temp_path = str(temp_path_obj)
-            
+            temp_path = self._save_page_image(img, 0) if save_pages else None
+
             # Get raw OCR with coordinates
             ocr_result = self.ocr_engine.extract_with_coordinates(img)
             
@@ -850,15 +844,10 @@ class ImageExtractor(BaseExtractor):
                 # Convert to RGB
                 frame = img.convert("RGB")
                 frame_array = np.array(frame)
-                
+
                 # Save to temp if requested
-                temp_path = None
-                if save_pages and self.temp_dir:
-                    img_buffer = io.BytesIO()
-                    frame.save(img_buffer, format='PNG')
-                    temp_path_obj = self.temp_dir.write_page(page_num, img_buffer.getvalue())
-                    temp_path = str(temp_path_obj)
-                
+                temp_path = self._save_page_image(frame, page_num) if save_pages else None
+
                 # Get raw OCR with coordinates
                 ocr_result = self.ocr_engine.extract_with_coordinates(frame)
                 

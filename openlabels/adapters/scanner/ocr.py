@@ -602,39 +602,16 @@ class OCREngine:
         apply_layout_processing: bool = False,
     ) -> OCRResult:
         """
-        Extract text with bounding boxes and optional layout processing.
-        
-        .. deprecated::
-            The apply_layout_processing parameter uses the deprecated layout.py.
-            For document intelligence, use EnhancedOCRProcessor directly in
-            your extraction pipeline, which is wired up in ImageExtractor
-            and PDFExtractor by default.
-        
+        Extract text with bounding boxes.
+
         Args:
             image: Image to process
-            apply_layout_processing: Whether to apply layout-aware cleanup
-                (deprecated - use EnhancedOCRProcessor instead)
-            
+            apply_layout_processing: Ignored (layout processing not available)
+
         Returns:
             OCRResult with text and bounding boxes
         """
-        # Get raw OCR result (with proper spacing from our fixed extract_with_coordinates)
         result = self.extract_with_coordinates(image)
-        
-        if not apply_layout_processing or not result.blocks:
-            return result
-        
-        # Apply legacy layout processing (deprecated)
-        try:
-            from .layout import process_structured_document
-            import warnings
-            warnings.warn(
-                "apply_layout_processing=True uses deprecated layout.py. "
-                "Use EnhancedOCRProcessor for document intelligence.",
-                DeprecationWarning,
-                stacklevel=2
-            )
-            return process_structured_document(result)
-        except Exception as e:
-            logger.warning(f"Layout processing failed, using raw OCR: {e}")
-            return result
+        if apply_layout_processing:
+            logger.debug("apply_layout_processing ignored: layout processing not available")
+        return result

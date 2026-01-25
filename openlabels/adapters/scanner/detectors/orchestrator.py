@@ -43,18 +43,9 @@ from .secrets import SecretsDetector
 from .financial import FinancialDetector
 from .government import GovernmentDetector
 
-# Pipeline imports - with fallbacks
-try:
-    from ..pipeline.merger import filter_tracking_numbers
-except ImportError:
-    def filter_tracking_numbers(spans, text):
-        return spans
-
-try:
-    from ..pipeline.confidence import normalize_spans_confidence
-except ImportError:
-    def normalize_spans_confidence(spans, text):
-        return spans
+# Pipeline imports
+from ..pipeline.merger import filter_tracking_numbers
+from ..pipeline.confidence import normalize_spans_confidence
 
 # Context enhancement - optional
 ContextEnhancer = None
@@ -63,10 +54,6 @@ try:
     from .context_enhancer import ContextEnhancer, create_enhancer
 except ImportError:
     pass
-
-# LLM verification not included in scanner - detection only
-LLMVerifier = None
-create_verifier = None
 
 
 logger = logging.getLogger(__name__)
@@ -105,6 +92,37 @@ def get_detection_queue_depth() -> int:
     """Get current number of pending detection requests."""
     with _QUEUE_LOCK:
         return _QUEUE_DEPTH
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def _detection_slot():
+    """
+    Context manager for detection backpressure.
+
+    Handles queue depth tracking and semaphore acquisition/release.
+    Raises DetectionQueueFullError if queue is at capacity.
+    """
+    global _QUEUE_DEPTH
+
+    # Check queue depth and increment
+    with _QUEUE_LOCK:
+        if MAX_QUEUE_DEPTH > 0 and _QUEUE_DEPTH >= MAX_QUEUE_DEPTH:
+            raise DetectionQueueFullError(_QUEUE_DEPTH, MAX_QUEUE_DEPTH)
+        _QUEUE_DEPTH += 1
+        current_depth = _QUEUE_DEPTH
+
+    try:
+        _DETECTION_SEMAPHORE.acquire()
+        try:
+            yield current_depth
+        finally:
+            _DETECTION_SEMAPHORE.release()
+    finally:
+        with _QUEUE_LOCK:
+            _QUEUE_DEPTH = max(0, _QUEUE_DEPTH - 1)
 
 
 def _get_executor() -> ThreadPoolExecutor:
@@ -338,29 +356,9 @@ class DetectorOrchestrator:
         if not text:
             return []
 
-        global _QUEUE_DEPTH
-
-        # Backpressure: check queue depth before accepting request
-        with _QUEUE_LOCK:
-            if MAX_QUEUE_DEPTH > 0 and _QUEUE_DEPTH >= MAX_QUEUE_DEPTH:
-                raise DetectionQueueFullError(_QUEUE_DEPTH, MAX_QUEUE_DEPTH)
-            _QUEUE_DEPTH += 1
-            current_depth = _QUEUE_DEPTH
-
-        try:
-            # Log input for debugging (SECURITY: never log actual text content)
-            logger.info(f"Detection starting on text ({len(text)} chars), queue depth: {current_depth}")
-
-            # Acquire semaphore (blocks if at max concurrent detections)
-            # This prevents CPU/memory overload from too many parallel detections
-            _DETECTION_SEMAPHORE.acquire()
-            try:
-                return self._detect_impl(text, timeout, known_entities)
-            finally:
-                _DETECTION_SEMAPHORE.release()
-        finally:
-            with _QUEUE_LOCK:
-                _QUEUE_DEPTH = max(0, _QUEUE_DEPTH - 1)
+        with _detection_slot() as queue_depth:
+            logger.info(f"Detection starting on text ({len(text)} chars), queue depth: {queue_depth}")
+            return self._detect_impl(text, timeout, known_entities)
 
     def _detect_impl(
         self,

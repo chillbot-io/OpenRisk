@@ -70,103 +70,128 @@ FALSE_POSITIVE_NAMES: Set[str] = {
 # Compile into lowercase set for case-insensitive matching
 _FALSE_POSITIVE_NAMES_LOWER = {s.lower() for s in FALSE_POSITIVE_NAMES}
 
+# Document terms that indicate false positive when at start/end of detected name
+_DOCUMENT_TERMS_START = frozenset({
+    "LABORATORY", "REPORT", "LICENSE", "CERTIFICATE", "DOCUMENT",
+    "INSURANCE", "DISCHARGE", "SUMMARY", "ASSESSMENT", "CONSULTATION",
+})
+
+_DOCUMENT_TERMS_END = frozenset({
+    "REPORT", "REPORTS", "FORM", "DOCUMENT", "CERTIFICATE", "LICENSE",
+    "SUMMARY", "RESULTS", "HISTORY", "NOTES", "CHART",
+})
+
+# Valid medical credentials (excludes state abbreviations that look like credentials)
+_VALID_CREDENTIALS = frozenset({
+    "MD", "DO", "PA", "NP", "RN", "PHD", "DNP", "APRN", "PAC"
+})
+
+# US state abbreviations
+_US_STATE_ABBREVS = frozenset({
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC"
+})
+
+# Common city name components (for city vs name disambiguation)
+_CITY_WORDS = frozenset({
+    "city", "york", "orleans", "angeles", "francisco",
+    "diego", "antonio", "vegas", "beach", "springs",
+    "falls", "rapids", "creek", "river", "lake", "park",
+    "heights", "hills", "valley", "grove", "point"
+})
+
+
+def _is_too_short(value: str, words: list) -> bool:
+    """Check if value is too short to be a valid name."""
+    if len(words) == 1 and len(words[0]) == 1:
+        return True
+    if len(value.replace(' ', '')) < 3:
+        return True
+    return False
+
+
+def _all_words_are_false_positives(words: list) -> bool:
+    """Check if all words in the value are known false positives."""
+    return all(w.upper() in FALSE_POSITIVE_NAMES for w in words)
+
+
+def _has_document_term_boundary(words: list) -> bool:
+    """Check if value starts or ends with a document term."""
+    if not words:
+        return False
+    if words[0].upper() in _DOCUMENT_TERMS_START:
+        return True
+    if words[-1].upper() in _DOCUMENT_TERMS_END:
+        return True
+    return False
+
+
+def _is_fragment_with_fp_suffix(value: str, words: list) -> bool:
+    """Check for short first word + false positive suffix (e.g., 'Y REPORT')."""
+    if len(words) < 2:
+        return False
+
+    first_word, last_word = words[0], words[-1]
+
+    if len(first_word) <= 2 and last_word.upper() in FALSE_POSITIVE_NAMES:
+        last_clean = last_word.upper().replace("-", "")
+        if not ("," in value and last_clean in _VALID_CREDENTIALS):
+            return True
+    return False
+
+
+def _is_city_state_pattern(value: str, words: list) -> bool:
+    """Check if value is a 'City, STATE' pattern (not a name)."""
+    if len(words) < 2:
+        return False
+
+    last_word = words[-1]
+    if last_word.upper() not in _US_STATE_ABBREVS:
+        return False
+
+    if "," in value:
+        before_comma = value.rsplit(",", 1)[0].strip()
+        before_words = before_comma.split()
+
+        if len(before_words) == 1:
+            return True
+        if len(before_words) == 2 and before_words[1].lower() in _CITY_WORDS:
+            return True
+    else:
+        # No comma - state abbrev without comma is likely false positive
+        return True
+
+    return False
+
+
+def _ends_with_fp_fragment(value: str) -> bool:
+    """Check if value ends with known false positive fragments."""
+    for fp in ("visitPA", "visitMA", "visitNY"):
+        if value.endswith(fp):
+            return True
+    return False
+
 
 def _is_false_positive_name(value: str) -> bool:
     """Check if a detected name is likely a false positive."""
-    # Split into words and check each
     words = value.split()
-    
-    # Single character "names" are almost always false positives
-    if len(words) == 1 and len(words[0]) == 1:
+
+    if _is_too_short(value, words):
         return True
-    
-    # Very short matches (< 3 chars) are usually false positives
-    if len(value.replace(' ', '')) < 3:
+    if _all_words_are_false_positives(words):
         return True
-    
-    # If ALL words are false positives, reject
-    if all(w.upper() in FALSE_POSITIVE_NAMES for w in words):
+    if _has_document_term_boundary(words):
         return True
-    
-    # If first word is a common document term (not a name), likely FP
-    if words and words[0].upper() in {
-        "LABORATORY", "REPORT", "LICENSE", "CERTIFICATE", "DOCUMENT",
-        "INSURANCE", "DISCHARGE", "SUMMARY", "ASSESSMENT", "CONSULTATION",
-    }:
+    if _is_fragment_with_fp_suffix(value, words):
         return True
-    
-    # If last word is a common document term, likely FP (catches "Y REPORT", "RY REPORT")
-    if words and words[-1].upper() in {
-        "REPORT", "REPORTS", "FORM", "DOCUMENT", "CERTIFICATE", "LICENSE",
-        "SUMMARY", "RESULTS", "HISTORY", "NOTES", "CHART",
-    }:
+    if _is_city_state_pattern(value, words):
         return True
-    
-    # Check for patterns that look like document text fragments
-    # e.g., "Y REPORT", "A visitPA", "RY REPORT"
-    # These usually have very short first words or all-caps
-    if len(words) >= 2:
-        first_word = words[0]
-        last_word = words[-1]
-        
-        # Short first word + document term = likely fragment (e.g., "Y REPORT")
-        # BUT exclude valid medical credentials after a comma (e.g., "E. Washington, MD")
-        VALID_CREDENTIALS = {"MD", "DO", "PA", "NP", "RN", "PHD", "DNP", "APRN", "PAC"}
-        if len(first_word) <= 2 and last_word.upper() in FALSE_POSITIVE_NAMES:
-            # Exception: comma + credential = valid provider name
-            last_clean = last_word.upper().replace("-", "")
-            if not ("," in value and last_clean in VALID_CREDENTIALS):
-                return True
-        
-        # Check if ends with state abbreviation mistaken for credentials
-        # Full list of US state abbreviations
-        US_STATE_ABBREVS = {
-            "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
-            "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
-            "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
-            "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
-            "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC"
-        }
-        
-        if last_word.upper() in US_STATE_ABBREVS:
-            # Check for "City, STATE" pattern (address, not name)
-            # Pattern: "Baltimore, MD" or "New York, NY"
-            # Real credentials would be "John Smith, MD" (name + credential)
-            if "," in value:
-                # Split at comma to check what's before it
-                before_comma = value.rsplit(",", 1)[0].strip()
-                before_words = before_comma.split()
-                
-                # If only 1-2 words before comma, likely a city not a person
-                # "Baltimore, MD" = 1 word → city
-                # "New York, NY" = 2 words → city
-                # "San Francisco, CA" = 2 words → city
-                # "John Smith, MD" = 2 words → could be either, but...
-                # Key insight: city names before state don't have typical name patterns
-                
-                # Simple heuristic: if 1 word before comma + state abbrev, it's a city
-                if len(before_words) == 1:
-                    return True
-                
-                # If 2 words and second word is a common city suffix/word, it's a city
-                if len(before_words) == 2:
-                    city_words = {"city", "york", "orleans", "angeles", "francisco", 
-                                  "diego", "antonio", "vegas", "beach", "springs",
-                                  "falls", "rapids", "creek", "river", "lake", "park",
-                                  "heights", "hills", "valley", "grove", "point"}
-                    if before_words[1].lower() in city_words:
-                        return True
-            else:
-                # No comma - state abbrev without comma is likely false positive
-                # e.g., pattern matched "visit MD" as name ending in MD
-                return True
-    
-    # Check if the value ends with a false positive fragment
-    # This catches things like "visitPA" where PA is mistaken for credential
-    for fp in ["visitPA", "visitMA", "visitNY"]:
-        if value.endswith(fp):
-            return True
-    
+    if _ends_with_fp_fragment(value):
+        return True
+
     return False
 
 
