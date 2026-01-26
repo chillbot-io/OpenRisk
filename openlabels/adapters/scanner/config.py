@@ -165,7 +165,10 @@ class Config:
         config = cls()
 
         if env_conf := os.environ.get("OPENLABELS_SCANNER_MIN_CONFIDENCE"):
-            config.min_confidence = float(env_conf)
+            try:
+                config.min_confidence = float(env_conf)
+            except ValueError:
+                logger.warning(f"Invalid OPENLABELS_SCANNER_MIN_CONFIDENCE='{env_conf}', using default")
 
         if env_device := os.environ.get("OPENLABELS_SCANNER_DEVICE"):
             config.device = env_device.lower()
@@ -174,6 +177,9 @@ class Config:
             config.enable_ocr = env_ocr.lower() in ("1", "true", "yes")
 
         if env_workers := os.environ.get("OPENLABELS_SCANNER_MAX_WORKERS"):
-            config.max_workers = int(env_workers)
+            try:
+                config.max_workers = int(env_workers)
+            except ValueError:
+                logger.warning(f"Invalid OPENLABELS_SCANNER_MAX_WORKERS='{env_workers}', using default")
 
         return config

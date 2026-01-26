@@ -158,31 +158,6 @@ class Detector:
 
         return result
 
-    def detect_batch(
-        self,
-        texts: List[str],
-        parallel: bool = True,
-    ) -> List[DetectionResult]:
-        """
-        Detect PII/PHI in multiple texts.
-
-        Args:
-            texts: List of texts to scan.
-            parallel: If True, process texts in parallel.
-
-        Returns:
-            List of DetectionResult, one per input text.
-        """
-        if not parallel or len(texts) <= 1:
-            return [self.detect(text) for text in texts]
-
-        from concurrent.futures import ThreadPoolExecutor
-
-        with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
-            results = list(executor.map(self.detect, texts))
-
-        return results
-
 
 def _make_config(**kwargs) -> Config:
     """Create Config with optional overrides."""

@@ -86,16 +86,16 @@ def cmd_delete(args) -> int:
     for i, result in enumerate(matches):
         try:
             file_path = Path(result.path)
-            if file_path.exists():
-                os.remove(file_path)
-                deleted_count += 1
-                if not args.quiet:
-                    print(f"[{i+1}/{len(matches)}] Deleted: {result.path}")
-            else:
-                if not args.quiet:
-                    print(f"[{i+1}/{len(matches)}] Skipped (not found): {result.path}")
+            file_path.unlink()
+            deleted_count += 1
+            if not args.quiet:
+                print(f"[{i+1}/{len(matches)}] Deleted: {result.path}")
 
-        except Exception as e:
+        except FileNotFoundError:
+            if not args.quiet:
+                print(f"[{i+1}/{len(matches)}] Skipped (not found): {result.path}")
+
+        except OSError as e:
             errors.append({"path": result.path, "error": str(e)})
             if not args.quiet:
                 print(f"[{i+1}/{len(matches)}] Error: {result.path} - {e}", file=sys.stderr)

@@ -354,50 +354,49 @@ class LabelIndex:
         Returns:
             List of matching label metadata
         """
-        conditions = ["1=1"]
         params: List[Any] = []
 
+        base_query = """
+            SELECT
+                o.label_id,
+                o.file_path,
+                o.file_name,
+                v.content_hash,
+                v.scanned_at,
+                v.risk_score,
+                v.risk_tier,
+                v.entity_types
+            FROM label_objects o
+            JOIN label_versions v ON o.label_id = v.label_id
+            WHERE 1=1
+        """
+
         if min_score is not None:
-            conditions.append("v.risk_score >= ?")
+            base_query += " AND v.risk_score >= ?"
             params.append(min_score)
 
         if max_score is not None:
-            conditions.append("v.risk_score <= ?")
+            base_query += " AND v.risk_score <= ?"
             params.append(max_score)
 
         if risk_tier:
-            conditions.append("v.risk_tier = ?")
+            base_query += " AND v.risk_tier = ?"
             params.append(risk_tier)
 
         if entity_type:
-            conditions.append("v.entity_types LIKE ?")
-            params.append(f"%{entity_type}%")
+            base_query += " AND v.entity_types LIKE ?"
+            params.append("%" + entity_type + "%")
 
         if since:
-            conditions.append("v.scanned_at >= ?")
+            base_query += " AND v.scanned_at >= ?"
             params.append(since)
 
+        base_query += " ORDER BY v.scanned_at DESC LIMIT ?"
         params.append(limit)
 
         try:
             with self._get_connection() as conn:
-                rows = conn.execute(f"""
-                    SELECT
-                        o.label_id,
-                        o.file_path,
-                        o.file_name,
-                        v.content_hash,
-                        v.scanned_at,
-                        v.risk_score,
-                        v.risk_tier,
-                        v.entity_types
-                    FROM label_objects o
-                    JOIN label_versions v ON o.label_id = v.label_id
-                    WHERE {' AND '.join(conditions)}
-                    ORDER BY v.scanned_at DESC
-                    LIMIT ?
-                """, params).fetchall()
-
+                rows = conn.execute(base_query, params).fetchall()
                 return [dict(row) for row in rows]
 
         except Exception as e:

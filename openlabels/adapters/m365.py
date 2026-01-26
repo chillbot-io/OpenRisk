@@ -341,20 +341,3 @@ class M365Adapter:
         """Extract MIME type from metadata."""
         file_info = meta.get("file", {})
         return file_info.get("mimeType", meta.get("contentType", ""))
-
-
-# Convenience functions
-def from_sharepoint_item(
-    permissions: Dict[str, Any],
-    item_meta: Dict[str, Any],
-) -> NormalizedInput:
-    """Convert SharePoint item + permissions to normalized format."""
-    return M365Adapter().extract(permissions, item_meta)
-
-
-def from_onedrive_item(
-    permissions: Dict[str, Any],
-    item_meta: Dict[str, Any],
-) -> NormalizedInput:
-    """Convert OneDrive item + permissions to normalized format."""
-    return M365Adapter().extract(permissions, item_meta)

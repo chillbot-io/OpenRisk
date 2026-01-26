@@ -107,13 +107,8 @@ class DLPAdapter:
 
     def _normalize_gcs_context(self, meta: Dict[str, Any]) -> NormalizedContext:
         """Convert GCS metadata to normalized context."""
-        # Determine exposure from IAM policy
         exposure = self._determine_exposure(meta)
-
-        # Normalize encryption
         encryption = self._normalize_encryption(meta.get("encryption"))
-
-        # Calculate staleness
         last_modified = meta.get("updated") or meta.get("timeCreated")
         staleness = calculate_staleness_days(last_modified)
 
@@ -250,13 +245,3 @@ class DLPAdapter:
         if encryption.get("defaultKmsKeyName"):
             return "customer_managed"
         return "platform"
-
-
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
-
-def from_dlp_inspect_result(result: Dict[str, Any], gcs_meta: Dict[str, Any]) -> NormalizedInput:
-    """Convert DLP inspection result to normalized input."""
-    adapter = DLPAdapter()
-    return adapter.extract(result, gcs_meta)

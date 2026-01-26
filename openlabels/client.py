@@ -33,19 +33,16 @@ Example:
     ... )
 """
 
-import os
 import shutil
 import logging
 import fnmatch
 from datetime import datetime
 from typing import Dict, List, Optional, Union, Iterator, Any, Callable
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from .adapters.base import Adapter, NormalizedInput, NormalizedContext
+from .adapters.base import Adapter, NormalizedInput
 from .core.scorer import ScoringResult, score as score_entities
-from .core.merger import merge_inputs_full, MergeStrategy
-from .core.triggers import should_scan, calculate_scan_priority, ScanTrigger
 from .core.types import (
     ScanResult,
     FilterCriteria,
