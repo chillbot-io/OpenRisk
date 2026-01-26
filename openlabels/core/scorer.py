@@ -16,7 +16,11 @@ from dataclasses import dataclass
 from enum import Enum
 import math
 
-from .registry import get_weight as registry_get_weight, get_category as registry_get_category
+from .registry import (
+    get_weight as registry_get_weight,
+    get_category as registry_get_category,
+    normalize_type,
+)
 
 
 class RiskTier(Enum):
@@ -103,8 +107,10 @@ class ScoringResult:
 
 def get_entity_weight(entity_type: str) -> float:
     """Get calibrated weight for an entity type."""
+    # Normalize type first (handles scanner aliases like SIN -> SIN_CA)
+    canonical = normalize_type(entity_type.upper())
     # Registry uses 1-10 scale, we scale up for scoring formula
-    raw_weight = registry_get_weight(entity_type.upper())
+    raw_weight = registry_get_weight(canonical)
     return raw_weight * WEIGHT_SCALE
 
 
@@ -112,7 +118,9 @@ def get_categories(entities: Dict[str, int]) -> Set[str]:
     """Get set of categories present in entities."""
     categories = set()
     for entity_type in entities:
-        cat = registry_get_category(entity_type.upper())
+        # Normalize type first (handles scanner aliases)
+        canonical = normalize_type(entity_type.upper())
+        cat = registry_get_category(canonical)
         if cat and cat != "unknown":
             categories.add(cat)
     return categories

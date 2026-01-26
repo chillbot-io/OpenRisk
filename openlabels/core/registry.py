@@ -970,6 +970,29 @@ VENDOR_ALIASES: Dict[str, str] = {
     "IPv4 Address": "IP_ADDRESS",
     "IPv6 Address": "IP_ADDRESS",
     "MAC Address": "MAC_ADDRESS",
+
+    # ----- OpenLabels Scanner -----
+    # Scanner outputs short names, map to canonical with country codes
+    "SIN": "SIN_CA",
+    "TFN": "TFN_AU",
+    "NINO": "NINO_UK",
+    "DRIVER_LICENSE": "DRIVERS_LICENSE",
+    "DRIVERS LICENSE": "DRIVERS_LICENSE",
+    "DL": "DRIVERS_LICENSE",
+    "ID_NUMBER": "STATE_ID",
+    "NATIONAL_ID": "STATE_ID",
+    "AADHAAR": "AADHAAR_IN",
+    "PAN": "PAN_IN",
+    "CURP": "CURP_MX",
+    "CPF": "CPF_BR",
+    "RG": "RG_BR",
+    "DNI": "DNI_ES",
+    "NIE": "DNI_ES",
+    "NIF": "DNI_ES",
+    "INSEE": "INSEE_FR",
+    "MY_NUMBER": "JAPAN_MY_NUMBER",
+    "CHINA_ID": "CHINA_RESIDENT_ID",
+    "RESIDENT_ID": "CHINA_RESIDENT_ID",
 }
 
 
