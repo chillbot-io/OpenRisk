@@ -305,8 +305,6 @@ def score_entities(
 # =============================================================================
 
 if __name__ == '__main__':
-    import sys
-
     # Quick test cases
     test_cases = [
         ({}, 'Empty'),

@@ -10,9 +10,12 @@ Usage:
 """
 
 import sys
+import logging
 from pathlib import Path
 
 from openlabels import Client
+
+logger = logging.getLogger(__name__)
 from openlabels.cli.commands.find import find_matching
 from openlabels.output.virtual import write_virtual_label
 from openlabels.output.embed import write_embedded_label
@@ -83,8 +86,8 @@ def cmd_tag(args) -> int:
                     write_embedded_label(str(file_path), label_set)
                     embedded = True
                     embedded_count += 1
-                except Exception:
-                    pass  # Fall back to virtual
+                except (OSError, ValueError) as e:
+                    logger.debug(f"Could not embed label in {file_path}, falling back to virtual: {e}")
 
             # Write virtual label if not embedded
             if not embedded:

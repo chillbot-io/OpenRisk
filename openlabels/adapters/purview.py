@@ -95,7 +95,6 @@ class PurviewAdapter:
             )
             purview_type = self._normalize_type_name(purview_type)
 
-            # Get count and confidence
             attrs = classification.get("attributes", {})
             count = classification.get("count", attrs.get("count", 1))
             confidence = attrs.get("confidence", 0.85)
@@ -267,13 +266,3 @@ class PurviewAdapter:
             return "customer_managed"
 
         return "platform"
-
-
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
-
-def from_purview_scan(scan_result: Dict[str, Any], blob_meta: Dict[str, Any]) -> NormalizedInput:
-    """Convert Purview scan result to normalized input."""
-    adapter = PurviewAdapter()
-    return adapter.extract(scan_result, blob_meta)

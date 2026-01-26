@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Iterator
 
 from ..adapters.base import NormalizedContext, ExposureLevel
+from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE, PARTIAL_HASH_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +93,8 @@ class FileMetadata:
             try:
                 modified = datetime.fromisoformat(self.modified_at.replace('Z', '+00:00'))
                 staleness_days = (datetime.now(modified.tzinfo) - modified).days
-            except Exception:
-                pass
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Could not parse modified_at '{self.modified_at}': {e}")
 
         encryption = "none"
         if self.is_encrypted:
@@ -349,7 +350,7 @@ class FileCollector:
 
         return False
 
-    def _compute_partial_hash(self, path: Path, size: int = 65536) -> str:
+    def _compute_partial_hash(self, path: Path, size: int = PARTIAL_HASH_SIZE) -> str:
         """Compute hash of first N bytes."""
         h = hashlib.sha256()
         with open(path, 'rb') as f:
@@ -360,7 +361,7 @@ class FileCollector:
         """Compute full content hash."""
         h = hashlib.sha256()
         with open(path, 'rb') as f:
-            for chunk in iter(lambda: f.read(8192), b''):
+            for chunk in iter(lambda: f.read(FILE_READ_CHUNK_SIZE), b''):
                 h.update(chunk)
         return h.hexdigest()
 
@@ -377,13 +378,12 @@ class FileCollector:
             for attr_name in xattr_module.listxattr(str(path)):
                 try:
                     value = xattr_module.getxattr(str(path), attr_name)
-                    # Try to decode as UTF-8
                     try:
                         xattrs[attr_name] = value.decode('utf-8')
                     except UnicodeDecodeError:
                         xattrs[attr_name] = value.hex()
-                except Exception:
-                    pass
+                except OSError as e:
+                    logger.debug(f"Could not read xattr '{attr_name}' from {path}: {e}")
         except ImportError:
             # xattr module not installed, try getfattr command
             import subprocess
@@ -399,10 +399,10 @@ class FileCollector:
                         if '=' in line and not line.startswith('#'):
                             key, _, value = line.partition('=')
                             xattrs[key.strip()] = value.strip().strip('"')
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
-        except Exception:
-            pass
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                logger.debug(f"getfattr fallback failed for {path}: {e}")
+        except OSError as e:
+            logger.debug(f"Could not list xattrs for {path}: {e}")
 
         return xattrs
 

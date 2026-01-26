@@ -15,6 +15,8 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 
+from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE
+
 
 # =============================================================================
 # LABEL ID
@@ -76,7 +78,7 @@ def compute_content_hash_file(path: str) -> str:
     """
     sha256 = hashlib.sha256()
     with open(path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
+        for chunk in iter(lambda: f.read(FILE_READ_CHUNK_SIZE), b''):
             sha256.update(chunk)
     return sha256.hexdigest()[:12].lower()
 

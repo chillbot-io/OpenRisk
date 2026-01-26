@@ -12,6 +12,11 @@ __all__ = [
     "OCR_READY_TIMEOUT",
     # Size limits
     "MAX_TEXT_LENGTH",
+    "MAX_PATH_LENGTH",
+    "MAX_XATTR_VALUE_SIZE",
+    # Chunk sizes for file I/O
+    "FILE_READ_CHUNK_SIZE",
+    "PARTIAL_HASH_SIZE",
     # File processing
     "MAX_DOCUMENT_PAGES",
     "MAX_PAGE_WORKERS",
@@ -46,6 +51,12 @@ OCR_READY_TIMEOUT = 30.0
 
 # --- SIZE LIMITS ---
 MAX_TEXT_LENGTH = 1_000_000  # 1MB text input
+MAX_PATH_LENGTH = 4096  # Filesystem path length limit
+MAX_XATTR_VALUE_SIZE = 65536  # Extended attribute value size limit
+
+# --- CHUNK SIZES FOR FILE I/O ---
+FILE_READ_CHUNK_SIZE = 8192  # Standard chunk size for reading files (8KB)
+PARTIAL_HASH_SIZE = 65536  # Bytes to read for partial hash (64KB)
 
 # --- FILE PROCESSING ---
 MAX_DOCUMENT_PAGES = 100  # Max pages to process per document

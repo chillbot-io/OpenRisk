@@ -38,7 +38,7 @@ Expected file metadata format:
     }
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
@@ -360,12 +360,3 @@ class NFSAdapter:
             return "platform"
 
         return "none"
-
-
-# Convenience function
-def from_nfs_export(
-    export_config: Dict[str, Any],
-    file_meta: Dict[str, Any],
-) -> NormalizedInput:
-    """Convert NFS export + metadata to normalized format."""
-    return NFSAdapter().extract(export_config, file_meta)

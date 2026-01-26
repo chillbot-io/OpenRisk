@@ -306,9 +306,3 @@ class NTFSAdapter:
         if enc_lower in ("efs", "bitlocker", "encrypted"):
             return "platform"
         return "none"
-
-
-# Convenience function
-def from_ntfs_acl(acl_data: Dict[str, Any], file_meta: Dict[str, Any]) -> NormalizedInput:
-    """Convert NTFS ACL + metadata to normalized format."""
-    return NTFSAdapter().extract(acl_data, file_meta)

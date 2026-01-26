@@ -182,7 +182,6 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
             win32security.DACL_SECURITY_INFORMATION
         )
 
-        # Get owner
         owner_sid = sd.GetSecurityDescriptorOwner()
         try:
             owner_name, domain, _ = win32security.LookupAccountSid(None, owner_sid)
@@ -190,7 +189,6 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
         except Exception:
             owner = str(owner_sid)
 
-        # Get group
         group_sid = sd.GetSecurityDescriptorGroup()
         group = None
         if group_sid:
@@ -200,7 +198,6 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
             except Exception:
                 group = str(group_sid)
 
-        # Get DACL
         dacl = sd.GetSecurityDescriptorDacl()
         aces = []
 
@@ -209,7 +206,6 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
                 ace = dacl.GetAce(i)
                 ace_type = "allow" if ace[0][0] == ntsecuritycon.ACCESS_ALLOWED_ACE_TYPE else "deny"
 
-                # Get principal
                 principal_sid = ace[2]
                 try:
                     principal_name, domain, _ = win32security.LookupAccountSid(None, principal_sid)
@@ -217,11 +213,8 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
                 except Exception:
                     principal = str(principal_sid)
 
-                # Get permissions
                 mask = ace[1]
                 permissions = _decode_access_mask(mask)
-
-                # Check if inherited
                 is_inherited = bool(ace[0][1] & ntsecuritycon.INHERITED_ACE)
 
                 aces.append(NtfsAce(
@@ -231,7 +224,6 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
                     is_inherited=is_inherited,
                 ))
 
-        # Calculate exposure
         exposure = _calculate_exposure_from_aces(aces)
 
         return NtfsPermissions(

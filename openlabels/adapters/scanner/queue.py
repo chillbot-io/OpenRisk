@@ -47,11 +47,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Optional, List, Callable, Any, Dict
-from queue import Empty
 
-from ...adapters.base import ExposureLevel
 from ...core.triggers import ScanTrigger
 
 logger = logging.getLogger(__name__)

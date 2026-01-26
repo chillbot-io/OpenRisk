@@ -115,31 +115,25 @@ class Condition:
 
     def _compare(self, actual: Any, operator: str, expected: Any) -> bool:
         """Compare actual value against expected using operator."""
-        if operator == "=":
-            return self._normalize(actual) == self._normalize(expected)
-        elif operator == "!=":
-            return self._normalize(actual) != self._normalize(expected)
-        elif operator == ">":
-            return self._to_comparable(actual) > self._to_comparable(expected)
-        elif operator == "<":
-            return self._to_comparable(actual) < self._to_comparable(expected)
-        elif operator == ">=":
-            return self._to_comparable(actual) >= self._to_comparable(expected)
-        elif operator == "<=":
-            return self._to_comparable(actual) <= self._to_comparable(expected)
-        elif operator == "contains":
-            return str(expected).lower() in str(actual).lower()
-        elif operator == "matches":
-            return bool(re.search(str(expected), str(actual), re.IGNORECASE))
-        elif operator == "has":
-            # Check if entity type exists
-            if isinstance(actual, list):
-                return expected.upper() in [str(x).upper() for x in actual]
-            return False
-        elif operator == "missing":
-            return actual is None
+        normalize = self._normalize
+        to_comparable = self._to_comparable
 
-        return False
+        dispatch = {
+            "=": lambda: normalize(actual) == normalize(expected),
+            "!=": lambda: normalize(actual) != normalize(expected),
+            ">": lambda: to_comparable(actual) > to_comparable(expected),
+            "<": lambda: to_comparable(actual) < to_comparable(expected),
+            ">=": lambda: to_comparable(actual) >= to_comparable(expected),
+            "<=": lambda: to_comparable(actual) <= to_comparable(expected),
+            "contains": lambda: str(expected).lower() in str(actual).lower(),
+            "matches": lambda: bool(re.search(str(expected), str(actual), re.IGNORECASE)),
+            "has": lambda: isinstance(actual, list) and expected.upper() in [str(x).upper() for x in actual],
+            "missing": lambda: actual is None,
+        }
+
+        if operator not in dispatch:
+            return False
+        return dispatch[operator]()
 
     def _normalize(self, value: Any) -> str:
         """Normalize value for comparison."""
