@@ -90,7 +90,7 @@ def encrypt_file_gpg(file_path: Path, recipient: str) -> bool:
             file_path.unlink()
             return True
         return False
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
         return False
 
 
@@ -112,7 +112,7 @@ def encrypt_file_age(file_path: Path, recipient: str) -> bool:
             file_path.unlink()
             return True
         return False
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
         return False
 
 
@@ -139,11 +139,11 @@ def cmd_encrypt(args) -> int:
         try:
             subprocess.run(["age", "--version"], capture_output=True)
             tool = "age"
-        except FileNotFoundError:
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
             try:
                 subprocess.run(["gpg", "--version"], capture_output=True)
                 tool = "gpg"
-            except FileNotFoundError:
+            except (FileNotFoundError, OSError, subprocess.SubprocessError):
                 print("Error: No encryption tool found. Install 'age' or 'gpg'", file=sys.stderr)
                 return 1
 

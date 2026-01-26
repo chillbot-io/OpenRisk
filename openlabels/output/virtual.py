@@ -76,7 +76,7 @@ class LinuxXattrHandler:
             xattr.setxattr(path, self.ATTR_NAME, value.encode('utf-8'))
             return True
         except ImportError:
-            pass
+            logger.debug("xattr module not available, falling back to setfattr")
         except OSError as e:
             logger.debug(f"xattr module failed: {e}")
 
@@ -107,7 +107,7 @@ class LinuxXattrHandler:
             value = xattr.getxattr(path, self.ATTR_NAME)
             return value.decode('utf-8')
         except ImportError:
-            pass
+            logger.debug("xattr module not available, falling back to getfattr")
         except OSError as e:
             logger.debug(f"xattr read failed for {path}: {e}")
 
@@ -138,7 +138,7 @@ class LinuxXattrHandler:
             xattr.removexattr(path, self.ATTR_NAME)
             return True
         except ImportError:
-            pass
+            logger.debug("xattr module not available, falling back to setfattr")
         except OSError as e:
             logger.debug(f"xattr remove failed for {path}: {e}")
 
@@ -233,7 +233,7 @@ class WindowsADSHandler:
             with open(ads_path, 'w', encoding='utf-8') as f:
                 f.write(value)
             return True
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Windows ADS write failed: {e}")
             return False
 
@@ -245,7 +245,7 @@ class WindowsADSHandler:
                 return f.read().strip()
         except FileNotFoundError:
             return None
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"Windows ADS read failed for {path}: {e}")
             return None
 
@@ -255,7 +255,7 @@ class WindowsADSHandler:
         try:
             os.remove(ads_path)
             return True
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"Windows ADS remove failed for {path}: {e}")
             return False
 

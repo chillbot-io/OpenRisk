@@ -520,7 +520,7 @@ class PollingWatcher:
 
                 self._known_files = current_files
 
-            except Exception as e:
+            except OSError as e:
                 logger.error(f"Polling error: {e}")
 
     def _scan_directory(self) -> dict:

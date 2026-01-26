@@ -206,7 +206,7 @@ class FileCollector:
         # Permissions and exposure
         try:
             self._collect_permissions(path, st, metadata)
-        except Exception as e:
+        except (OSError, PermissionError, KeyError) as e:
             errors.append(f"Permission collection failed: {e}")
             logger.debug(f"Permission collection failed for {path}: {e}")
 
@@ -220,20 +220,20 @@ class FileCollector:
         if self.compute_partial_hash:
             try:
                 metadata.partial_hash = self._compute_partial_hash(path)
-            except Exception as e:
+            except (OSError, PermissionError) as e:
                 errors.append(f"Partial hash failed: {e}")
 
         if self.compute_hash and st.st_size <= self.hash_size_limit:
             try:
                 metadata.content_hash = self._compute_content_hash(path)
-            except Exception as e:
+            except (OSError, PermissionError) as e:
                 errors.append(f"Content hash failed: {e}")
 
         # Extended attributes
         if self.collect_xattrs:
             try:
                 metadata.xattrs = self._collect_xattrs(path)
-            except Exception as e:
+            except (OSError, PermissionError) as e:
                 errors.append(f"Xattr collection failed: {e}")
                 logger.debug(f"Xattr collection failed for {path}: {e}")
 
@@ -475,7 +475,7 @@ def collect_directory(
         try:
             yield collector.collect(str(file_path))
             count += 1
-        except Exception as e:
+        except (OSError, PermissionError) as e:
             logger.warning(f"Failed to collect metadata for {file_path}: {e}")
             # Yield a minimal metadata object with error
             yield FileMetadata(
