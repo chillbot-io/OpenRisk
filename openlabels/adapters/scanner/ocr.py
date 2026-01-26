@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 def _clean_ocr_text(text: str) -> str:
     """
     Clean up common OCR artifacts from structured documents.
-    
+
     Fixes:
-    - Stuck field codes: "15SEX:M" → "15 SEX: M"  
+    - Stuck field codes: "15SEX:M" → "15 SEX: M"
     - Missing spaces after colons: "DOB:01/01/90" → "DOB: 01/01/90"
     - Numbers stuck to words: "18EYES" → "18 EYES"
     - Field codes with letters: "4dDLN" → "4d DLN"
@@ -49,12 +49,88 @@ def _clean_ocr_text(text: str) -> str:
     # Add space between digits (optionally followed by lowercase) and uppercase letters
     # 15SEX → 15 SEX, 18EYES → 18 EYES, 4dDLN → 4d DLN
     text = re.sub(r'(\d[a-z]?)([A-Z]{2,})', r'\1 \2', text)
-    
+
     # Add space after colon if followed by letter/digit without space
-    # DOB:01/01 → DOB: 01/01, SEX:M → SEX: M  
+    # DOB:01/01 → DOB: 01/01, SEX:M → SEX: M
     text = re.sub(r':([A-Za-z0-9])', r': \1', text)
-    
+
     return text
+
+
+# Line grouping threshold in pixels - blocks within this vertical distance are same line
+_LINE_GROUP_THRESHOLD = 20
+
+
+def _get_line_group(y_coord: float) -> int:
+    """Get line group number from y-coordinate."""
+    return int(y_coord / _LINE_GROUP_THRESHOLD)
+
+
+def _get_bbox_top_left(bbox: List[List[float]]) -> Tuple[float, float]:
+    """Extract top-left coordinates from quadrilateral bbox."""
+    y_top = min(p[1] for p in bbox)
+    x_left = min(p[0] for p in bbox)
+    return x_left, y_top
+
+
+def _ocr_sort_key(item: Tuple) -> Tuple[int, float]:
+    """
+    Sort key for OCR results in reading order (top-to-bottom, left-to-right).
+
+    Args:
+        item: OCR result tuple (bbox, text, confidence)
+
+    Returns:
+        (line_group, x_left) for sorting
+    """
+    bbox = item[0]
+    x_left, y_top = _get_bbox_top_left(bbox)
+    line_group = _get_line_group(y_top)
+    return (line_group, x_left)
+
+
+def _group_text_into_lines(items: List[Tuple], get_bbox, get_text) -> List[str]:
+    """
+    Group OCR text blocks into lines based on vertical position.
+
+    Blocks on the same line (within LINE_GROUP_THRESHOLD pixels) are joined
+    with spaces. Different lines are separate entries.
+
+    Args:
+        items: List of items to process
+        get_bbox: Function to extract bbox from item
+        get_text: Function to extract text from item
+
+    Returns:
+        List of line strings
+    """
+    lines = []
+    current_line_parts = []
+    current_line_group = None
+
+    for item in items:
+        bbox = get_bbox(item)
+        text = get_text(item)
+        _, y_top = _get_bbox_top_left(bbox)
+        line_group = _get_line_group(y_top)
+
+        if current_line_group is None:
+            current_line_group = line_group
+            current_line_parts.append(text)
+        elif line_group == current_line_group:
+            # Same line - add with space
+            current_line_parts.append(text)
+        else:
+            # New line - flush current and start new
+            lines.append(' '.join(current_line_parts))
+            current_line_parts = [text]
+            current_line_group = line_group
+
+    # Flush final line
+    if current_line_parts:
+        lines.append(' '.join(current_line_parts))
+
+    return lines
 
 
 @dataclass
@@ -326,81 +402,39 @@ class OCREngine:
             return False
     
     def extract_text(
-        self, 
+        self,
         image: Union[str, Path, "np.ndarray", "Image.Image"],
     ) -> str:
         """
         Extract text from image.
-        
+
         Args:
             image: Can be:
                 - Path to image file (str or Path)
                 - numpy array (H, W, C) in RGB or BGR
                 - PIL Image
-                
+
         Returns:
             Extracted text with lines joined by newlines.
             Empty string if no text detected.
-            
+
         Raises:
             FileNotFoundError: If models not available
             ImportError: If rapidocr-onnxruntime not installed
         """
         self._ensure_initialized()
-        
-        # Convert Path to string for RapidOCR
+
         if isinstance(image, Path):
             image = str(image)
-        
-        # Run OCR
+
         result, _ = self._ocr(image)
-        
+
         if not result:
             return ""
-        
-        # Result format: [(bbox, text, confidence), ...]
-        # bbox is [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] (quadrilateral)
-        # Sort by y-coordinate (top of bounding box) for reading order
-        # Then by x-coordinate for same line
-        
-        def sort_key(item):
-            bbox = item[0]
-            # Use top-left corner: bbox[0] = [x1, y1]
-            y_top = min(bbox[0][1], bbox[1][1], bbox[2][1], bbox[3][1])
-            x_left = min(bbox[0][0], bbox[1][0], bbox[2][0], bbox[3][0])
-            # Group into approximate lines (within 20px = same line)
-            line_group = int(y_top / 20)
-            return (line_group, x_left)
-        
-        result.sort(key=sort_key)
-        
-        # Group blocks into lines and join with proper spacing
-        lines = []
-        current_line_parts = []
-        current_line_group = None
-        
-        for item in result:
-            bbox = item[0]
-            text = item[1]
-            y_top = min(bbox[0][1], bbox[1][1], bbox[2][1], bbox[3][1])
-            line_group = int(y_top / 20)
-            
-            if current_line_group is None:
-                current_line_group = line_group
-                current_line_parts.append(text)
-            elif line_group == current_line_group:
-                # Same line - add with space
-                current_line_parts.append(text)
-            else:
-                # New line - flush current and start new
-                lines.append(' '.join(current_line_parts))
-                current_line_parts = [text]
-                current_line_group = line_group
-        
-        # Flush final line
-        if current_line_parts:
-            lines.append(' '.join(current_line_parts))
-        
+
+        result.sort(key=_ocr_sort_key)
+        lines = _group_text_into_lines(result, lambda x: x[0], lambda x: x[1])
+
         return _clean_ocr_text('\n'.join(lines))
     
     def extract_text_with_confidence(
@@ -409,60 +443,28 @@ class OCREngine:
     ) -> tuple[str, float]:
         """
         Extract text with average confidence score.
-        
+
         Returns:
             Tuple of (text, average_confidence).
             Confidence is 0.0 if no text detected.
         """
         self._ensure_initialized()
-        
+
         if isinstance(image, Path):
             image = str(image)
-        
+
         result, _ = self._ocr(image)
-        
+
         if not result:
             return "", 0.0
-        
-        # Sort for reading order
-        def sort_key(item):
-            bbox = item[0]
-            y_top = min(bbox[0][1], bbox[1][1], bbox[2][1], bbox[3][1])
-            x_left = min(bbox[0][0], bbox[1][0], bbox[2][0], bbox[3][0])
-            line_group = int(y_top / 20)
-            return (line_group, x_left)
-        
-        result.sort(key=sort_key)
-        
+
+        result.sort(key=_ocr_sort_key)
         confidences = [item[2] for item in result]
-        
-        # Group blocks into lines and join with proper spacing
-        lines = []
-        current_line_parts = []
-        current_line_group = None
-        
-        for item in result:
-            bbox = item[0]
-            text = item[1]
-            y_top = min(bbox[0][1], bbox[1][1], bbox[2][1], bbox[3][1])
-            line_group = int(y_top / 20)
-            
-            if current_line_group is None:
-                current_line_group = line_group
-                current_line_parts.append(text)
-            elif line_group == current_line_group:
-                current_line_parts.append(text)
-            else:
-                lines.append(' '.join(current_line_parts))
-                current_line_parts = [text]
-                current_line_group = line_group
-        
-        if current_line_parts:
-            lines.append(' '.join(current_line_parts))
-        
+        lines = _group_text_into_lines(result, lambda x: x[0], lambda x: x[1])
+
         text = _clean_ocr_text('\n'.join(lines))
-        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-        
+        avg_confidence = sum(confidences) / len(confidences)
+
         return text, avg_confidence
     
     def extract_with_coordinates(
@@ -471,30 +473,30 @@ class OCREngine:
     ) -> OCRResult:
         """
         Extract text with bounding box coordinates.
-        
+
         Returns OCRResult with full_text, blocks, and offset_map for
         mapping PHI spans back to image coordinates for visual redaction.
-        
+
         Args:
             image: Can be:
                 - Path to image file (str or Path)
                 - numpy array (H, W, C) in RGB or BGR
                 - PIL Image
-                
+
         Returns:
             OCRResult with full text, blocks with coordinates, and offset map.
-            
+
         Raises:
             FileNotFoundError: If models not available
             ImportError: If rapidocr-onnxruntime not installed
         """
         self._ensure_initialized()
-        
+
         if isinstance(image, Path):
             image = str(image)
-        
+
         result, _ = self._ocr(image)
-        
+
         if not result:
             return OCRResult(
                 full_text="",
@@ -502,90 +504,41 @@ class OCREngine:
                 offset_map=[],
                 confidence=0.0,
             )
-        
-        # Sort by reading order (top-to-bottom, left-to-right)
-        def sort_key(item):
-            bbox = item[0]
-            y_top = min(p[1] for p in bbox)
-            x_left = min(p[0] for p in bbox)
-            # Group into approximate lines (within 20px = same line)
-            line_group = int(y_top / 20)
-            return (line_group, x_left)
-        
-        result.sort(key=sort_key)
-        
-        # Build blocks and offset map
+
+        result.sort(key=_ocr_sort_key)
+
+        # Build blocks
         blocks = []
-        offset_map = []
         confidences = []
-        
-        for i, (bbox, text, conf) in enumerate(result):
-            blocks.append(OCRBlock(
-                text=text,
-                bbox=bbox,
-                confidence=conf,
-            ))
+        for bbox, text, conf in result:
+            blocks.append(OCRBlock(text=text, bbox=bbox, confidence=conf))
             confidences.append(conf)
-        
-        # Build text with proper spacing:
-        # - Same line (same line_group) → space between blocks
-        # - Different lines → newline between blocks
-        lines = []
-        current_line_parts = []
-        current_line_group = None
-        
-        for i, block in enumerate(blocks):
-            y_top = min(p[1] for p in block.bbox)
-            line_group = int(y_top / 20)
-            
-            if current_line_group is None:
-                current_line_group = line_group
-                current_line_parts.append(block.text)
-            elif line_group == current_line_group:
-                # Same line - add with space
-                current_line_parts.append(block.text)
-            else:
-                # New line - flush current line and start new
-                lines.append(' '.join(current_line_parts))
-                current_line_parts = [block.text]
-                current_line_group = line_group
-        
-        # Flush final line
-        if current_line_parts:
-            lines.append(' '.join(current_line_parts))
-        
-        # Join lines - DON'T apply _clean_ocr_text() here because it would
-        # break the offset_map alignment (it adds characters like "15SEX" → "15 SEX")
-        # The spacing fix between blocks is the important one for readability.
-        # OCR artifact cleanup happens elsewhere in the pipeline.
+
+        # Build text using shared helper (DON'T apply _clean_ocr_text - breaks offset_map)
+        lines = _group_text_into_lines(blocks, lambda b: b.bbox, lambda b: b.text)
         full_text = '\n'.join(lines)
-        
-        # Build offset map for the properly-spaced text
+
+        # Build offset map for character-to-block mapping
         offset_map = []
         current_offset = 0
 
         for i, block in enumerate(blocks):
-            y_top = min(p[1] for p in block.bbox)
-            line_group = int(y_top / 20)
+            _, y_top = _get_bbox_top_left(block.bbox)
+            line_group = _get_line_group(y_top)
 
-            # Check if we've moved to a new line
             if i > 0:
-                prev_y_top = min(p[1] for p in blocks[i-1].bbox)
-                prev_line_group = int(prev_y_top / 20)
-                if line_group != prev_line_group:
-                    # New line - add newline offset
-                    current_offset += 1  # for \n
-                else:
-                    # Same line - add space offset
-                    current_offset += 1  # for space
-            
+                _, prev_y_top = _get_bbox_top_left(blocks[i-1].bbox)
+                prev_line_group = _get_line_group(prev_y_top)
+                # Add separator: newline for new line, space for same line
+                current_offset += 1
+
             start = current_offset
             end = current_offset + len(block.text)
             offset_map.append((start, end, i))
             current_offset = end
-        
+
         avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-        
+
         return OCRResult(
             full_text=full_text,
             blocks=blocks,
