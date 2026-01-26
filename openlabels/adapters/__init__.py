@@ -16,7 +16,14 @@ For the built-in scanner, use:
     from openlabels.adapters.scanner import Detector, detect, detect_file
 """
 
-from .base import Adapter, Entity, NormalizedContext, NormalizedInput, ExposureLevel
+from .base import (
+    Adapter,
+    Entity,
+    NormalizedContext,
+    NormalizedInput,
+    ExposureLevel,
+    EntityAggregator,
+)
 from .macie import MacieAdapter
 from .dlp import DLPAdapter
 from .purview import PurviewAdapter
@@ -30,6 +37,7 @@ __all__ = [
     "NormalizedContext",
     "NormalizedInput",
     "ExposureLevel",
+    "EntityAggregator",
     "MacieAdapter",
     "DLPAdapter",
     "PurviewAdapter",

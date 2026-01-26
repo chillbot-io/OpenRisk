@@ -14,7 +14,7 @@ from typing import Dict, Any, List, Optional
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days, is_archive,
+    ExposureLevel, EntityAggregator, calculate_staleness_days, is_archive,
 )
 from ..core.registry import normalize_type
 
@@ -80,7 +80,7 @@ class PurviewAdapter:
 
     def _extract_entities(self, classifications: Dict[str, Any]) -> List[Entity]:
         """Extract entities from Purview classifications."""
-        seen_types: Dict[str, Dict] = {}
+        agg = EntityAggregator(source="purview")
 
         # Handle multiple classification formats
         class_list = classifications.get("classifications", [])
@@ -93,8 +93,6 @@ class PurviewAdapter:
                 classification.get("classificationName") or
                 classification.get("typeName", "UNKNOWN")
             )
-
-            # Normalize Purview internal type names
             purview_type = self._normalize_type_name(purview_type)
 
             # Get count and confidence
@@ -102,30 +100,10 @@ class PurviewAdapter:
             count = classification.get("count", attrs.get("count", 1))
             confidence = attrs.get("confidence", 0.85)
 
-            # Map to canonical type
             entity_type = normalize_type(purview_type, source="purview")
+            agg.add(entity_type, count, confidence)
 
-            # Aggregate by type
-            if entity_type in seen_types:
-                seen_types[entity_type]["count"] += count
-                seen_types[entity_type]["confidence"] = max(
-                    seen_types[entity_type]["confidence"], confidence
-                )
-            else:
-                seen_types[entity_type] = {
-                    "count": count,
-                    "confidence": confidence,
-                }
-
-        return [
-            Entity(
-                type=etype,
-                count=data["count"],
-                confidence=data["confidence"],
-                source="purview",
-            )
-            for etype, data in seen_types.items()
-        ]
+        return agg.to_entities()
 
     def _normalize_type_name(self, type_name: str) -> str:
         """Normalize Purview internal type names to display names."""

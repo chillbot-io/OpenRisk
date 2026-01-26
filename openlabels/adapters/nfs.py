@@ -42,7 +42,7 @@ from typing import Dict, Any, List, Optional
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days, is_archive,
+    ExposureLevel, EntityAggregator, calculate_staleness_days, is_archive,
 )
 from ..core.registry import normalize_type
 
@@ -98,40 +98,14 @@ class NFSAdapter:
 
     def _extract_entities(self, file_metadata: Dict[str, Any]) -> List[Entity]:
         """Extract entities from file content scan results if present."""
-        entities = []
+        agg = EntityAggregator(source="nfs")
 
         scan_results = file_metadata.get("scan_results", {})
-        findings = scan_results.get("findings", [])
-
-        type_aggregates: Dict[str, Dict[str, Any]] = {}
-
-        for finding in findings:
+        for finding in scan_results.get("findings", []):
             entity_type = normalize_type(finding.get("type", ""), "nfs")
-            count = finding.get("count", 1)
-            confidence = finding.get("confidence", 0.8)
+            agg.add(entity_type, finding.get("count", 1), finding.get("confidence", 0.8))
 
-            if entity_type not in type_aggregates:
-                type_aggregates[entity_type] = {
-                    "count": 0,
-                    "max_confidence": 0.0,
-                }
-
-            type_aggregates[entity_type]["count"] += count
-            type_aggregates[entity_type]["max_confidence"] = max(
-                type_aggregates[entity_type]["max_confidence"],
-                confidence
-            )
-
-        for entity_type, agg in type_aggregates.items():
-            entities.append(Entity(
-                type=entity_type,
-                count=agg["count"],
-                confidence=agg["max_confidence"],
-                source="nfs",
-                positions=[],
-            ))
-
-        return entities
+        return agg.to_entities()
 
     def _normalize_context(
         self,

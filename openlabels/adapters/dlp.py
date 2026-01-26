@@ -14,7 +14,7 @@ from typing import Dict, Any, List, Optional
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days, is_archive,
+    ExposureLevel, EntityAggregator, calculate_staleness_days, is_archive,
 )
 from ..core.registry import normalize_type
 
@@ -78,7 +78,7 @@ class DLPAdapter:
 
     def _extract_entities(self, findings: Dict[str, Any]) -> List[Entity]:
         """Extract entities from DLP findings."""
-        seen_types: Dict[str, Dict] = {}
+        agg = EntityAggregator(source="dlp")
 
         # Handle both direct findings array and nested result.findings
         findings_list = findings.get("findings", [])
@@ -88,33 +88,11 @@ class DLPAdapter:
         for finding in findings_list:
             info_type = finding.get("infoType", {})
             dlp_type = info_type.get("name", "UNKNOWN")
-            likelihood = finding.get("likelihood", "POSSIBLE")
-
-            # Map to canonical type
             entity_type = normalize_type(dlp_type, source="dlp")
-            confidence = self._likelihood_to_confidence(likelihood)
+            confidence = self._likelihood_to_confidence(finding.get("likelihood", "POSSIBLE"))
+            agg.add(entity_type, count=1, confidence=confidence)
 
-            # Aggregate by type (DLP reports each occurrence separately)
-            if entity_type in seen_types:
-                seen_types[entity_type]["count"] += 1
-                seen_types[entity_type]["confidence"] = max(
-                    seen_types[entity_type]["confidence"], confidence
-                )
-            else:
-                seen_types[entity_type] = {
-                    "count": 1,
-                    "confidence": confidence,
-                }
-
-        return [
-            Entity(
-                type=etype,
-                count=data["count"],
-                confidence=data["confidence"],
-                source="dlp",
-            )
-            for etype, data in seen_types.items()
-        ]
+        return agg.to_entities()
 
     def _likelihood_to_confidence(self, likelihood: str) -> float:
         """Map DLP likelihood to confidence score."""
