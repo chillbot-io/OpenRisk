@@ -14,15 +14,44 @@ For cloud DLP integration:
     >>> adapter = MacieAdapter()
     >>> normalized = adapter.extract(macie_findings, s3_metadata)
     >>> result = client.score_from_adapters([normalized])
+
+Working with labels:
+    >>> from openlabels import Label, LabelSet
+    >>> from openlabels.output import read_label, write_label
+    >>>
+    >>> # Read a label from a file (embedded or virtual)
+    >>> result = read_label("document.pdf")
+    >>> if result.label_set:
+    ...     print(f"Found {len(result.label_set.labels)} labels")
+    >>>
+    >>> # Write a label (auto-selects transport)
+    >>> success, transport = write_label("data.csv", label_set)
 """
 
 __version__ = "0.1.0"
 
 from .client import Client
 from .core.scorer import ScoringResult
+from .core.labels import (
+    Label,
+    LabelSet,
+    VirtualLabelPointer,
+    generate_label_id,
+    compute_content_hash,
+    compute_value_hash,
+)
 
 __all__ = [
+    # Client
     "Client",
     "ScoringResult",
+    # Labels
+    "Label",
+    "LabelSet",
+    "VirtualLabelPointer",
+    "generate_label_id",
+    "compute_content_hash",
+    "compute_value_hash",
+    # Version
     "__version__",
 ]
