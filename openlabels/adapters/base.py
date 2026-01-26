@@ -80,6 +80,65 @@ class ExposureLevel(Enum):
     │ Network rules: default=Deny + VNet rules   │ INTERNAL    │
     │ Private endpoint only                      │ PRIVATE     │
     └────────────────────────────────────────────┴─────────────┘
+
+    NTFS (WINDOWS) PERMISSIONS → EXPOSURE LEVEL:
+    ┌────────────────────────────────────────────┬─────────────┐
+    │ NTFS Permission                            │ Level       │
+    ├────────────────────────────────────────────┼─────────────┤
+    │ Owner only                                 │ PRIVATE     │
+    │ Specific user/group ACE                    │ PRIVATE     │
+    │ CREATOR OWNER                              │ PRIVATE     │
+    │ Domain Admins                              │ INTERNAL    │
+    │ Domain Users                               │ INTERNAL    │
+    │ Authenticated Users (domain)               │ INTERNAL    │
+    │ BUILTIN\\Users                             │ ORG_WIDE    │
+    │ Everyone (authenticated context)           │ ORG_WIDE    │
+    │ Anonymous Logon                            │ PUBLIC      │
+    │ Everyone (+ anonymous enabled)             │ PUBLIC      │
+    │ NULL SID                                   │ PUBLIC      │
+    │ Network share: Everyone Full Control       │ PUBLIC      │
+    │ Inherited broad permissions                │ ORG_WIDE    │
+    └────────────────────────────────────────────┴─────────────┘
+
+    NFS PERMISSIONS → EXPOSURE LEVEL:
+    ┌────────────────────────────────────────────┬─────────────┐
+    │ NFS Permission                             │ Level       │
+    ├────────────────────────────────────────────┼─────────────┤
+    │ root_squash + specific UID/GID             │ PRIVATE     │
+    │ Single host export (/path host)            │ PRIVATE     │
+    │ Kerberos auth (sec=krb5/krb5i/krb5p)       │ INTERNAL    │
+    │ Subnet export (/path 10.0.0.0/24)          │ INTERNAL    │
+    │ all_squash + anonuid mapping               │ INTERNAL    │
+    │ Large subnet (/16 or broader)              │ ORG_WIDE    │
+    │ no_root_squash                             │ ORG_WIDE    │
+    │ sec=sys (AUTH_SYS, UID trust)              │ ORG_WIDE    │
+    │ Export: * (all hosts)                      │ PUBLIC      │
+    │ insecure option (non-privileged ports)     │ PUBLIC      │
+    │ World-readable (mode 755/644) + * export   │ PUBLIC      │
+    │ no_auth_nlm                                │ PUBLIC      │
+    └────────────────────────────────────────────┴─────────────┘
+
+    M365 (SHAREPOINT/ONEDRIVE) PERMISSIONS → EXPOSURE LEVEL:
+    ┌────────────────────────────────────────────┬─────────────┐
+    │ M365 Permission                            │ Level       │
+    ├────────────────────────────────────────────┼─────────────┤
+    │ Specific users (direct permission)         │ PRIVATE     │
+    │ "Only people with existing access"         │ PRIVATE     │
+    │ Private channel membership                 │ PRIVATE     │
+    │ Security group (scoped)                    │ INTERNAL    │
+    │ "People in your organization" link         │ INTERNAL    │
+    │ M365 Group / Team membership               │ INTERNAL    │
+    │ Site collection scoped                     │ INTERNAL    │
+    │ "People in <org> with the link"            │ ORG_WIDE    │
+    │ "Anyone in org" (all employees)            │ ORG_WIDE    │
+    │ External sharing: specific guests          │ ORG_WIDE    │
+    │ External sharing: existing guests          │ ORG_WIDE    │
+    │ "Anyone with the link" (sign-in req)       │ ORG_WIDE    │
+    │ "Anyone with the link" (no sign-in)        │ PUBLIC      │
+    │ Anonymous guest links                      │ PUBLIC      │
+    │ Public site / Public CDN                   │ PUBLIC      │
+    │ Forms: anyone can respond                  │ PUBLIC      │
+    └────────────────────────────────────────────┴─────────────┘
     """
     PRIVATE = 0       # Only owner/specific principals
     INTERNAL = 1      # Same org/tenant
