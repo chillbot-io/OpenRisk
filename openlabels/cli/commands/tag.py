@@ -102,7 +102,7 @@ def cmd_tag(args) -> int:
                 tag_type = "embedded" if embedded else "virtual"
                 print(f"[{i+1}/{len(matches)}] Tagged ({tag_type}): {result.path}")
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             errors.append({"path": result.path, "error": str(e)})
             if not args.quiet:
                 print(f"[{i+1}/{len(matches)}] Error: {result.path} - {e}", file=sys.stderr)

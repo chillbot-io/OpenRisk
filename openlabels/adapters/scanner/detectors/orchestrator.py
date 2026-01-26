@@ -395,7 +395,7 @@ class DetectorOrchestrator:
                         f"Structured extractor: {structured_result.fields_extracted} fields, "
                         f"{len(structured_result.spans)} spans"
                     )
-            except Exception as e:
+            except (ValueError, RuntimeError) as e:
                 logger.error(f"Structured extractor failed: {e}")
                 # Continue with original text
                 processed_text = text
@@ -513,7 +513,7 @@ class DetectorOrchestrator:
                 structured_result = extract_structured_phi(text)
                 all_spans.extend(structured_result.spans)
                 processed_text = structured_result.processed_text
-            except Exception as e:
+            except (ValueError, RuntimeError) as e:
                 logger.error(f"Structured extractor failed: {e}")
 
         # Step 2: Run all other detectors (use cached availability for performance)

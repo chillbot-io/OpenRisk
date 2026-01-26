@@ -95,7 +95,7 @@ class Scanner:
                 result = self._scan_single_file(file_path)
                 if self._matches_filter(result, filter_criteria, filter_obj):
                     yield result
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 logger.warning(f"Error scanning {file_path}: {e}")
                 yield ScanResult(
                     path=str(file_path),
@@ -217,7 +217,7 @@ class Scanner:
                 scanned_at=datetime.utcnow().isoformat(),
             )
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             return ScanResult(
                 path=str(path),
                 error=str(e),

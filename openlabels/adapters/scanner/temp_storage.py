@@ -33,7 +33,7 @@ def _cleanup_on_exit() -> None:
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
                 logger.debug(f"Cleaned up orphaned temp dir: {temp_dir}")
-        except Exception as e:
+        except OSError as e:
             logger.warning(f"Failed to clean up temp dir {temp_dir}: {e}")
     _active_temp_dirs.clear()
 
@@ -116,7 +116,7 @@ class SecureTempDir:
             try:
                 shutil.rmtree(self._path)
                 logger.debug(f"Cleaned up temp dir: {self._path}")
-            except Exception as e:
+            except OSError as e:
                 logger.warning(f"Failed to clean up temp dir {self._path}: {e}")
             
             # Remove from tracking list

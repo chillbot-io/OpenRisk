@@ -127,7 +127,7 @@ def cmd_restrict(args) -> int:
                 if not args.quiet:
                     print(f"[{i+1}/{len(matches)}] Failed: {result.path}", file=sys.stderr)
 
-        except Exception as e:
+        except OSError as e:
             errors.append({"path": result.path, "error": str(e)})
             if not args.quiet:
                 print(f"[{i+1}/{len(matches)}] Error: {result.path} - {e}", file=sys.stderr)

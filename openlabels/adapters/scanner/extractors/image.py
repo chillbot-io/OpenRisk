@@ -36,7 +36,7 @@ class ImageExtractor(BaseExtractor):
                 from ..enhanced_ocr import EnhancedOCRProcessor
                 self._enhanced_processor = EnhancedOCRProcessor()
                 logger.info("EnhancedOCRProcessor initialized for document intelligence")
-            except Exception as e:
+            except (ImportError, OSError, ValueError) as e:
                 logger.warning(f"Could not initialize EnhancedOCRProcessor: {e}")
                 self.enable_enhanced_processing = False
         return self._enhanced_processor
@@ -125,7 +125,7 @@ class ImageExtractor(BaseExtractor):
                         f"enhancements={enhancements}"
                     )
 
-                except Exception as e:
+                except (ValueError, RuntimeError) as e:
                     logger.warning(f"Enhanced OCR processing failed, using raw OCR: {e}")
                     enhancements.append(f"enhanced_failed:{str(e)[:50]}")
 
@@ -153,7 +153,7 @@ class ImageExtractor(BaseExtractor):
                 enhancements_applied=enhancements,
             )
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             logger.error(f"Image extraction failed: {e}")
             return ExtractionResult(
                 text="",
@@ -213,7 +213,7 @@ class ImageExtractor(BaseExtractor):
                             phi_fields = enhanced_result.phi_fields
                             enhancements = enhanced_result.enhancements_applied
 
-                    except Exception as e:
+                    except (ValueError, RuntimeError) as e:
                         logger.warning(f"Enhanced processing failed for page {page_num}: {e}")
 
                 pages_text.append(ocr_result.full_text)
