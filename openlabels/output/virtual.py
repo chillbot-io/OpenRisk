@@ -15,7 +15,6 @@ Platform support:
 """
 
 import os
-import sys
 import logging
 import platform
 import subprocess

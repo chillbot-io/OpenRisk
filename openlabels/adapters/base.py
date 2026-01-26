@@ -119,18 +119,6 @@ def calculate_staleness_days(last_modified: Optional[str]) -> int:
         return 0
 
 
-def exposure_from_string(exposure: str) -> ExposureLevel:
-    """Convert string exposure to enum."""
-    mapping = {
-        'PRIVATE': ExposureLevel.PRIVATE,
-        'INTERNAL': ExposureLevel.INTERNAL,
-        'ORG_WIDE': ExposureLevel.ORG_WIDE,
-        'OVER_EXPOSED': ExposureLevel.ORG_WIDE,  # Alias
-        'PUBLIC': ExposureLevel.PUBLIC,
-    }
-    return mapping.get(exposure.upper(), ExposureLevel.PRIVATE)
-
-
 ARCHIVE_EXTENSIONS = frozenset({'.zip', '.tar', '.gz', '.tgz', '.tar.gz', '.7z', '.rar', '.bz2'})
 
 
