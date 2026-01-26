@@ -155,7 +155,7 @@ TIER_THRESHOLDS = {
 EXPOSURE_MULTIPLIERS = {
     'PRIVATE': 1.0,
     'INTERNAL': 1.2,
-    'OVER_EXPOSED': 1.8,
+    'ORG_WIDE': 1.8,
     'PUBLIC': 2.5,
 }
 
@@ -285,7 +285,7 @@ def score(
 
     Args:
         entities: Dict of {entity_type: count} from detection
-        exposure: Exposure level (PRIVATE, INTERNAL, OVER_EXPOSED, PUBLIC)
+        exposure: Exposure level (PRIVATE, INTERNAL, ORG_WIDE, PUBLIC)
         confidence: Average detection confidence
 
     Returns:
