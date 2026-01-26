@@ -11,18 +11,27 @@ Available adapters:
 - NTFSAdapter: Windows NTFS + SMB shares
 - NFSAdapter: NFS exports
 - M365Adapter: SharePoint / OneDrive / Teams
+- PresidioAdapter: Microsoft Presidio
 
 For the built-in scanner, use:
     from openlabels.adapters.scanner import Detector, detect, detect_file
 """
 
-from .base import Adapter, Entity, NormalizedContext, NormalizedInput, ExposureLevel
+from .base import (
+    Adapter,
+    Entity,
+    NormalizedContext,
+    NormalizedInput,
+    ExposureLevel,
+    EntityAggregator,
+)
 from .macie import MacieAdapter
 from .dlp import DLPAdapter
 from .purview import PurviewAdapter
 from .ntfs import NTFSAdapter
 from .nfs import NFSAdapter
 from .m365 import M365Adapter
+from .presidio import PresidioAdapter
 
 __all__ = [
     "Adapter",
@@ -36,4 +45,5 @@ __all__ = [
     "NTFSAdapter",
     "NFSAdapter",
     "M365Adapter",
+    "PresidioAdapter",
 ]

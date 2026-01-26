@@ -1,29 +1,85 @@
 """
 OpenLabels encrypt command.
 
-Encrypt files matching filter criteria.
+Encrypt local files matching filter criteria using GPG or age.
 
 Usage:
     openlabels encrypt <source> --where "<filter>" --key <key-id>
-    openlabels encrypt ./data --where "score > 75" --key alias/my-key
-    openlabels encrypt s3://bucket --where "has(SSN)" --key arn:aws:kms:...
-
-Note: This command provides guidance and integration with platform encryption.
-For local files, it uses GPG or age. For cloud storage, it configures
-server-side encryption settings.
+    openlabels encrypt ./data --where "score > 75" --key user@example.com
+    openlabels encrypt ./secrets --where "has(API_KEY)" --key age1...
 """
 
+import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 from openlabels import Client
 from openlabels.cli.commands.find import find_matching
 
 
+# Dangerous shell metacharacters that could enable injection
+SHELL_METACHARACTERS = frozenset(['`', '$', '|', ';', '&', '>', '<', '\n', '\r', '\x00'])
+
+
+def validate_recipient(recipient: str, tool: str) -> bool:
+    """
+    Validate encryption recipient/key to prevent injection attacks.
+
+    Args:
+        recipient: The key ID, email, or public key
+        tool: Either 'gpg' or 'age'
+
+    Returns:
+        True if the recipient appears safe to use
+    """
+    if not recipient or len(recipient) > 500:
+        return False
+    if any(c in recipient for c in SHELL_METACHARACTERS):
+        return False
+
+    if tool == "gpg":
+        # GPG accepts: hex key IDs, email addresses, key fingerprints, names
+        gpg_pattern = re.compile(
+            r'^([0-9A-Fa-f]{8,40}|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|[A-Za-z0-9 ._-]+)$'
+        )
+        return bool(gpg_pattern.match(recipient))
+    elif tool == "age":
+        # Age accepts: age1... public keys, SSH public keys, file paths
+        age_pattern = re.compile(
+            r'^(age1[a-z0-9]{58}|ssh-(rsa|ed25519) [A-Za-z0-9+/=]+ ?.*|[A-Za-z0-9._/-]+)$'
+        )
+        return bool(age_pattern.match(recipient))
+    return False
+
+
+def validate_file_path(file_path: Path) -> bool:
+    """
+    Validate file path to prevent injection.
+
+    Args:
+        file_path: The path to validate
+
+    Returns:
+        True if the path is safe to use with subprocess
+    """
+    path_str = str(file_path)
+    if any(c in path_str for c in SHELL_METACHARACTERS):
+        return False
+    try:
+        resolved = file_path.resolve()
+        return resolved.exists() and resolved.is_file()
+    except (OSError, ValueError):
+        return False
+
+
 def encrypt_file_gpg(file_path: Path, recipient: str) -> bool:
     """Encrypt a file using GPG."""
+    if not validate_file_path(file_path):
+        return False
+    if not validate_recipient(recipient, "gpg"):
+        return False
+
     try:
         result = subprocess.run(
             ["gpg", "--encrypt", "--recipient", recipient, str(file_path)],
@@ -31,7 +87,6 @@ def encrypt_file_gpg(file_path: Path, recipient: str) -> bool:
             text=True,
         )
         if result.returncode == 0:
-            # Remove original file after successful encryption
             file_path.unlink()
             return True
         return False
@@ -41,6 +96,11 @@ def encrypt_file_gpg(file_path: Path, recipient: str) -> bool:
 
 def encrypt_file_age(file_path: Path, recipient: str) -> bool:
     """Encrypt a file using age."""
+    if not validate_file_path(file_path):
+        return False
+    if not validate_recipient(recipient, "age"):
+        return False
+
     try:
         output_path = file_path.with_suffix(file_path.suffix + ".age")
         result = subprocess.run(
@@ -49,7 +109,6 @@ def encrypt_file_age(file_path: Path, recipient: str) -> bool:
             text=True,
         )
         if result.returncode == 0:
-            # Remove original file after successful encryption
             file_path.unlink()
             return True
         return False
@@ -67,19 +126,7 @@ def cmd_encrypt(args) -> int:
         print("Error: --key is required for encryption", file=sys.stderr)
         return 1
 
-    source = Path(args.source) if not args.source.startswith(('s3://', 'gs://', 'azure://')) else args.source
-
-    # Check for cloud paths
-    if isinstance(source, str):
-        if source.startswith('s3://'):
-            print("For S3 encryption, use AWS CLI or SDK to configure SSE-KMS:")
-            print(f"  aws s3 cp {source} {source} --sse aws:kms --sse-kms-key-id {args.key}")
-        elif source.startswith('gs://'):
-            print("For GCS encryption, use gsutil to configure CMEK:")
-            print(f"  gsutil rewrite -k {args.key} {source}")
-        elif source.startswith('azure://'):
-            print("For Azure Blob encryption, configure customer-managed keys in portal")
-        return 1
+    source = Path(args.source)
 
     if not source.exists():
         print(f"Error: Source not found: {source}", file=sys.stderr)
@@ -99,6 +146,11 @@ def cmd_encrypt(args) -> int:
             except FileNotFoundError:
                 print("Error: No encryption tool found. Install 'age' or 'gpg'", file=sys.stderr)
                 return 1
+
+    # Validate recipient/key early
+    if not validate_recipient(args.key, tool):
+        print(f"Error: Invalid key format for {tool}. Check key ID or recipient.", file=sys.stderr)
+        return 1
 
     client = Client(default_exposure=args.exposure)
     extensions = args.extensions.split(",") if args.extensions else None
@@ -182,7 +234,7 @@ def add_encrypt_parser(subparsers):
     )
     parser.add_argument(
         "source",
-        help="Source path to search",
+        help="Local source path to search",
     )
     parser.add_argument(
         "--where", "-w",
@@ -192,7 +244,7 @@ def add_encrypt_parser(subparsers):
     parser.add_argument(
         "--key", "-k",
         required=True,
-        help="Encryption key or recipient (GPG key ID, age public key, KMS key ARN)",
+        help="Encryption key or recipient (GPG key ID, email, or age public key)",
     )
     parser.add_argument(
         "--tool",
