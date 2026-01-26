@@ -72,7 +72,7 @@ OpenLabels is a universal, portable standard for data sensitivity **labels** tha
 │     When files change tenants, labels travel; index updates locally.        │
 │                                                                             │
 │  7. PERMISSION NORMALIZATION IS UNIVERSAL                                   │
-│     S3 "authenticated-read" = NTFS "Authenticated Users" = OVER_EXPOSED     │
+│     S3 "authenticated-read" = NTFS "Authenticated Users" = ORG_WIDE     │
 │     GCS "allUsers" = Azure "Blob" public = POSIX "o+r" = PUBLIC             │
 │     Same exposure levels across all platforms. This enables comparison.     │
 │                                                                             │
@@ -160,7 +160,7 @@ OpenLabels is a universal, portable standard for data sensitivity **labels** tha
 EXPOSURE_MULTIPLIERS = {
     ExposureLevel.PRIVATE: 1.0,
     ExposureLevel.INTERNAL: 1.2,
-    ExposureLevel.OVER_EXPOSED: 1.8,
+    ExposureLevel.ORG_WIDE: 1.8,
     ExposureLevel.PUBLIC: 2.5,
 }
 

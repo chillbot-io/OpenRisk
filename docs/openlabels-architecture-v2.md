@@ -212,7 +212,7 @@ class ExposureLevel(Enum):
     """Normalized exposure levels across all platforms."""
     PRIVATE = 0          # Only owner/specific principals
     INTERNAL = 1         # Same org/tenant
-    OVER_EXPOSED = 2     # Too broad (authenticated users, large groups)
+    ORG_WIDE = 2         # Too broad (authenticated users, large groups)
     PUBLIC = 3           # Anyone, anonymous
 
 
@@ -336,7 +336,7 @@ class MacieAdapter:
             if "public-read" in meta.get("acl", ""):
                 exposure = ExposureLevel.PUBLIC
             elif "authenticated-read" in meta.get("acl", ""):
-                exposure = ExposureLevel.OVER_EXPOSED
+                exposure = ExposureLevel.ORG_WIDE
 
         return NormalizedContext(
             exposure=exposure,
@@ -427,7 +427,7 @@ class DLPAdapter:
                 exposure = ExposureLevel.PUBLIC
                 break
             if "allAuthenticatedUsers" in members:
-                exposure = ExposureLevel.OVER_EXPOSED
+                exposure = ExposureLevel.ORG_WIDE
 
         return NormalizedContext(
             exposure=exposure,
@@ -582,14 +582,14 @@ class MetadataNormalizer:
     PERMISSION_MAP = {
         # AWS S3
         "private": ExposureLevel.PRIVATE,
-        "authenticated-read": ExposureLevel.OVER_EXPOSED,
+        "authenticated-read": ExposureLevel.ORG_WIDE,
         "public-read": ExposureLevel.PUBLIC,
         "public-read-write": ExposureLevel.PUBLIC,
         "bucket-owner-full-control": ExposureLevel.PRIVATE,
 
         # GCP GCS
         "allUsers": ExposureLevel.PUBLIC,
-        "allAuthenticatedUsers": ExposureLevel.OVER_EXPOSED,
+        "allAuthenticatedUsers": ExposureLevel.ORG_WIDE,
         "projectViewer": ExposureLevel.INTERNAL,
         "projectEditor": ExposureLevel.INTERNAL,
 
@@ -599,10 +599,10 @@ class MetadataNormalizer:
         "Container": ExposureLevel.PUBLIC,
 
         # NTFS / Windows
-        "Authenticated Users": ExposureLevel.OVER_EXPOSED,
+        "Authenticated Users": ExposureLevel.ORG_WIDE,
         "Everyone": ExposureLevel.PUBLIC,
         "Domain Users": ExposureLevel.INTERNAL,
-        "BUILTIN\\Users": ExposureLevel.OVER_EXPOSED,
+        "BUILTIN\\Users": ExposureLevel.ORG_WIDE,
         "BUILTIN\\Administrators": ExposureLevel.PRIVATE,
 
         # POSIX / Linux (octal)
@@ -900,8 +900,9 @@ class RiskScorer:
     """
     OpenLabels scoring engine.
 
-    Formula:
-        content_score = Σ(weight × (1 + ln(count)) × confidence)
+    Formula (calibrated January 2026):
+        WEIGHT_SCALE = 4.0
+        content_score = Σ(weight × WEIGHT_SCALE × (1 + ln(count)) × confidence)
         content_score *= co_occurrence_multiplier
         exposure_multiplier = f(context)
         final_score = min(100, content_score × exposure_multiplier)
@@ -911,56 +912,47 @@ class RiskScorer:
     EXPOSURE_MULTIPLIERS = {
         ExposureLevel.PRIVATE: 1.0,
         ExposureLevel.INTERNAL: 1.2,
-        ExposureLevel.OVER_EXPOSED: 1.8,
+        ExposureLevel.ORG_WIDE: 1.8,
         ExposureLevel.PUBLIC: 2.5,
     }
 
     # Co-occurrence multipliers
+    # Categories from registry: direct_identifier, health_info, financial, credential, etc.
     CO_OCCURRENCE_RULES = {
         "hipaa_phi": {
-            "condition": lambda e: has_any(e, "direct_id") and has_any(e, "health"),
+            "condition": lambda e: has_category(e, "direct_identifier") and has_category(e, "health_info"),
             "multiplier": 2.0,
             "description": "HIPAA PHI (direct ID + health data)",
         },
         "identity_theft": {
-            "condition": lambda e: has_any(e, "direct_id") and has_any(e, "financial"),
+            "condition": lambda e: has_category(e, "direct_identifier") and has_category(e, "financial"),
             "multiplier": 1.8,
             "description": "Identity theft risk (direct ID + financial)",
         },
         "credential_exposure": {
-            "condition": lambda e: has_any(e, "credential") and has_any(e, "pii"),
-            "multiplier": 2.0,
-            "description": "Credential + PII exposure",
-        },
-        "reidentification": {
-            "condition": lambda e: count_category(e, "quasi_id") >= 3,
+            "condition": lambda e: has_category(e, "credential"),
             "multiplier": 1.5,
-            "description": "Re-identification risk (3+ quasi-identifiers)",
+            "description": "Credential exposure",
         },
-        "bulk_quasi_id": {
-            "condition": lambda e: count_category(e, "quasi_id") >= 4,
-            "multiplier": 1.7,
-            "description": "Bulk quasi-identifiers (4+)",
+        "phi_without_id": {
+            "condition": lambda e: has_category(e, "quasi_identifier") and has_category(e, "health_info"),
+            "multiplier": 1.5,
+            "description": "PHI without direct identifier",
         },
-        "minor_data": {
-            "condition": lambda e: has_any(e, "direct_id") and has_minor_indicator(e),
-            "multiplier": 1.8,
-            "description": "Minor's data (COPPA)",
+        "phi_with_contact": {
+            "condition": lambda e: has_category(e, "contact") and has_category(e, "health_info"),
+            "multiplier": 1.4,
+            "description": "Health info with contact details",
+        },
+        "full_identity": {
+            "condition": lambda e: has_category(e, "direct_identifier") and has_category(e, "quasi_identifier") and has_category(e, "financial"),
+            "multiplier": 2.2,
+            "description": "Full identity package (direct ID + quasi ID + financial)",
         },
         "classified_data": {
-            "condition": lambda e: has_any(e, "classification"),
+            "condition": lambda e: has_category(e, "classification_marking"),
             "multiplier": 2.5,
             "description": "Classified information",
-        },
-        "biometric_pii": {
-            "condition": lambda e: has_any(e, "biometric") and has_any(e, "direct_id"),
-            "multiplier": 2.2,
-            "description": "Biometric + PII (BIPA)",
-        },
-        "genetic_data": {
-            "condition": lambda e: has_any(e, "genetic"),
-            "multiplier": 2.0,
-            "description": "Genetic data (GINA)",
         },
     }
 
@@ -974,9 +966,10 @@ class RiskScorer:
             # No entities - score based on exposure only
             return self._score_exposure_only(context)
 
-        # Step 1: Calculate content score
+        # Step 1: Calculate content score (with WEIGHT_SCALE calibration)
+        WEIGHT_SCALE = 4.0
         content_score = sum(
-            entity.weight * (1 + log(max(entity.count, 1))) * entity.confidence
+            entity.weight * WEIGHT_SCALE * (1 + log(max(entity.count, 1))) * entity.confidence
             for entity in entities
         )
 
@@ -1027,7 +1020,7 @@ class RiskScorer:
 
         if context.exposure == ExposureLevel.PUBLIC:
             base = 15  # Public but unknown content
-        elif context.exposure == ExposureLevel.OVER_EXPOSED:
+        elif context.exposure == ExposureLevel.ORG_WIDE:
             base = 10
 
         if context.encryption == "none":
@@ -1044,14 +1037,14 @@ class RiskScorer:
         )
 
     def _score_to_level(self, score: int) -> str:
-        """Convert numeric score to risk level."""
-        if score >= 90:
+        """Convert numeric score to risk level (calibrated thresholds)."""
+        if score >= 80:
             return "CRITICAL"
-        elif score >= 70:
+        elif score >= 55:
             return "HIGH"
-        elif score >= 50:
+        elif score >= 31:
             return "MEDIUM"
-        elif score >= 25:
+        elif score >= 11:
             return "LOW"
         else:
             return "MINIMAL"
@@ -1158,7 +1151,7 @@ class ScanTrigger(Enum):
     """Reasons to trigger a scan."""
     NO_LABELS = "no_labels"                      # No external classification
     PUBLIC_ACCESS = "public_access"              # Public = always verify
-    OVER_EXPOSED = "over_exposed"                # Broadly shared = verify
+    ORG_WIDE = "org_wide"                        # Broadly shared = verify
     NO_ENCRYPTION = "no_encryption"              # Unprotected = verify
     STALE_DATA = "stale_data"                    # Old data = verify
     LOW_CONFIDENCE_HIGH_RISK = "low_conf_high_risk"  # Uncertain critical finding
@@ -1188,8 +1181,8 @@ def should_scan(
     # Exposure-based triggers
     if context.exposure == ExposureLevel.PUBLIC:
         triggers.append(ScanTrigger.PUBLIC_ACCESS)
-    elif context.exposure == ExposureLevel.OVER_EXPOSED:
-        triggers.append(ScanTrigger.OVER_EXPOSED)
+    elif context.exposure == ExposureLevel.ORG_WIDE:
+        triggers.append(ScanTrigger.ORG_WIDE)
 
     # Protection gaps
     if context.encryption == "none":
@@ -1301,7 +1294,7 @@ class OCRPriorityQueue:
         priority += {
             ExposureLevel.PRIVATE: 0,
             ExposureLevel.INTERNAL: 10,
-            ExposureLevel.OVER_EXPOSED: 30,
+            ExposureLevel.ORG_WIDE: 30,
             ExposureLevel.PUBLIC: 50,
         }[context.exposure]
 
@@ -1445,7 +1438,7 @@ class OpenLabelsAgent:
                 if sid == EVERYONE_SID:
                     return ExposureLevel.PUBLIC
                 if sid == AUTH_USERS_SID or sid == USERS_SID:
-                    return ExposureLevel.OVER_EXPOSED
+                    return ExposureLevel.ORG_WIDE
 
             return ExposureLevel.PRIVATE
 
@@ -1501,7 +1494,7 @@ openlabels shell <path>
 
 <value>      := <number> | <duration> | <enum> | <string>
 <duration>   := <number>(d|w|m|y)  # days, weeks, months, years
-<enum>       := public | over_exposed | internal | private
+<enum>       := public | org_wide | internal | private
              | none | platform | customer_managed
 ```
 
@@ -1525,7 +1518,7 @@ openlabels delete /mnt/fileshare \
 # Complex query
 openlabels find . --where "
   score > 75
-  AND exposure >= over_exposed
+  AND exposure >= org_wide
   AND last_accessed > 1y
   AND (has(SSN) OR has(CREDIT_CARD))
   AND encryption = none
@@ -1686,7 +1679,7 @@ result = client.score(
 high_risk_stale = Filter(
     score__gt=75,
     last_accessed__gt="5y",
-    exposure__gte="over_exposed"
+    exposure__gte="org_wide"
 )
 
 for obj in client.find("s3://bucket", where=high_risk_stale):
@@ -2194,7 +2187,7 @@ Tags can include an optional signature for authenticity verification:
             },
             "exposure": {
               "type": "string",
-              "enum": ["PRIVATE", "INTERNAL", "OVER_EXPOSED", "PUBLIC"]
+              "enum": ["PRIVATE", "INTERNAL", "ORG_WIDE", "PUBLIC"]
             },
             "exposure_multiplier": {
               "type": "number",
