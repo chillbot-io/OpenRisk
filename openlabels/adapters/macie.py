@@ -15,80 +15,9 @@ from typing import Dict, Any, List, Optional
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days,
+    ExposureLevel, calculate_staleness_days, is_archive,
 )
-
-# Entity type mapping: Macie -> OpenLabels canonical types
-ENTITY_MAP = {
-    # Credentials
-    "AWS_CREDENTIALS": "AWS_ACCESS_KEY",
-    "OPENSSH_PRIVATE_KEY": "PRIVATE_KEY",
-    "PGP_PRIVATE_KEY": "PRIVATE_KEY",
-    "PKCS": "PRIVATE_KEY",
-
-    # Financial
-    "CREDIT_CARD_NUMBER": "CREDIT_CARD",
-    "BANK_ACCOUNT_NUMBER": "BANK_ACCOUNT",
-
-    # US Identifiers
-    "USA_SOCIAL_SECURITY_NUMBER": "SSN",
-    "USA_PASSPORT_NUMBER": "PASSPORT",
-    "USA_DRIVERS_LICENSE": "DRIVERS_LICENSE",
-    "USA_INDIVIDUAL_TAX_IDENTIFICATION_NUMBER": "ITIN",
-    "USA_EMPLOYER_IDENTIFICATION_NUMBER": "EIN",
-    "USA_HEALTH_INSURANCE_CLAIM_NUMBER": "HICN",
-    "USA_MEDICARE_BENEFICIARY_IDENTIFIER": "MBI",
-    "USA_NATIONAL_PROVIDER_IDENTIFIER": "NPI",
-    "USA_DRUG_ENFORCEMENT_AGENCY_NUMBER": "DEA",
-    "USA_NATIONAL_DRUG_CODE": "NDC",
-
-    # Contact info
-    "EMAIL_ADDRESS": "EMAIL",
-    "PHONE_NUMBER": "PHONE",
-    "ADDRESS": "ADDRESS",
-    "NAME": "NAME",
-
-    # Dates
-    "DATE_OF_BIRTH": "DOB",
-
-    # Vehicle
-    "VEHICLE_IDENTIFICATION_NUMBER": "VIN",
-
-    # International
-    "CA_SOCIAL_INSURANCE_NUMBER": "SIN_CA",
-    "CA_HEALTH_NUMBER": "HEALTH_NUMBER_CA",
-    "UK_NATIONAL_INSURANCE_NUMBER": "NINO_UK",
-    "UK_NATIONAL_HEALTH_SERVICE_NUMBER": "NHS_UK",
-    "UK_UNIQUE_TAXPAYER_REFERENCE": "UTR_UK",
-    "FRANCE_NATIONAL_IDENTIFICATION_NUMBER": "INSEE_FR",
-    "GERMANY_NATIONAL_IDENTIFICATION_NUMBER": "PERSONALAUSWEIS_DE",
-    "ITALY_NATIONAL_IDENTIFICATION_NUMBER": "CODICE_FISCALE_IT",
-    "SPAIN_NATIONAL_IDENTIFICATION_NUMBER": "DNI_ES",
-    "BRAZIL_CPF_NUMBER": "CPF_BR",
-}
-
-# Entity weights (from registry, subset for quick lookup)
-ENTITY_WEIGHTS = {
-    "SSN": 10,
-    "CREDIT_CARD": 10,
-    "PASSPORT": 9,
-    "DRIVERS_LICENSE": 8,
-    "BANK_ACCOUNT": 8,
-    "AWS_ACCESS_KEY": 10,
-    "PRIVATE_KEY": 10,
-    "EMAIL": 3,
-    "PHONE": 3,
-    "NAME": 4,
-    "ADDRESS": 5,
-    "DOB": 6,
-    "NPI": 6,
-    "DEA": 7,
-    "MBI": 7,
-    "HICN": 7,
-    "VIN": 5,
-}
-
-DEFAULT_WEIGHT = 5
+from ..core.registry import normalize_type
 
 
 class MacieAdapter:
@@ -176,9 +105,8 @@ class MacieAdapter:
                     count = detection.get("count", 1)
 
                     # Map to canonical type
-                    entity_type = ENTITY_MAP.get(macie_type, macie_type)
+                    entity_type = normalize_type(macie_type, source="macie")
                     confidence = self._severity_to_confidence(severity_score)
-                    weight = ENTITY_WEIGHTS.get(entity_type, DEFAULT_WEIGHT)
 
                     # Aggregate by type
                     if entity_type in seen_types:
@@ -187,7 +115,6 @@ class MacieAdapter:
                             type=entity_type,
                             count=existing.count + count,
                             confidence=max(existing.confidence, confidence),
-                            weight=weight,
                             source="macie",
                         )
                     else:
@@ -195,7 +122,6 @@ class MacieAdapter:
                             type=entity_type,
                             count=count,
                             confidence=confidence,
-                            weight=weight,
                             source="macie",
                         )
 
@@ -252,7 +178,7 @@ class MacieAdapter:
             owner=meta.get("owner"),
             size_bytes=meta.get("size", 0),
             file_type=meta.get("content_type", ""),
-            is_archive=self._is_archive(meta.get("key", "")),
+            is_archive=is_archive(meta.get("key", "")),
         )
 
     def _determine_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
@@ -293,12 +219,6 @@ class MacieAdapter:
         if "aes256" in enc_lower or "sse-s3" in enc_lower:
             return "platform"
         return "platform"
-
-    def _is_archive(self, key: str) -> bool:
-        """Check if file is an archive based on extension."""
-        archive_exts = {'.zip', '.tar', '.gz', '.tgz', '.tar.gz', '.7z', '.rar', '.bz2'}
-        key_lower = key.lower()
-        return any(key_lower.endswith(ext) for ext in archive_exts)
 
 
 # =============================================================================

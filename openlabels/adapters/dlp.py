@@ -14,107 +14,9 @@ from typing import Dict, Any, List, Optional
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days,
+    ExposureLevel, calculate_staleness_days, is_archive,
 )
-
-# Entity type mapping: GCP DLP infoType -> OpenLabels canonical types
-ENTITY_MAP = {
-    # US Identifiers
-    "US_SOCIAL_SECURITY_NUMBER": "SSN",
-    "US_PASSPORT": "PASSPORT",
-    "US_DRIVERS_LICENSE_NUMBER": "DRIVERS_LICENSE",
-    "US_INDIVIDUAL_TAXPAYER_IDENTIFICATION_NUMBER": "ITIN",
-    "US_EMPLOYER_IDENTIFICATION_NUMBER": "EIN",
-    "US_HEALTHCARE_NPI": "NPI",
-    "US_DEA_NUMBER": "DEA",
-
-    # Financial
-    "CREDIT_CARD_NUMBER": "CREDIT_CARD",
-    "CREDIT_CARD_TRACK_NUMBER": "CREDIT_CARD",
-    "US_BANK_ROUTING_MICR": "BANK_ROUTING",
-    "IBAN_CODE": "IBAN",
-    "SWIFT_CODE": "SWIFT",
-    "FINANCIAL_ACCOUNT_NUMBER": "BANK_ACCOUNT",
-
-    # Contact
-    "EMAIL_ADDRESS": "EMAIL",
-    "PHONE_NUMBER": "PHONE",
-    "PERSON_NAME": "NAME",
-    "FIRST_NAME": "NAME",
-    "LAST_NAME": "NAME",
-    "STREET_ADDRESS": "ADDRESS",
-
-    # Dates
-    "DATE_OF_BIRTH": "DOB",
-    "DATE": "DATE",
-    "TIME": "TIME",
-
-    # Health
-    "US_MEDICARE_BENEFICIARY_ID_NUMBER": "MBI",
-
-    # Credentials
-    "GCP_CREDENTIALS": "GCP_CREDENTIALS",
-    "AWS_CREDENTIALS": "AWS_ACCESS_KEY",
-    "AZURE_AUTH_TOKEN": "AZURE_AUTH_TOKEN",
-    "AUTH_TOKEN": "AUTH_TOKEN",
-    "ENCRYPTION_KEY": "ENCRYPTION_KEY",
-    "PASSWORD": "PASSWORD",
-    "XSRF_TOKEN": "XSRF_TOKEN",
-    "HTTP_COOKIE": "HTTP_COOKIE",
-    "JSON_WEB_TOKEN": "JWT",
-
-    # International
-    "CANADA_SOCIAL_INSURANCE_NUMBER": "SIN_CA",
-    "CANADA_BC_PHN": "HEALTH_NUMBER_CA",
-    "CANADA_OHIP": "HEALTH_NUMBER_CA",
-    "CANADA_PASSPORT": "PASSPORT_CA",
-    "UK_NATIONAL_INSURANCE_NUMBER": "NINO_UK",
-    "UK_NHS_NUMBER": "NHS_UK",
-    "UK_PASSPORT": "PASSPORT_UK",
-    "UK_TAXPAYER_REFERENCE": "UTR_UK",
-    "FRANCE_CNI": "CNI_FR",
-    "FRANCE_NIR": "INSEE_FR",
-    "FRANCE_PASSPORT": "PASSPORT_FR",
-    "GERMANY_IDENTITY_CARD_NUMBER": "PERSONALAUSWEIS_DE",
-    "GERMANY_PASSPORT": "PASSPORT_DE",
-    "ITALY_FISCAL_CODE": "CODICE_FISCALE_IT",
-    "SPAIN_DNI_NUMBER": "DNI_ES",
-    "SPAIN_NIE_NUMBER": "NIE_ES",
-    "BRAZIL_CPF_NUMBER": "CPF_BR",
-    "JAPAN_MY_NUMBER": "MY_NUMBER_JP",
-    "CHINA_RESIDENT_ID_NUMBER": "RESIDENT_ID_CN",
-    "INDIA_AADHAAR_INDIVIDUAL": "AADHAAR_IN",
-    "INDIA_PAN_INDIVIDUAL": "PAN_IN",
-    "AUSTRALIA_TAX_FILE_NUMBER": "TFN_AU",
-    "AUSTRALIA_MEDICARE_NUMBER": "MEDICARE_AU",
-    "MEXICO_CURP_NUMBER": "CURP_MX",
-
-    # Network/Technical
-    "IP_ADDRESS": "IP_ADDRESS",
-    "MAC_ADDRESS": "MAC_ADDRESS",
-    "IMEI_HARDWARE_ID": "IMEI",
-    "URL": "URL",
-    "DOMAIN_NAME": "DOMAIN",
-
-    # Vehicle
-    "VEHICLE_IDENTIFICATION_NUMBER": "VIN",
-
-    # Generic
-    "AGE": "AGE",
-    "GENDER": "GENDER",
-    "ETHNIC_GROUP": "ETHNICITY",
-    "LOCATION": "LOCATION",
-}
-
-# Entity weights
-ENTITY_WEIGHTS = {
-    "SSN": 10, "CREDIT_CARD": 10, "PASSPORT": 9, "DRIVERS_LICENSE": 8,
-    "BANK_ACCOUNT": 8, "IBAN": 8, "GCP_CREDENTIALS": 10, "AWS_ACCESS_KEY": 10,
-    "PASSWORD": 10, "JWT": 9, "EMAIL": 3, "PHONE": 3, "NAME": 4,
-    "ADDRESS": 5, "DOB": 6, "NPI": 6, "DEA": 7, "MBI": 7, "AADHAAR_IN": 10,
-}
-
-DEFAULT_WEIGHT = 5
+from ..core.registry import normalize_type
 
 
 class DLPAdapter:
@@ -189,9 +91,8 @@ class DLPAdapter:
             likelihood = finding.get("likelihood", "POSSIBLE")
 
             # Map to canonical type
-            entity_type = ENTITY_MAP.get(dlp_type, dlp_type)
+            entity_type = normalize_type(dlp_type, source="dlp")
             confidence = self._likelihood_to_confidence(likelihood)
-            weight = ENTITY_WEIGHTS.get(entity_type, DEFAULT_WEIGHT)
 
             # Aggregate by type (DLP reports each occurrence separately)
             if entity_type in seen_types:
@@ -203,7 +104,6 @@ class DLPAdapter:
                 seen_types[entity_type] = {
                     "count": 1,
                     "confidence": confidence,
-                    "weight": weight,
                 }
 
         return [
@@ -211,7 +111,6 @@ class DLPAdapter:
                 type=etype,
                 count=data["count"],
                 confidence=data["confidence"],
-                weight=data["weight"],
                 source="dlp",
             )
             for etype, data in seen_types.items()
@@ -266,7 +165,7 @@ class DLPAdapter:
             owner=meta.get("owner", {}).get("entity") if isinstance(meta.get("owner"), dict) else meta.get("owner"),
             size_bytes=int(meta.get("size", 0)),
             file_type=meta.get("contentType", ""),
-            is_archive=self._is_archive(meta.get("name", "")),
+            is_archive=is_archive(meta.get("name", "")),
         )
 
     def _determine_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
@@ -318,11 +217,6 @@ class DLPAdapter:
         if encryption.get("defaultKmsKeyName"):
             return "customer_managed"
         return "platform"
-
-    def _is_archive(self, name: str) -> bool:
-        """Check if file is an archive."""
-        archive_exts = {'.zip', '.tar', '.gz', '.tgz', '.tar.gz', '.7z', '.rar', '.bz2'}
-        return any(name.lower().endswith(ext) for ext in archive_exts)
 
 
 # =============================================================================

@@ -14,96 +14,9 @@ from typing import Dict, Any, List, Optional
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days,
+    ExposureLevel, calculate_staleness_days, is_archive,
 )
-
-# Entity type mapping: Purview classification -> OpenLabels canonical types
-ENTITY_MAP = {
-    # US Identifiers
-    "U.S. Social Security Number (SSN)": "SSN",
-    "U.S. / U.K. Passport Number": "PASSPORT",
-    "U.S. Driver's License Number": "DRIVERS_LICENSE",
-    "U.S. Individual Taxpayer Identification Number (ITIN)": "ITIN",
-
-    # Financial
-    "Credit Card Number": "CREDIT_CARD",
-    "U.S. Bank Account Number": "BANK_ACCOUNT",
-    "International Banking Account Number (IBAN)": "IBAN",
-    "SWIFT Code": "SWIFT",
-    "ABA Routing Number": "BANK_ROUTING",
-
-    # Contact
-    "Email": "EMAIL",
-    "Phone Number": "PHONE",
-    "Person's Name": "NAME",
-    "All Full Names": "NAME",
-    "Address": "ADDRESS",
-    "Physical Addresses": "ADDRESS",
-
-    # Dates
-    "Date of Birth": "DOB",
-    "EU Date of Birth": "DOB",
-
-    # Health
-    "U.S. Health Insurance Claim Number (HICN)": "HICN",
-    "Drug Enforcement Agency (DEA) Number": "DEA",
-    "National Provider Index (NPI)": "NPI",
-
-    # Credentials/Secrets
-    "Azure Storage Account Key": "AZURE_STORAGE_KEY",
-    "Azure SQL Connection String": "AZURE_SQL_CONNECTION",
-    "Azure Service Bus Connection String": "AZURE_SERVICE_BUS_KEY",
-    "Azure Cosmos DB Connection String": "AZURE_COSMOS_KEY",
-    "Azure DocumentDB Auth Key": "AZURE_DOCDB_KEY",
-    "Azure IoT Hub Connection String": "AZURE_IOT_KEY",
-    "Azure Redis Cache Connection String": "AZURE_REDIS_KEY",
-    "Azure Shared Access Signature": "AZURE_SAS",
-    "Password": "PASSWORD",
-    "Generic Secret": "SECRET",
-    "Http Authorization Header": "AUTH_HEADER",
-
-    # International
-    "Canada Social Insurance Number": "SIN_CA",
-    "Canada Health Service Number": "HEALTH_NUMBER_CA",
-    "U.K. National Insurance Number (NINO)": "NINO_UK",
-    "U.K. National Health Service Number": "NHS_UK",
-    "France National ID Card (CNI)": "CNI_FR",
-    "France Social Security Number (INSEE)": "INSEE_FR",
-    "Germany Identity Card Number": "PERSONALAUSWEIS_DE",
-    "Germany Driver's License Number": "DRIVERS_LICENSE_DE",
-    "Italy Fiscal Code": "CODICE_FISCALE_IT",
-    "Spain DNI": "DNI_ES",
-    "Spain Social Security Number": "SSN_ES",
-    "Brazil CPF Number": "CPF_BR",
-    "Brazil Legal Entity Number (CNPJ)": "CNPJ_BR",
-    "Japan My Number": "MY_NUMBER_JP",
-    "Japan Residence Card Number": "RESIDENCE_CARD_JP",
-    "China Resident Identity Card Number": "RESIDENT_ID_CN",
-    "India Unique Identification (Aadhaar)": "AADHAAR_IN",
-    "India Permanent Account Number (PAN)": "PAN_IN",
-    "Australia Tax File Number": "TFN_AU",
-    "Australia Medicare Number": "MEDICARE_AU",
-    "Australia Business Number": "ABN_AU",
-    "New Zealand Ministry of Health Number": "NHI_NZ",
-    "South Africa Identification Number": "ID_ZA",
-
-    # Network
-    "IP Address": "IP_ADDRESS",
-    "IPv4 Address": "IP_ADDRESS",
-    "IPv6 Address": "IP_ADDRESS",
-    "MAC Address": "MAC_ADDRESS",
-    "URL": "URL",
-}
-
-# Entity weights
-ENTITY_WEIGHTS = {
-    "SSN": 10, "CREDIT_CARD": 10, "PASSPORT": 9, "DRIVERS_LICENSE": 8,
-    "BANK_ACCOUNT": 8, "IBAN": 8, "AZURE_STORAGE_KEY": 10, "AZURE_SQL_CONNECTION": 10,
-    "PASSWORD": 10, "SECRET": 9, "EMAIL": 3, "PHONE": 3, "NAME": 4,
-    "ADDRESS": 5, "DOB": 6, "NPI": 6, "DEA": 7, "HICN": 7, "AADHAAR_IN": 10,
-}
-
-DEFAULT_WEIGHT = 5
+from ..core.registry import normalize_type
 
 
 class PurviewAdapter:
@@ -190,8 +103,7 @@ class PurviewAdapter:
             confidence = attrs.get("confidence", 0.85)
 
             # Map to canonical type
-            entity_type = ENTITY_MAP.get(purview_type, purview_type)
-            weight = ENTITY_WEIGHTS.get(entity_type, DEFAULT_WEIGHT)
+            entity_type = normalize_type(purview_type, source="purview")
 
             # Aggregate by type
             if entity_type in seen_types:
@@ -203,7 +115,6 @@ class PurviewAdapter:
                 seen_types[entity_type] = {
                     "count": count,
                     "confidence": confidence,
-                    "weight": weight,
                 }
 
         return [
@@ -211,7 +122,6 @@ class PurviewAdapter:
                 type=etype,
                 count=data["count"],
                 confidence=data["confidence"],
-                weight=data["weight"],
                 source="purview",
             )
             for etype, data in seen_types.items()
@@ -277,7 +187,7 @@ class PurviewAdapter:
             owner=meta.get("owner"),
             size_bytes=props.get("content_length", 0),
             file_type=props.get("content_type", ""),
-            is_archive=self._is_archive(meta.get("name", "")),
+            is_archive=is_archive(meta.get("name", "")),
         )
 
     def _determine_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
@@ -313,11 +223,6 @@ class PurviewAdapter:
             return "customer_managed"
 
         return "platform"
-
-    def _is_archive(self, name: str) -> bool:
-        """Check if file is an archive."""
-        archive_exts = {'.zip', '.tar', '.gz', '.tgz', '.tar.gz', '.7z', '.rar', '.bz2'}
-        return any(name.lower().endswith(ext) for ext in archive_exts)
 
 
 # =============================================================================

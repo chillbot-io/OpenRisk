@@ -10,8 +10,6 @@ Per the spec, embedded labels contain the full LabelSet JSON and are
 the source of truth for files that support native metadata.
 """
 
-import json
-import io
 import logging
 from pathlib import Path
 from typing import Optional, Union
@@ -86,16 +84,8 @@ class PDFLabelWriter(EmbeddedLabelWriter):
 
         try:
             with pikepdf.open(path, allow_overwriting_input=True) as pdf:
-                # Get or create XMP metadata
                 with pdf.open_metadata() as meta:
-                    # Register our namespace
-                    meta._xmp.setdefault(
-                        f'{{{OPENLABELS_XMP_NS}}}openlabels',
-                        label_set.to_json(compact=True)
-                    )
-                    # Set the value
                     meta[f'{{{OPENLABELS_XMP_NS}}}openlabels'] = label_set.to_json(compact=True)
-
                 pdf.save(path)
             return True
 
@@ -467,18 +457,3 @@ def read_embedded_label(path: Union[str, Path]) -> Optional[LabelSet]:
     if writer is None:
         return None
     return writer.read(path)
-
-
-# File type matrix for reference
-EMBEDDED_LABEL_MATRIX = {
-    '.pdf': {'method': 'XMP', 'limit': '~100KB'},
-    '.docx': {'method': 'Custom Properties', 'limit': '~32KB'},
-    '.xlsx': {'method': 'Custom Properties', 'limit': '~32KB'},
-    '.pptx': {'method': 'Custom Properties', 'limit': '~32KB'},
-    '.jpg': {'method': 'EXIF UserComment', 'limit': '~64KB'},
-    '.jpeg': {'method': 'EXIF UserComment', 'limit': '~64KB'},
-    '.png': {'method': 'Text Chunk', 'limit': '~2GB'},
-    '.tiff': {'method': 'XMP', 'limit': '~100KB'},
-    '.tif': {'method': 'XMP', 'limit': '~100KB'},
-    '.webp': {'method': 'XMP', 'limit': '~100KB'},
-}

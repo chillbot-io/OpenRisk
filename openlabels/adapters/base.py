@@ -25,7 +25,6 @@ class Entity:
     type: str                       # Canonical entity type (e.g., "SSN", "CREDIT_CARD")
     count: int                      # Number of occurrences
     confidence: float               # Detection confidence (0.0-1.0)
-    weight: int                     # Risk weight from registry (1-10)
     source: str                     # Which adapter detected this
     positions: List[Tuple[int, int]] = field(default_factory=list)  # [(start, end), ...]
 
@@ -130,3 +129,12 @@ def exposure_from_string(exposure: str) -> ExposureLevel:
         'PUBLIC': ExposureLevel.PUBLIC,
     }
     return mapping.get(exposure.upper(), ExposureLevel.PRIVATE)
+
+
+ARCHIVE_EXTENSIONS = frozenset({'.zip', '.tar', '.gz', '.tgz', '.tar.gz', '.7z', '.rar', '.bz2'})
+
+
+def is_archive(filename: str) -> bool:
+    """Check if file is an archive based on extension."""
+    filename_lower = filename.lower()
+    return any(filename_lower.endswith(ext) for ext in ARCHIVE_EXTENSIONS)
