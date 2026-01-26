@@ -199,25 +199,83 @@ class PurviewAdapter:
         )
 
     def _determine_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
-        """Determine exposure from Azure Blob access level."""
+        """
+        Determine exposure from Azure Blob access level, network rules, and SAS tokens.
+
+        See ExposureLevel docstring for full permission mapping.
+        """
+        # Check for private endpoint only (strongest protection)
+        if meta.get("private_endpoint_only", False):
+            # Even with private endpoint, check for cross-tenant
+            if meta.get("cross_tenant_access", False):
+                return ExposureLevel.ORG_WIDE
+            return ExposureLevel.PRIVATE
+
+        # Check container access level
         access_level = meta.get("access_level", "private").lower()
 
-        # Container-level access = public
+        # PUBLIC: container-level anonymous access
         if access_level == "container":
             return ExposureLevel.PUBLIC
 
-        # Blob-level access = semi-public
+        # Check for SAS tokens
+        sas_exposure = self._evaluate_sas_exposure(meta)
+        if sas_exposure == ExposureLevel.PUBLIC:
+            return ExposureLevel.PUBLIC
+
+        # ORG_WIDE: blob-level anonymous access (need URL to access)
         if access_level == "blob":
             return ExposureLevel.ORG_WIDE
 
-        # Check for SAS tokens that allow public access
+        # Check network rules
+        network_rules = meta.get("network_rules", {})
+        default_action = network_rules.get("default_action", "Deny")
+
+        # If default is Allow with no VNet rules, it's broadly accessible
+        if default_action == "Allow":
+            virtual_network_rules = network_rules.get("virtual_network_rules", [])
+            ip_rules = network_rules.get("ip_rules", [])
+            if not virtual_network_rules and not ip_rules:
+                return ExposureLevel.ORG_WIDE
+
+        # INTERNAL: VNet rules or IP rules configured
+        if network_rules.get("virtual_network_rules") or network_rules.get("ip_rules"):
+            return ExposureLevel.INTERNAL
+
+        # Check for cross-tenant access
+        if meta.get("cross_tenant_access", False):
+            return ExposureLevel.ORG_WIDE
+
+        # Check SAS token exposure (may return INTERNAL or ORG_WIDE)
+        if sas_exposure.value > ExposureLevel.PRIVATE.value:
+            return sas_exposure
+
+        return ExposureLevel.PRIVATE
+
+    def _evaluate_sas_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
+        """Evaluate exposure level based on SAS token configuration."""
+        # Publicly shared SAS = PUBLIC
         if meta.get("has_public_sas", False):
             return ExposureLevel.PUBLIC
 
-        # Check network rules
-        network_rules = meta.get("network_rules", {})
-        if network_rules.get("default_action") == "Allow":
+        sas_config = meta.get("sas_policy", {})
+        if not sas_config:
+            return ExposureLevel.PRIVATE
+
+        # Check for overly permissive SAS
+        # No expiry or very long expiry = ORG_WIDE
+        if sas_config.get("no_expiry", False):
             return ExposureLevel.ORG_WIDE
+
+        # Broad permissions (full access) = ORG_WIDE
+        permissions = sas_config.get("permissions", "")
+        if "d" in permissions and "w" in permissions and "r" in permissions:
+            # Delete + Write + Read = very broad
+            return ExposureLevel.ORG_WIDE
+
+        # Limited scope SAS with expiry = INTERNAL
+        if sas_config.get("has_expiry", True):
+            return ExposureLevel.INTERNAL
 
         return ExposureLevel.PRIVATE
 

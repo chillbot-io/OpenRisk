@@ -169,30 +169,85 @@ class DLPAdapter:
         )
 
     def _determine_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
-        """Determine exposure from GCS IAM policy."""
+        """
+        Determine exposure from GCS IAM policy and ACLs.
+
+        See ExposureLevel docstring for full permission mapping.
+        """
+        # Check for public access prevention (strongest protection)
+        if meta.get("iamConfiguration", {}).get("publicAccessPrevention") == "enforced":
+            # Even with prevention, check for cross-project access
+            if self._has_cross_project_access(meta):
+                return ExposureLevel.ORG_WIDE
+            return ExposureLevel.PRIVATE
+
+        # Track the highest exposure level found
+        max_exposure = ExposureLevel.PRIVATE
+
+        # Check IAM policy bindings
         iam_policy = meta.get("iam_policy", {})
         bindings = iam_policy.get("bindings", [])
 
         for binding in bindings:
             members = binding.get("members", [])
-            if "allUsers" in members:
-                return ExposureLevel.PUBLIC
-            if "allAuthenticatedUsers" in members:
-                return ExposureLevel.ORG_WIDE
+            for member in members:
+                exposure = self._member_to_exposure(member)
+                if exposure.value > max_exposure.value:
+                    max_exposure = exposure
+                # Early exit if PUBLIC found
+                if max_exposure == ExposureLevel.PUBLIC:
+                    return ExposureLevel.PUBLIC
 
-        # Check for uniform bucket-level access
-        if meta.get("iamConfiguration", {}).get("publicAccessPrevention") == "enforced":
-            return ExposureLevel.PRIVATE
-
-        # Check ACL if present
+        # Check legacy ACL if present
         acl = meta.get("acl", [])
         for entry in acl:
             entity = entry.get("entity", "")
-            if entity == "allUsers":
+            exposure = self._acl_entity_to_exposure(entity)
+            if exposure.value > max_exposure.value:
+                max_exposure = exposure
+            if max_exposure == ExposureLevel.PUBLIC:
                 return ExposureLevel.PUBLIC
-            if entity == "allAuthenticatedUsers":
-                return ExposureLevel.ORG_WIDE
 
+        # Check for cross-project access (elevates to at least ORG_WIDE)
+        if self._has_cross_project_access(meta) and max_exposure.value < ExposureLevel.ORG_WIDE.value:
+            max_exposure = ExposureLevel.ORG_WIDE
+
+        return max_exposure
+
+    def _member_to_exposure(self, member: str) -> ExposureLevel:
+        """Map IAM member string to exposure level."""
+        # PUBLIC: allUsers
+        if member == "allUsers":
+            return ExposureLevel.PUBLIC
+
+        # ORG_WIDE: allAuthenticatedUsers
+        if member == "allAuthenticatedUsers":
+            return ExposureLevel.ORG_WIDE
+
+        # INTERNAL: domain-wide or project-wide access
+        if member.startswith("domain:"):
+            return ExposureLevel.INTERNAL
+        if member.startswith("projectViewer:") or \
+           member.startswith("projectEditor:") or \
+           member.startswith("projectOwner:"):
+            return ExposureLevel.INTERNAL
+
+        # INTERNAL: group access (could be broad)
+        if member.startswith("group:"):
+            return ExposureLevel.INTERNAL
+
+        # PRIVATE: specific user or service account
+        return ExposureLevel.PRIVATE
+
+    def _acl_entity_to_exposure(self, entity: str) -> ExposureLevel:
+        """Map ACL entity string to exposure level."""
+        if entity == "allUsers":
+            return ExposureLevel.PUBLIC
+        if entity == "allAuthenticatedUsers":
+            return ExposureLevel.ORG_WIDE
+        if entity.startswith("project-"):
+            return ExposureLevel.INTERNAL
+        # user-*, group-* are considered private (specific principals)
         return ExposureLevel.PRIVATE
 
     def _has_cross_project_access(self, meta: Dict[str, Any]) -> bool:

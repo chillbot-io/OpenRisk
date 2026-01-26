@@ -182,36 +182,55 @@ class MacieAdapter:
         )
 
     def _determine_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
-        """Determine exposure level from S3 ACL and public access settings."""
-        # Check public access block first
-        # Handle bool, string "true"/"false", or missing (default True)
+        """
+        Determine exposure level from S3 ACL, bucket policy, and access settings.
+
+        See ExposureLevel docstring for full permission mapping.
+        """
+        # Check if website hosting is enabled (always public)
+        if meta.get("website_enabled", False):
+            return ExposureLevel.PUBLIC
+
+        # Check public access block - if all four settings enabled, caps exposure
         public_block = meta.get("public_access_block", True)
         public_block_enabled = (
             public_block is True or
             (isinstance(public_block, str) and public_block.lower() == "true")
         )
-        if not public_block_enabled:
-            acl = meta.get("acl", "private").lower()
 
-            if "public-read" in acl or "public-read-write" in acl:
+        # Check bucket policy for public access (Principal: "*" without conditions)
+        if meta.get("bucket_policy_public", False):
+            if not public_block_enabled:
                 return ExposureLevel.PUBLIC
 
+        # Check ACL-based permissions (only apply if public block not enabled)
+        acl = meta.get("acl", "private").lower()
+        if not public_block_enabled:
+            # PUBLIC ACLs
+            if "public-read" in acl or "public-read-write" in acl:
+                return ExposureLevel.PUBLIC
+            # ORG_WIDE ACLs
             if "authenticated-read" in acl:
                 return ExposureLevel.ORG_WIDE
 
-        # Check bucket policy for public access
-        if meta.get("bucket_policy_public", False):
-            return ExposureLevel.PUBLIC
-
-        # Check for cross-account access
+        # Check for cross-account access (elevated to ORG_WIDE)
         if meta.get("cross_account", False):
             return ExposureLevel.ORG_WIDE
 
-        # Check ACL grants
-        acl = meta.get("acl", "private").lower()
-        if acl == "private" or acl == "bucket-owner-full-control":
+        # Check for bucket policy with conditions (internal access patterns)
+        if meta.get("bucket_policy_conditional", False):
+            return ExposureLevel.INTERNAL
+
+        # Map remaining ACLs to exposure levels
+        # PRIVATE ACLs
+        if acl in ("private", "bucket-owner-full-control", "bucket-owner-read"):
             return ExposureLevel.PRIVATE
 
+        # INTERNAL ACLs (AWS service access)
+        if acl in ("aws-exec-read", "log-delivery-write"):
+            return ExposureLevel.INTERNAL
+
+        # Default to INTERNAL for unknown ACLs (safer than PRIVATE)
         return ExposureLevel.INTERNAL
 
     def _normalize_encryption(self, enc: Optional[str]) -> str:

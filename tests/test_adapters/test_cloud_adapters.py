@@ -148,6 +148,85 @@ def test_macie_adapter_kms_encryption():
     print("  PASSED\n")
 
 
+def test_macie_adapter_website_hosting():
+    """Test that website hosting is detected as PUBLIC."""
+    print("Test: MacieAdapter website hosting detection")
+
+    adapter = MacieAdapter()
+
+    findings = {"findings": []}
+    s3_metadata = {
+        "bucket": "test-bucket",
+        "key": "index.html",
+        "website_enabled": True,
+        "acl": "private",  # Even with private ACL, website = public
+    }
+
+    result = adapter.extract(findings, s3_metadata)
+
+    assert result.context.exposure == "PUBLIC"
+    print("  PASSED\n")
+
+
+def test_macie_adapter_aws_exec_read():
+    """Test that aws-exec-read ACL is INTERNAL."""
+    print("Test: MacieAdapter aws-exec-read ACL")
+
+    adapter = MacieAdapter()
+
+    findings = {"findings": []}
+    s3_metadata = {
+        "bucket": "test-bucket",
+        "key": "file.txt",
+        "acl": "aws-exec-read",
+        "public_access_block": True,
+    }
+
+    result = adapter.extract(findings, s3_metadata)
+
+    assert result.context.exposure == "INTERNAL"
+    print("  PASSED\n")
+
+
+def test_macie_adapter_bucket_owner_read():
+    """Test that bucket-owner-read ACL is PRIVATE."""
+    print("Test: MacieAdapter bucket-owner-read ACL")
+
+    adapter = MacieAdapter()
+
+    findings = {"findings": []}
+    s3_metadata = {
+        "bucket": "test-bucket",
+        "key": "file.txt",
+        "acl": "bucket-owner-read",
+    }
+
+    result = adapter.extract(findings, s3_metadata)
+
+    assert result.context.exposure == "PRIVATE"
+    print("  PASSED\n")
+
+
+def test_macie_adapter_cross_account():
+    """Test that cross-account access is ORG_WIDE."""
+    print("Test: MacieAdapter cross-account detection")
+
+    adapter = MacieAdapter()
+
+    findings = {"findings": []}
+    s3_metadata = {
+        "bucket": "test-bucket",
+        "key": "file.txt",
+        "acl": "private",
+        "cross_account": True,
+    }
+
+    result = adapter.extract(findings, s3_metadata)
+
+    assert result.context.exposure == "ORG_WIDE"
+    print("  PASSED\n")
+
+
 # =============================================================================
 # DLPAdapter Tests
 # =============================================================================
@@ -269,6 +348,80 @@ def test_dlp_adapter_authenticated_users():
     result = adapter.extract(findings, gcs_metadata)
 
     assert result.context.exposure == "ORG_WIDE"
+
+    print("  PASSED\n")
+
+
+def test_dlp_adapter_domain_access():
+    """Test DLPAdapter detects domain-wide access as INTERNAL."""
+    print("Test: DLPAdapter domain access detection")
+
+    adapter = DLPAdapter()
+
+    findings = {"findings": []}
+    gcs_metadata = {
+        "bucket": "test-bucket",
+        "name": "file.txt",
+        "iam_policy": {
+            "bindings": [
+                {"role": "roles/storage.objectViewer", "members": ["domain:example.com"]}
+            ]
+        },
+    }
+
+    result = adapter.extract(findings, gcs_metadata)
+
+    assert result.context.exposure == "INTERNAL"
+
+    print("  PASSED\n")
+
+
+def test_dlp_adapter_project_access():
+    """Test DLPAdapter detects project-wide access as INTERNAL."""
+    print("Test: DLPAdapter project access detection")
+
+    adapter = DLPAdapter()
+
+    findings = {"findings": []}
+    gcs_metadata = {
+        "bucket": "test-bucket",
+        "name": "file.txt",
+        "iam_policy": {
+            "bindings": [
+                {"role": "roles/storage.objectViewer", "members": ["projectViewer:my-project"]}
+            ]
+        },
+    }
+
+    result = adapter.extract(findings, gcs_metadata)
+
+    assert result.context.exposure == "INTERNAL"
+
+    print("  PASSED\n")
+
+
+def test_dlp_adapter_public_prevention():
+    """Test DLPAdapter respects publicAccessPrevention."""
+    print("Test: DLPAdapter publicAccessPrevention")
+
+    adapter = DLPAdapter()
+
+    findings = {"findings": []}
+    gcs_metadata = {
+        "bucket": "test-bucket",
+        "name": "file.txt",
+        "iamConfiguration": {"publicAccessPrevention": "enforced"},
+        "iam_policy": {
+            "bindings": [
+                # Even with allUsers, prevention should block
+                {"role": "roles/storage.objectViewer", "members": ["user:test@example.com"]}
+            ]
+        },
+    }
+
+    result = adapter.extract(findings, gcs_metadata)
+
+    assert result.context.exposure == "PRIVATE"
 
     print("  PASSED\n")
 
@@ -441,6 +594,122 @@ def test_purview_adapter_scan_result_format():
     print("  PASSED\n")
 
 
+def test_purview_adapter_private_endpoint():
+    """Test PurviewAdapter detects private endpoint as PRIVATE."""
+    print("Test: PurviewAdapter private endpoint detection")
+
+    adapter = PurviewAdapter()
+
+    classifications = {"classifications": []}
+    blob_metadata = {
+        "container": "test-container",
+        "name": "file.txt",
+        "properties": {},
+        "private_endpoint_only": True,
+    }
+
+    result = adapter.extract(classifications, blob_metadata)
+
+    assert result.context.exposure == "PRIVATE"
+
+    print("  PASSED\n")
+
+
+def test_purview_adapter_vnet_rules():
+    """Test PurviewAdapter detects VNet rules as INTERNAL."""
+    print("Test: PurviewAdapter VNet rules detection")
+
+    adapter = PurviewAdapter()
+
+    classifications = {"classifications": []}
+    blob_metadata = {
+        "container": "test-container",
+        "name": "file.txt",
+        "properties": {},
+        "network_rules": {
+            "default_action": "Deny",
+            "virtual_network_rules": [{"id": "/subscriptions/.../virtualNetworks/vnet1"}],
+        },
+    }
+
+    result = adapter.extract(classifications, blob_metadata)
+
+    assert result.context.exposure == "INTERNAL"
+
+    print("  PASSED\n")
+
+
+def test_purview_adapter_network_allow_no_rules():
+    """Test PurviewAdapter detects Allow without rules as ORG_WIDE."""
+    print("Test: PurviewAdapter network Allow without rules")
+
+    adapter = PurviewAdapter()
+
+    classifications = {"classifications": []}
+    blob_metadata = {
+        "container": "test-container",
+        "name": "file.txt",
+        "properties": {},
+        "network_rules": {
+            "default_action": "Allow",
+            # No VNet or IP rules = broadly accessible
+        },
+    }
+
+    result = adapter.extract(classifications, blob_metadata)
+
+    assert result.context.exposure == "ORG_WIDE"
+
+    print("  PASSED\n")
+
+
+def test_purview_adapter_cross_tenant():
+    """Test PurviewAdapter detects cross-tenant access as ORG_WIDE."""
+    print("Test: PurviewAdapter cross-tenant detection")
+
+    adapter = PurviewAdapter()
+
+    classifications = {"classifications": []}
+    blob_metadata = {
+        "container": "test-container",
+        "name": "file.txt",
+        "properties": {},
+        "access_level": "private",
+        "cross_tenant_access": True,
+    }
+
+    result = adapter.extract(classifications, blob_metadata)
+
+    assert result.context.exposure == "ORG_WIDE"
+
+    print("  PASSED\n")
+
+
+def test_purview_adapter_sas_broad_permissions():
+    """Test PurviewAdapter detects broad SAS permissions as ORG_WIDE."""
+    print("Test: PurviewAdapter SAS broad permissions")
+
+    adapter = PurviewAdapter()
+
+    classifications = {"classifications": []}
+    blob_metadata = {
+        "container": "test-container",
+        "name": "file.txt",
+        "properties": {},
+        "access_level": "private",
+        "sas_policy": {
+            "permissions": "rwdl",  # Read, Write, Delete, List
+            "has_expiry": True,
+        },
+    }
+
+    result = adapter.extract(classifications, blob_metadata)
+
+    assert result.context.exposure == "ORG_WIDE"
+
+    print("  PASSED\n")
+
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -452,24 +721,39 @@ def main():
     print("=" * 60 + "\n")
 
     tests = [
-        # Macie tests
+        # Macie tests - basic
         test_macie_adapter_basic,
         test_macie_adapter_public_access_block_string,
         test_macie_adapter_public_access_block_true_string,
         test_macie_adapter_severity_to_confidence,
         test_macie_adapter_kms_encryption,
-        # DLP tests
+        # Macie tests - permission mappings
+        test_macie_adapter_website_hosting,
+        test_macie_adapter_aws_exec_read,
+        test_macie_adapter_bucket_owner_read,
+        test_macie_adapter_cross_account,
+        # DLP tests - basic
         test_dlp_adapter_basic,
         test_dlp_adapter_likelihood_mapping,
         test_dlp_adapter_public_access,
         test_dlp_adapter_authenticated_users,
-        # Purview tests
+        # DLP tests - permission mappings
+        test_dlp_adapter_domain_access,
+        test_dlp_adapter_project_access,
+        test_dlp_adapter_public_prevention,
+        # Purview tests - basic
         test_purview_adapter_basic,
         test_purview_adapter_type_normalization,
         test_purview_adapter_container_access,
         test_purview_adapter_blob_access,
         test_purview_adapter_keyvault_encryption,
         test_purview_adapter_scan_result_format,
+        # Purview tests - permission mappings
+        test_purview_adapter_private_endpoint,
+        test_purview_adapter_vnet_rules,
+        test_purview_adapter_network_allow_no_rules,
+        test_purview_adapter_cross_tenant,
+        test_purview_adapter_sas_broad_permissions,
     ]
 
     passed = 0
