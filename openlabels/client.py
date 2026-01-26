@@ -36,7 +36,7 @@ class Client:
 
         Args:
             default_exposure: Default exposure level when not specified.
-                             One of: PRIVATE, INTERNAL, OVER_EXPOSED, PUBLIC
+                             One of: PRIVATE, INTERNAL, ORG_WIDE, PUBLIC
         """
         self.default_exposure = default_exposure.upper()
 
@@ -54,7 +54,7 @@ class Client:
         Args:
             path: Path to file to scan
             adapters: Optional list of adapters to use. If None, uses scanner.
-            exposure: Exposure level override (PRIVATE, INTERNAL, OVER_EXPOSED, PUBLIC).
+            exposure: Exposure level override (PRIVATE, INTERNAL, ORG_WIDE, PUBLIC).
                      If None, uses the client's default_exposure.
 
         Returns:
@@ -103,7 +103,7 @@ class Client:
 
         Args:
             text: Text to scan for sensitive data
-            exposure: Exposure level (PRIVATE, INTERNAL, OVER_EXPOSED, PUBLIC)
+            exposure: Exposure level (PRIVATE, INTERNAL, ORG_WIDE, PUBLIC)
 
         Returns:
             ScoringResult with score, tier, and breakdown
@@ -242,7 +242,7 @@ class Client:
 
     def _get_highest_exposure(self, inputs: List[NormalizedInput]) -> str:
         """Get the highest exposure level from inputs."""
-        exposure_order = ["PRIVATE", "INTERNAL", "OVER_EXPOSED", "PUBLIC"]
+        exposure_order = ["PRIVATE", "INTERNAL", "ORG_WIDE", "PUBLIC"]
 
         highest_idx = 0
         for inp in inputs:

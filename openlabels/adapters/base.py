@@ -22,7 +22,7 @@ class Entity:
 @dataclass
 class NormalizedContext:
     """Normalized file/object context across all platforms."""
-    exposure: str           # PRIVATE, INTERNAL, OVER_EXPOSED, PUBLIC
+    exposure: str           # PRIVATE, INTERNAL, ORG_WIDE, PUBLIC
     encryption: str         # none, platform, customer_managed
     owner: Optional[str]    # Owner identifier
     path: str               # File path or object key
