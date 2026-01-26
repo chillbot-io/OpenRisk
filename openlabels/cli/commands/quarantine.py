@@ -1,12 +1,11 @@
 """
 OpenLabels quarantine command.
 
-Move files matching filter criteria to a quarantine location.
+Move local files matching filter criteria to a quarantine location.
 
 Usage:
     openlabels quarantine <source> --where "<filter>" --to <dest>
     openlabels quarantine ./data --where "score > 75" --to ./quarantine
-    openlabels quarantine s3://prod --where "exposure = public AND has(SSN)" --to s3://quarantine
 """
 
 import json
@@ -17,8 +16,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from openlabels import Client
-from openlabels.cli.commands.find import find_matching, result_to_filter_dict
-from openlabels.cli.commands.scan import ScanResult
+from openlabels.cli.commands.find import find_matching
 
 
 def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, base_path: Optional[Path] = None) -> Path:
@@ -84,13 +82,8 @@ def cmd_quarantine(args) -> int:
         print("Error: --to destination is required", file=sys.stderr)
         return 1
 
-    source = Path(args.source) if not args.source.startswith(('s3://', 'gs://', 'azure://')) else args.source
-    dest = Path(args.to) if not args.to.startswith(('s3://', 'gs://', 'azure://')) else args.to
-
-    # Check for cloud paths
-    if isinstance(source, str) or isinstance(dest, str):
-        print("Cloud storage quarantine not yet implemented", file=sys.stderr)
-        return 1
+    source = Path(args.source)
+    dest = Path(args.to)
 
     if not source.exists():
         print(f"Error: Source not found: {source}", file=sys.stderr)
@@ -196,7 +189,7 @@ def add_quarantine_parser(subparsers):
     )
     parser.add_argument(
         "source",
-        help="Source path to search",
+        help="Local source path to search",
     )
     parser.add_argument(
         "--where", "-w",
@@ -206,7 +199,7 @@ def add_quarantine_parser(subparsers):
     parser.add_argument(
         "--to", "-t",
         required=True,
-        help="Destination quarantine directory",
+        help="Local destination quarantine directory",
     )
     parser.add_argument(
         "--recursive", "-r",

@@ -92,7 +92,6 @@ class MacieAdapter:
             severity_score = severity.get("score", 2) if isinstance(severity, dict) else 2
             confidence = self._severity_to_confidence(severity_score)
 
-            # Get classification details
             class_details = finding.get("classificationDetails", {})
             result = class_details.get("result", {})
 

@@ -1,7 +1,7 @@
 """
 OpenLabels delete command.
 
-Delete files matching filter criteria.
+Delete local files matching filter criteria.
 
 Usage:
     openlabels delete <source> --where "<filter>" --confirm
@@ -11,8 +11,6 @@ Usage:
 import os
 import sys
 from pathlib import Path
-from datetime import datetime
-from typing import Optional
 
 from openlabels import Client
 from openlabels.cli.commands.find import find_matching
@@ -24,12 +22,7 @@ def cmd_delete(args) -> int:
         print("Error: --where filter is required for delete", file=sys.stderr)
         return 1
 
-    source = Path(args.source) if not args.source.startswith(('s3://', 'gs://', 'azure://')) else args.source
-
-    # Check for cloud paths
-    if isinstance(source, str):
-        print("Cloud storage delete not yet implemented", file=sys.stderr)
-        return 1
+    source = Path(args.source)
 
     if not source.exists():
         print(f"Error: Source not found: {source}", file=sys.stderr)
@@ -125,7 +118,7 @@ def add_delete_parser(subparsers):
     )
     parser.add_argument(
         "source",
-        help="Source path to search",
+        help="Local source path to search",
     )
     parser.add_argument(
         "--where", "-w",

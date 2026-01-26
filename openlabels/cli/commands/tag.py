@@ -1,7 +1,7 @@
 """
 OpenLabels tag command.
 
-Apply or update OpenLabels tags on files matching filter criteria.
+Apply or update OpenLabels tags on local files matching filter criteria.
 
 Usage:
     openlabels tag <source> --where "<filter>"
@@ -11,7 +11,6 @@ Usage:
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 from openlabels import Client
 from openlabels.cli.commands.find import find_matching
@@ -22,12 +21,7 @@ from openlabels.output.index import store_label
 
 def cmd_tag(args) -> int:
     """Execute the tag command."""
-    source = Path(args.source) if not args.source.startswith(('s3://', 'gs://', 'azure://')) else args.source
-
-    # Check for cloud paths
-    if isinstance(source, str):
-        print("Cloud storage tagging not yet implemented", file=sys.stderr)
-        return 1
+    source = Path(args.source)
 
     if not source.exists():
         print(f"Error: Source not found: {source}", file=sys.stderr)
@@ -130,7 +124,7 @@ def add_tag_parser(subparsers):
     )
     parser.add_argument(
         "source",
-        help="Source path to search",
+        help="Local source path to search",
     )
     parser.add_argument(
         "--where", "-w",

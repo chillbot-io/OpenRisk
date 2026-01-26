@@ -1,12 +1,12 @@
 """
 OpenLabels find command.
 
-Find files matching filter criteria.
+Find local files matching filter criteria.
 
 Usage:
     openlabels find <path> --where "<filter>"
     openlabels find . --where "score > 75 AND has(SSN)"
-    openlabels find s3://bucket --where "exposure = public"
+    openlabels find ./data --where "exposure = private"
 """
 
 import json
@@ -81,12 +81,7 @@ def format_find_result(result: ScanResult, format: str = "text") -> str:
 def cmd_find(args) -> int:
     """Execute the find command."""
     client = Client(default_exposure=args.exposure)
-    path = Path(args.path) if not args.path.startswith(('s3://', 'gs://', 'azure://')) else args.path
-
-    # Check for cloud paths
-    if isinstance(path, str):
-        print(f"Cloud storage not yet implemented: {path}", file=sys.stderr)
-        return 1
+    path = Path(args.path)
 
     if not path.exists():
         print(f"Error: Path not found: {path}", file=sys.stderr)
@@ -138,7 +133,7 @@ def add_find_parser(subparsers):
     )
     parser.add_argument(
         "path",
-        help="Path to search (file, directory, or cloud storage)",
+        help="Local path to search (file or directory)",
     )
     parser.add_argument(
         "--where", "-w",

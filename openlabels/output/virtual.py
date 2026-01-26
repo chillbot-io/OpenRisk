@@ -19,7 +19,7 @@ import logging
 import platform
 import subprocess
 from pathlib import Path
-from typing import Optional, Union, Tuple
+from typing import Optional, Union
 
 from ..core.labels import LabelSet, VirtualLabelPointer
 
@@ -29,6 +29,34 @@ logger = logging.getLogger(__name__)
 XATTR_LINUX = "user.openlabels"
 XATTR_MACOS = "com.openlabels.label"
 XATTR_WINDOWS_ADS = "openlabels"  # Stored as file.txt:openlabels
+
+# Dangerous characters that could enable shell injection
+SHELL_METACHARACTERS = frozenset(['`', '$', '|', ';', '&', '>', '<', '\n', '\r', '\x00'])
+
+
+def _validate_path_for_subprocess(path: str) -> bool:
+    """Validate path is safe for subprocess calls."""
+    if not path:
+        return False
+    if any(c in path for c in SHELL_METACHARACTERS):
+        return False
+    # Check path length (filesystem limits)
+    if len(path) > 4096:
+        return False
+    return True
+
+
+def _validate_xattr_value(value: str) -> bool:
+    """Validate xattr value is safe."""
+    if not value:
+        return False
+    # Reject shell metacharacters in values
+    if any(c in value for c in SHELL_METACHARACTERS):
+        return False
+    # Reasonable size limit for xattr values
+    if len(value) > 65536:
+        return False
+    return True
 
 
 def _get_platform() -> str:
@@ -54,14 +82,21 @@ class LinuxXattrHandler:
 
     def write(self, path: str, value: str) -> bool:
         """Write xattr value."""
-        # Try using xattr module first
+        if not _validate_path_for_subprocess(path):
+            logger.error(f"Invalid path for xattr write: {path[:100]}")
+            return False
+        if not _validate_xattr_value(value):
+            logger.error("Invalid value for xattr write")
+            return False
+
+        # Try using xattr module first (safer, no subprocess)
         try:
             import xattr
             xattr.setxattr(path, self.ATTR_NAME, value.encode('utf-8'))
             return True
         except ImportError:
             pass
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"xattr module failed: {e}")
 
         # Fallback to setfattr command
@@ -75,20 +110,24 @@ class LinuxXattrHandler:
         except FileNotFoundError:
             logger.error("setfattr not found. Install attr package.")
             return False
-        except Exception as e:
+        except OSError as e:
             logger.error(f"setfattr failed: {e}")
             return False
 
     def read(self, path: str) -> Optional[str]:
         """Read xattr value."""
-        # Try using xattr module first
+        if not _validate_path_for_subprocess(path):
+            logger.debug(f"Invalid path for xattr read: {path[:100]}")
+            return None
+
+        # Try using xattr module first (safer, no subprocess)
         try:
             import xattr
             value = xattr.getxattr(path, self.ATTR_NAME)
             return value.decode('utf-8')
         except ImportError:
             pass
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"xattr read failed for {path}: {e}")
 
         # Fallback to getfattr command
@@ -102,20 +141,24 @@ class LinuxXattrHandler:
                 return result.stdout.strip()
         except FileNotFoundError:
             logger.debug("getfattr not found")
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"getfattr failed for {path}: {e}")
 
         return None
 
     def remove(self, path: str) -> bool:
         """Remove xattr."""
+        if not _validate_path_for_subprocess(path):
+            logger.debug(f"Invalid path for xattr remove: {path[:100]}")
+            return False
+
         try:
             import xattr
             xattr.removexattr(path, self.ATTR_NAME)
             return True
         except ImportError:
             pass
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"xattr remove failed for {path}: {e}")
 
         try:
@@ -124,7 +167,7 @@ class LinuxXattrHandler:
                 capture_output=True,
             )
             return result.returncode == 0
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"setfattr remove failed for {path}: {e}")
             return False
 
@@ -140,6 +183,13 @@ class MacOSXattrHandler:
 
     def write(self, path: str, value: str) -> bool:
         """Write xattr value using macOS xattr command."""
+        if not _validate_path_for_subprocess(path):
+            logger.error(f"Invalid path for xattr write: {path[:100]}")
+            return False
+        if not _validate_xattr_value(value):
+            logger.error("Invalid value for xattr write")
+            return False
+
         try:
             result = subprocess.run(
                 ["xattr", "-w", self.ATTR_NAME, value, path],
@@ -147,12 +197,16 @@ class MacOSXattrHandler:
                 text=True,
             )
             return result.returncode == 0
-        except Exception as e:
+        except OSError as e:
             logger.error(f"macOS xattr write failed: {e}")
             return False
 
     def read(self, path: str) -> Optional[str]:
         """Read xattr value using macOS xattr command."""
+        if not _validate_path_for_subprocess(path):
+            logger.debug(f"Invalid path for xattr read: {path[:100]}")
+            return None
+
         try:
             result = subprocess.run(
                 ["xattr", "-p", self.ATTR_NAME, path],
@@ -161,19 +215,23 @@ class MacOSXattrHandler:
             )
             if result.returncode == 0:
                 return result.stdout.strip()
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"macOS xattr read failed for {path}: {e}")
         return None
 
     def remove(self, path: str) -> bool:
         """Remove xattr using macOS xattr command."""
+        if not _validate_path_for_subprocess(path):
+            logger.debug(f"Invalid path for xattr remove: {path[:100]}")
+            return False
+
         try:
             result = subprocess.run(
                 ["xattr", "-d", self.ATTR_NAME, path],
                 capture_output=True,
             )
             return result.returncode == 0
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"macOS xattr remove failed for {path}: {e}")
             return False
 
