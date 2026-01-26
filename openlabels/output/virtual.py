@@ -499,10 +499,31 @@ class AzureBlobMetadataHandler:
             return None
 
 
-# Cloud handler singletons
-s3_handler = S3MetadataHandler()
-gcs_handler = GCSMetadataHandler()
-azure_handler = AzureBlobMetadataHandler()
+# Cloud handler singletons (lazy-loaded)
+_s3_handler = None
+_gcs_handler = None
+_azure_handler = None
+
+
+def _get_s3_handler():
+    global _s3_handler
+    if _s3_handler is None:
+        _s3_handler = S3MetadataHandler()
+    return _s3_handler
+
+
+def _get_gcs_handler():
+    global _gcs_handler
+    if _gcs_handler is None:
+        _gcs_handler = GCSMetadataHandler()
+    return _gcs_handler
+
+
+def _get_azure_handler():
+    global _azure_handler
+    if _azure_handler is None:
+        _azure_handler = AzureBlobMetadataHandler()
+    return _azure_handler
 
 
 def write_cloud_label(
@@ -535,17 +556,17 @@ def write_cloud_label(
     if uri.startswith('s3://'):
         parts = uri[5:].split('/', 1)
         bucket, key = parts[0], parts[1] if len(parts) > 1 else ''
-        return s3_handler.write(bucket, key, value, kwargs.get('s3_client'))
+        return _get_s3_handler().write(bucket, key, value, kwargs.get('s3_client'))
 
     elif uri.startswith('gs://'):
         parts = uri[5:].split('/', 1)
         bucket, blob_name = parts[0], parts[1] if len(parts) > 1 else ''
-        return gcs_handler.write(bucket, blob_name, value, kwargs.get('gcs_client'))
+        return _get_gcs_handler().write(bucket, blob_name, value, kwargs.get('gcs_client'))
 
     elif uri.startswith('azure://'):
         parts = uri[8:].split('/', 1)
         container, blob_name = parts[0], parts[1] if len(parts) > 1 else ''
-        return azure_handler.write(
+        return _get_azure_handler().write(
             container, blob_name, value,
             kwargs.get('connection_string'),
         )
@@ -571,17 +592,17 @@ def read_cloud_label(uri: str, **kwargs) -> Optional[VirtualLabelPointer]:
     if uri.startswith('s3://'):
         parts = uri[5:].split('/', 1)
         bucket, key = parts[0], parts[1] if len(parts) > 1 else ''
-        value = s3_handler.read(bucket, key, kwargs.get('s3_client'))
+        value = _get_s3_handler().read(bucket, key, kwargs.get('s3_client'))
 
     elif uri.startswith('gs://'):
         parts = uri[5:].split('/', 1)
         bucket, blob_name = parts[0], parts[1] if len(parts) > 1 else ''
-        value = gcs_handler.read(bucket, blob_name, kwargs.get('gcs_client'))
+        value = _get_gcs_handler().read(bucket, blob_name, kwargs.get('gcs_client'))
 
     elif uri.startswith('azure://'):
         parts = uri[8:].split('/', 1)
         container, blob_name = parts[0], parts[1] if len(parts) > 1 else ''
-        value = azure_handler.read(
+        value = _get_azure_handler().read(
             container, blob_name,
             kwargs.get('connection_string'),
         )

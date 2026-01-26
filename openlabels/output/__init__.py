@@ -39,7 +39,6 @@ from .embed import (
     supports_embedded_labels,
     read_embedded_label,
     write_embedded_label,
-    EMBEDDED_LABEL_MATRIX,
 )
 
 # Virtual label operations
@@ -80,7 +79,6 @@ __all__ = [
     'supports_embedded_labels',
     'read_embedded_label',
     'write_embedded_label',
-    'EMBEDDED_LABEL_MATRIX',
 
     # Virtual
     'read_virtual_label',

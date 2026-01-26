@@ -14,7 +14,7 @@ from typing import Dict, Any, List, Optional
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days,
+    ExposureLevel, calculate_staleness_days, is_archive,
 )
 
 # Entity type mapping: Purview classification -> OpenLabels canonical types
@@ -94,17 +94,6 @@ ENTITY_MAP = {
     "MAC Address": "MAC_ADDRESS",
     "URL": "URL",
 }
-
-# Entity weights
-ENTITY_WEIGHTS = {
-    "SSN": 10, "CREDIT_CARD": 10, "PASSPORT": 9, "DRIVERS_LICENSE": 8,
-    "BANK_ACCOUNT": 8, "IBAN": 8, "AZURE_STORAGE_KEY": 10, "AZURE_SQL_CONNECTION": 10,
-    "PASSWORD": 10, "SECRET": 9, "EMAIL": 3, "PHONE": 3, "NAME": 4,
-    "ADDRESS": 5, "DOB": 6, "NPI": 6, "DEA": 7, "HICN": 7, "AADHAAR_IN": 10,
-}
-
-DEFAULT_WEIGHT = 5
-
 
 class PurviewAdapter:
     """
@@ -191,7 +180,6 @@ class PurviewAdapter:
 
             # Map to canonical type
             entity_type = ENTITY_MAP.get(purview_type, purview_type)
-            weight = ENTITY_WEIGHTS.get(entity_type, DEFAULT_WEIGHT)
 
             # Aggregate by type
             if entity_type in seen_types:
@@ -203,7 +191,6 @@ class PurviewAdapter:
                 seen_types[entity_type] = {
                     "count": count,
                     "confidence": confidence,
-                    "weight": weight,
                 }
 
         return [
@@ -211,7 +198,6 @@ class PurviewAdapter:
                 type=etype,
                 count=data["count"],
                 confidence=data["confidence"],
-                weight=data["weight"],
                 source="purview",
             )
             for etype, data in seen_types.items()
@@ -277,7 +263,7 @@ class PurviewAdapter:
             owner=meta.get("owner"),
             size_bytes=props.get("content_length", 0),
             file_type=props.get("content_type", ""),
-            is_archive=self._is_archive(meta.get("name", "")),
+            is_archive=is_archive(meta.get("name", "")),
         )
 
     def _determine_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
@@ -313,11 +299,6 @@ class PurviewAdapter:
             return "customer_managed"
 
         return "platform"
-
-    def _is_archive(self, name: str) -> bool:
-        """Check if file is an archive."""
-        archive_exts = {'.zip', '.tar', '.gz', '.tgz', '.tar.gz', '.7z', '.rar', '.bz2'}
-        return any(name.lower().endswith(ext) for ext in archive_exts)
 
 
 # =============================================================================

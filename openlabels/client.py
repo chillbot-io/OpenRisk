@@ -7,7 +7,7 @@ High-level API for scoring files and objects.
 from typing import Dict, List, Optional, Union
 from pathlib import Path
 
-from .adapters.base import Adapter, NormalizedInput, Entity
+from .adapters.base import Adapter, NormalizedInput
 from .core.scorer import ScoringResult, score as score_entities
 
 

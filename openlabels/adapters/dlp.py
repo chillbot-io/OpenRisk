@@ -14,7 +14,7 @@ from typing import Dict, Any, List, Optional
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days,
+    ExposureLevel, calculate_staleness_days, is_archive,
 )
 
 # Entity type mapping: GCP DLP infoType -> OpenLabels canonical types
@@ -106,17 +106,6 @@ ENTITY_MAP = {
     "LOCATION": "LOCATION",
 }
 
-# Entity weights
-ENTITY_WEIGHTS = {
-    "SSN": 10, "CREDIT_CARD": 10, "PASSPORT": 9, "DRIVERS_LICENSE": 8,
-    "BANK_ACCOUNT": 8, "IBAN": 8, "GCP_CREDENTIALS": 10, "AWS_ACCESS_KEY": 10,
-    "PASSWORD": 10, "JWT": 9, "EMAIL": 3, "PHONE": 3, "NAME": 4,
-    "ADDRESS": 5, "DOB": 6, "NPI": 6, "DEA": 7, "MBI": 7, "AADHAAR_IN": 10,
-}
-
-DEFAULT_WEIGHT = 5
-
-
 class DLPAdapter:
     """
     GCP DLP + GCS metadata adapter.
@@ -191,7 +180,6 @@ class DLPAdapter:
             # Map to canonical type
             entity_type = ENTITY_MAP.get(dlp_type, dlp_type)
             confidence = self._likelihood_to_confidence(likelihood)
-            weight = ENTITY_WEIGHTS.get(entity_type, DEFAULT_WEIGHT)
 
             # Aggregate by type (DLP reports each occurrence separately)
             if entity_type in seen_types:
@@ -203,7 +191,6 @@ class DLPAdapter:
                 seen_types[entity_type] = {
                     "count": 1,
                     "confidence": confidence,
-                    "weight": weight,
                 }
 
         return [
@@ -211,7 +198,6 @@ class DLPAdapter:
                 type=etype,
                 count=data["count"],
                 confidence=data["confidence"],
-                weight=data["weight"],
                 source="dlp",
             )
             for etype, data in seen_types.items()
@@ -266,7 +252,7 @@ class DLPAdapter:
             owner=meta.get("owner", {}).get("entity") if isinstance(meta.get("owner"), dict) else meta.get("owner"),
             size_bytes=int(meta.get("size", 0)),
             file_type=meta.get("contentType", ""),
-            is_archive=self._is_archive(meta.get("name", "")),
+            is_archive=is_archive(meta.get("name", "")),
         )
 
     def _determine_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
@@ -318,11 +304,6 @@ class DLPAdapter:
         if encryption.get("defaultKmsKeyName"):
             return "customer_managed"
         return "platform"
-
-    def _is_archive(self, name: str) -> bool:
-        """Check if file is an archive."""
-        archive_exts = {'.zip', '.tar', '.gz', '.tgz', '.tar.gz', '.7z', '.rar', '.bz2'}
-        return any(name.lower().endswith(ext) for ext in archive_exts)
 
 
 # =============================================================================
