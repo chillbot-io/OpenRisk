@@ -110,8 +110,8 @@ def test_score_from_adapters():
 
     # Create mock normalized input
     entities = [
-        Entity(type="SSN", count=1, confidence=0.95, weight=40, source="test"),
-        Entity(type="EMAIL", count=2, confidence=0.90, weight=10, source="test"),
+        Entity(type="SSN", count=1, confidence=0.95, source="test"),
+        Entity(type="EMAIL", count=2, confidence=0.90, source="test"),
     ]
     context = NormalizedContext(
         exposure="INTERNAL",
@@ -142,7 +142,7 @@ def test_score_from_adapters_merge():
 
     # First input - low count, low confidence
     entities1 = [
-        Entity(type="SSN", count=1, confidence=0.80, weight=40, source="adapter1"),
+        Entity(type="SSN", count=1, confidence=0.80, source="adapter1"),
     ]
     context1 = NormalizedContext(
         exposure="PRIVATE",
@@ -157,8 +157,8 @@ def test_score_from_adapters_merge():
 
     # Second input - higher count, higher confidence
     entities2 = [
-        Entity(type="SSN", count=3, confidence=0.95, weight=40, source="adapter2"),
-        Entity(type="CREDIT_CARD", count=2, confidence=0.90, weight=40, source="adapter2"),
+        Entity(type="SSN", count=3, confidence=0.95, source="adapter2"),
+        Entity(type="CREDIT_CARD", count=2, confidence=0.90, source="adapter2"),
     ]
     context2 = NormalizedContext(
         exposure="PUBLIC",  # Higher exposure
