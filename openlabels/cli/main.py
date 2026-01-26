@@ -259,15 +259,27 @@ Examples:
         add_scan_parser,
         add_find_parser,
         add_quarantine_parser,
+        add_move_parser,
+        add_delete_parser,
+        add_tag_parser,
+        add_encrypt_parser,
+        add_restrict_parser,
         add_report_parser,
         add_heatmap_parser,
+        add_shell_parser,
     )
 
     add_scan_parser(subparsers)
     add_find_parser(subparsers)
     add_quarantine_parser(subparsers)
+    add_move_parser(subparsers)
+    add_delete_parser(subparsers)
+    add_tag_parser(subparsers)
+    add_encrypt_parser(subparsers)
+    add_restrict_parser(subparsers)
     add_report_parser(subparsers)
     add_heatmap_parser(subparsers)
+    add_shell_parser(subparsers)
 
     # ==========================================================================
     # LEGACY DETECT COMMANDS
