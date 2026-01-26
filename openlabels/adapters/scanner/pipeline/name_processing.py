@@ -206,12 +206,10 @@ def normalize_name_types(spans: List[Span], text: str) -> List[Span]:
     - NAME_RELATIVE requires: family relationship terms
     - Otherwise → NAME (safe default)
     """
-    text_lower = text.lower()
-
     def has_context(span: Span, before_patterns: list, after_patterns: list = None) -> bool:
         """Check if span has matching context before or after."""
         before_start = max(0, span.start - NAME_CONTEXT_WINDOW)
-        before_text = text_lower[before_start:span.start]
+        before_text = text[before_start:span.start]
 
         for pattern in before_patterns:
             if pattern.search(before_text):
@@ -219,7 +217,7 @@ def normalize_name_types(spans: List[Span], text: str) -> List[Span]:
 
         if after_patterns:
             after_end = min(len(text), span.end + NAME_CONTEXT_WINDOW)
-            after_text = text_lower[span.end:after_end]
+            after_text = text[span.end:after_end]
 
             for pattern in after_patterns:
                 if pattern.search(after_text):

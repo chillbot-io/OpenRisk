@@ -108,7 +108,7 @@ def trim_span_whitespace(spans: List[Span], text: str) -> List[Span]:
     return result
 
 
-def trim_trailing_punctuation(spans: List[Span], text: str) -> List[Span]:
+def trim_trailing_punctuation(spans: List[Span]) -> List[Span]:
     """
     Trim trailing punctuation from spans where it doesn't belong.
 

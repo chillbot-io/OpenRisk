@@ -163,7 +163,7 @@ def merge_spans(
         spans = trim_names_at_newlines(spans, text)
         spans = trim_name_at_non_name_words(spans, text)
         spans = merge_adjacent_addresses(spans, text)
-        spans = trim_trailing_punctuation(spans, text)
+        spans = trim_trailing_punctuation(spans)
 
     # Step 6: Fix misclassified emails
     spans = fix_misclassified_emails(spans)
