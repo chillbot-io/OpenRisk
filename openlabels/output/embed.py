@@ -301,7 +301,8 @@ class ImageLabelWriter(EmbeddedLabelWriter):
 
         try:
             exif_dict = piexif.load(str(path))
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Could not load existing EXIF from {path}, creating new: {e}")
             exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}}
 
         # Store in UserComment (tag 37510)
@@ -330,8 +331,8 @@ class ImageLabelWriter(EmbeddedLabelWriter):
                     json_str = user_comment[8:].decode('utf-8')
                     if json_str.startswith('{"v":'):
                         return LabelSet.from_json(json_str)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not read EXIF label from {path}: {e}")
         return None
 
     def _write_pil_metadata(self, path: Path, label_set: LabelSet) -> bool:
@@ -377,8 +378,8 @@ class ImageLabelWriter(EmbeddedLabelWriter):
                 json_str = img.info['openlabels']
                 if json_str.startswith('{"v":'):
                     return LabelSet.from_json(json_str)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not read PIL label from {path}: {e}")
         return None
 
 

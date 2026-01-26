@@ -143,7 +143,7 @@ WEBP_SECONDARY_CHECK = (b"WEBP", 8)
 
 def detect_mime_from_magic_bytes(
     file_content: bytes,
-) -> str | None:
+) -> Optional[str]:
     """
     Detect MIME type from file content magic bytes.
 
@@ -238,9 +238,9 @@ def validate_magic_bytes(
     signatures = MAGIC_SIGNATURES.get(expected_mime)
     
     if signatures is None:
-        # Unknown MIME type - log warning but allow (fail open for unknown types)
-        logger.warning(f"No magic signature defined for MIME type: {expected_mime}")
-        return True
+        # Unknown MIME type - fail closed for security
+        logger.warning(f"No magic signature defined for MIME type: {expected_mime}, rejecting")
+        return False
     
     # Special handling for text formats (no magic bytes)
     if expected_mime in ("text/plain", "text/csv"):
@@ -426,7 +426,7 @@ def validate_file(
     size_bytes: int,
     file_path: Optional[Union[str, Path]] = None,
     file_content: Optional[bytes] = None,
-) -> str | None:
+) -> Optional[str]:
     """
     Validate file before processing.
 

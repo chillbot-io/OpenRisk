@@ -158,6 +158,7 @@ def cmd_detect_dir(args):
 
     total_entities = 0
     files_with_pii = 0
+    errors = 0
 
     for file_path in files:
         try:
@@ -182,6 +183,7 @@ def cmd_detect_dir(args):
                 print(f"{file_path}: clean")
 
         except Exception as e:
+            errors += 1
             if args.verbose:
                 print(f"Error processing {file_path}: {e}", file=sys.stderr)
 
@@ -190,6 +192,8 @@ def cmd_detect_dir(args):
         print(f"Scanned {len(files)} files")
         print(f"Files with PII/PHI: {files_with_pii}")
         print(f"Total entities found: {total_entities}")
+        if errors > 0:
+            print(f"Errors: {errors} file(s) failed to process")
 
     if args.fail_on_pii and files_with_pii > 0:
         sys.exit(1)

@@ -16,6 +16,7 @@ import json
 import sqlite3
 import logging
 import os
+import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Iterator
 from datetime import datetime
@@ -495,13 +496,17 @@ class LabelIndex:
 # =============================================================================
 
 _default_index: Optional[LabelIndex] = None
+_default_index_lock = threading.Lock()
 
 
 def get_default_index() -> LabelIndex:
-    """Get the default label index singleton."""
+    """Get the default label index singleton (thread-safe)."""
     global _default_index
     if _default_index is None:
-        _default_index = LabelIndex()
+        with _default_index_lock:
+            # Double-check inside lock
+            if _default_index is None:
+                _default_index = LabelIndex()
     return _default_index
 
 

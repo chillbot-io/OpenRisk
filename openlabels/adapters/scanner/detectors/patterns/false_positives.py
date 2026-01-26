@@ -127,6 +127,12 @@ def _is_fragment_with_fp_suffix(value: str, words: list) -> bool:
 
 
 def _is_city_state_pattern(value: str, words: list) -> bool:
+    """
+    Check if value looks like a city/state pattern (e.g., "Sacramento CA").
+
+    Returns True only when there's clear evidence of a city pattern,
+    not just any string ending in a state abbreviation.
+    """
     if len(words) < 2:
         return False
 
@@ -134,16 +140,27 @@ def _is_city_state_pattern(value: str, words: list) -> bool:
     if last_word.upper() not in _US_STATE_ABBREVS:
         return False
 
+    # Get words before the state abbreviation
+    before_state = words[:-1]
+
     if "," in value:
+        # With comma: "City, ST" or "City Name, ST"
         before_comma = value.rsplit(",", 1)[0].strip()
         before_words = before_comma.split()
 
         if len(before_words) == 1:
             return True
-        if len(before_words) == 2 and before_words[1].lower() in _CITY_WORDS:
+        if len(before_words) >= 2 and any(w.lower() in _CITY_WORDS for w in before_words):
             return True
     else:
-        return True
+        # Without comma: be conservative to avoid filtering real names
+        # Only match single-word cities or multi-word with city indicators
+        if len(before_state) == 1:
+            # Single word before state - likely a city (e.g., "Sacramento CA")
+            return True
+        # Multi-word: only if it contains a city-like word (e.g., "New York NY")
+        if any(w.lower() in _CITY_WORDS for w in before_state):
+            return True
 
     return False
 
