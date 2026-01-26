@@ -16,95 +16,8 @@ from .base import (
     Entity, NormalizedContext, NormalizedInput,
     ExposureLevel, calculate_staleness_days, is_archive,
 )
+from ..core.registry import normalize_type
 
-# Entity type mapping: GCP DLP infoType -> OpenLabels canonical types
-ENTITY_MAP = {
-    # US Identifiers
-    "US_SOCIAL_SECURITY_NUMBER": "SSN",
-    "US_PASSPORT": "PASSPORT",
-    "US_DRIVERS_LICENSE_NUMBER": "DRIVERS_LICENSE",
-    "US_INDIVIDUAL_TAXPAYER_IDENTIFICATION_NUMBER": "ITIN",
-    "US_EMPLOYER_IDENTIFICATION_NUMBER": "EIN",
-    "US_HEALTHCARE_NPI": "NPI",
-    "US_DEA_NUMBER": "DEA",
-
-    # Financial
-    "CREDIT_CARD_NUMBER": "CREDIT_CARD",
-    "CREDIT_CARD_TRACK_NUMBER": "CREDIT_CARD",
-    "US_BANK_ROUTING_MICR": "BANK_ROUTING",
-    "IBAN_CODE": "IBAN",
-    "SWIFT_CODE": "SWIFT",
-    "FINANCIAL_ACCOUNT_NUMBER": "BANK_ACCOUNT",
-
-    # Contact
-    "EMAIL_ADDRESS": "EMAIL",
-    "PHONE_NUMBER": "PHONE",
-    "PERSON_NAME": "NAME",
-    "FIRST_NAME": "NAME",
-    "LAST_NAME": "NAME",
-    "STREET_ADDRESS": "ADDRESS",
-
-    # Dates
-    "DATE_OF_BIRTH": "DOB",
-    "DATE": "DATE",
-    "TIME": "TIME",
-
-    # Health
-    "US_MEDICARE_BENEFICIARY_ID_NUMBER": "MBI",
-
-    # Credentials
-    "GCP_CREDENTIALS": "GCP_CREDENTIALS",
-    "AWS_CREDENTIALS": "AWS_ACCESS_KEY",
-    "AZURE_AUTH_TOKEN": "AZURE_AUTH_TOKEN",
-    "AUTH_TOKEN": "AUTH_TOKEN",
-    "ENCRYPTION_KEY": "ENCRYPTION_KEY",
-    "PASSWORD": "PASSWORD",
-    "XSRF_TOKEN": "XSRF_TOKEN",
-    "HTTP_COOKIE": "HTTP_COOKIE",
-    "JSON_WEB_TOKEN": "JWT",
-
-    # International
-    "CANADA_SOCIAL_INSURANCE_NUMBER": "SIN_CA",
-    "CANADA_BC_PHN": "HEALTH_NUMBER_CA",
-    "CANADA_OHIP": "HEALTH_NUMBER_CA",
-    "CANADA_PASSPORT": "PASSPORT_CA",
-    "UK_NATIONAL_INSURANCE_NUMBER": "NINO_UK",
-    "UK_NHS_NUMBER": "NHS_UK",
-    "UK_PASSPORT": "PASSPORT_UK",
-    "UK_TAXPAYER_REFERENCE": "UTR_UK",
-    "FRANCE_CNI": "CNI_FR",
-    "FRANCE_NIR": "INSEE_FR",
-    "FRANCE_PASSPORT": "PASSPORT_FR",
-    "GERMANY_IDENTITY_CARD_NUMBER": "PERSONALAUSWEIS_DE",
-    "GERMANY_PASSPORT": "PASSPORT_DE",
-    "ITALY_FISCAL_CODE": "CODICE_FISCALE_IT",
-    "SPAIN_DNI_NUMBER": "DNI_ES",
-    "SPAIN_NIE_NUMBER": "NIE_ES",
-    "BRAZIL_CPF_NUMBER": "CPF_BR",
-    "JAPAN_MY_NUMBER": "MY_NUMBER_JP",
-    "CHINA_RESIDENT_ID_NUMBER": "RESIDENT_ID_CN",
-    "INDIA_AADHAAR_INDIVIDUAL": "AADHAAR_IN",
-    "INDIA_PAN_INDIVIDUAL": "PAN_IN",
-    "AUSTRALIA_TAX_FILE_NUMBER": "TFN_AU",
-    "AUSTRALIA_MEDICARE_NUMBER": "MEDICARE_AU",
-    "MEXICO_CURP_NUMBER": "CURP_MX",
-
-    # Network/Technical
-    "IP_ADDRESS": "IP_ADDRESS",
-    "MAC_ADDRESS": "MAC_ADDRESS",
-    "IMEI_HARDWARE_ID": "IMEI",
-    "URL": "URL",
-    "DOMAIN_NAME": "DOMAIN",
-
-    # Vehicle
-    "VEHICLE_IDENTIFICATION_NUMBER": "VIN",
-
-    # Generic
-    "AGE": "AGE",
-    "GENDER": "GENDER",
-    "ETHNIC_GROUP": "ETHNICITY",
-    "LOCATION": "LOCATION",
-}
 
 class DLPAdapter:
     """
@@ -178,7 +91,7 @@ class DLPAdapter:
             likelihood = finding.get("likelihood", "POSSIBLE")
 
             # Map to canonical type
-            entity_type = ENTITY_MAP.get(dlp_type, dlp_type)
+            entity_type = normalize_type(dlp_type, source="dlp")
             confidence = self._likelihood_to_confidence(likelihood)
 
             # Aggregate by type (DLP reports each occurrence separately)

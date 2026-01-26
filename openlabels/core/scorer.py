@@ -4,17 +4,19 @@ OpenLabels Scoring Engine.
 Computes risk scores from detected entities and exposure context.
 
 Formula:
-    content_score = Σ(weight × (1 + ln(count)) × confidence)
+    content_score = Σ(weight × WEIGHT_SCALE × (1 + ln(count)) × confidence)
     content_score *= co_occurrence_multiplier
     final_score = min(100, content_score × exposure_multiplier)
 
-Calibration: January 2026 (see calibration/CALIBRATION_RESULTS.md)
+Weights are sourced from registry.py (1-10 scale) and scaled for scoring.
 """
 
 from typing import List, Dict, Set, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import math
+
+from .registry import get_weight as registry_get_weight, get_category as registry_get_category
 
 
 class RiskTier(Enum):
@@ -30,117 +32,27 @@ class RiskTier(Enum):
 # CALIBRATED PARAMETERS (January 2026)
 # =============================================================================
 
-# Entity weights - calibrated so single SSN/CC = Medium tier
-ENTITY_WEIGHTS = {
-    # Direct Identifiers
-    'ssn': 40,
-    'passport': 38,
-    'drivers_license': 32,
-    'tax_id': 36,
-    'aadhaar': 40,
-    'national_id': 38,
+# Scale factor: converts registry weights (1-10) to scoring weights
+# Calibrated so single SSN (weight=10) at PRIVATE = Medium tier (~40)
+WEIGHT_SCALE = 4.0
 
-    # Financial
-    'credit_card': 40,
-    'bank_account': 25,
-    'routing_number': 15,
-    'iban': 25,
-    'swift': 15,
-
-    # Medical/Health (HIPAA)
-    'mrn': 28,
-    'diagnosis': 25,
-    'medication': 20,
-    'procedure': 20,
-    'lab_result': 22,
-    'health_plan_id': 18,
-
-    # Personal Identifiers
-    'full_name': 12,
-    'physical_address': 15,
-    'email': 10,
-    'phone': 10,
-    'ip_address': 8,
-    'date_of_birth': 18,
-
-    # Quasi-identifiers
-    'age': 5,
-    'gender': 4,
-    'postal_code': 6,
-    'ethnicity': 8,
-
-    # Credentials/Secrets
-    'api_key': 70,
-    'password': 70,
-    'private_key': 80,
-    'access_token': 65,
-    'aws_key': 75,
-    'secret_key': 70,
-
-    # Classification markings
-    'classification_marking': 90,
-}
-
-DEFAULT_WEIGHT = 10
-
-# Entity categories for co-occurrence detection
-ENTITY_CATEGORIES = {
-    # Direct identifiers
-    'ssn': 'direct_id',
-    'passport': 'direct_id',
-    'drivers_license': 'direct_id',
-    'tax_id': 'direct_id',
-    'aadhaar': 'direct_id',
-    'national_id': 'direct_id',
-
-    # Financial
-    'credit_card': 'financial',
-    'bank_account': 'financial',
-    'routing_number': 'financial',
-    'iban': 'financial',
-    'swift': 'financial',
-
-    # Health/Medical
-    'mrn': 'health',
-    'diagnosis': 'health',
-    'medication': 'health',
-    'procedure': 'health',
-    'lab_result': 'health',
-    'health_plan_id': 'health',
-
-    # Personal
-    'full_name': 'personal',
-    'physical_address': 'personal',
-    'date_of_birth': 'personal',
-    'email': 'personal',
-    'phone': 'personal',
-
-    # Credentials
-    'api_key': 'credentials',
-    'password': 'credentials',
-    'private_key': 'credentials',
-    'access_token': 'credentials',
-    'aws_key': 'credentials',
-    'secret_key': 'credentials',
-
-    # Classification
-    'classification_marking': 'classified',
-}
-
-# Co-occurrence rules: (required_categories, multiplier)
+# Co-occurrence rules: (required_categories, multiplier, rule_name)
+# Categories from registry: direct_identifier, health_info, financial, credential, etc.
 CO_OCCURRENCE_RULES: List[Tuple[Set[str], float, str]] = [
     # HIPAA: Direct ID + Health data
-    ({'direct_id', 'health'}, 2.0, 'hipaa_phi'),
+    ({'direct_identifier', 'health_info'}, 2.0, 'hipaa_phi'),
     # Identity theft: Direct ID + Financial
-    ({'direct_id', 'financial'}, 1.8, 'identity_theft'),
+    ({'direct_identifier', 'financial'}, 1.8, 'identity_theft'),
     # Credentials always risky
-    ({'credentials'}, 1.5, 'credential_exposure'),
+    ({'credential'}, 1.5, 'credential_exposure'),
     # Personal + Health (even without direct ID)
-    ({'personal', 'health'}, 1.5, 'phi_without_id'),
+    ({'quasi_identifier', 'health_info'}, 1.5, 'phi_without_id'),
+    # Contact + Health
+    ({'contact', 'health_info'}, 1.4, 'phi_with_contact'),
     # Full identity package
-    ({'direct_id', 'personal', 'financial'}, 2.2, 'full_identity'),
+    ({'direct_identifier', 'quasi_identifier', 'financial'}, 2.2, 'full_identity'),
     # Classified data
-    ({'classified'}, 2.5, 'classified_data'),
+    ({'classification_marking'}, 2.5, 'classified_data'),
 ]
 
 # Tier thresholds
@@ -189,17 +101,19 @@ class ScoringResult:
         }
 
 
-def get_entity_weight(entity_type: str) -> int:
-    """Get weight for an entity type."""
-    return ENTITY_WEIGHTS.get(entity_type.lower(), DEFAULT_WEIGHT)
+def get_entity_weight(entity_type: str) -> float:
+    """Get calibrated weight for an entity type."""
+    # Registry uses 1-10 scale, we scale up for scoring formula
+    raw_weight = registry_get_weight(entity_type.upper())
+    return raw_weight * WEIGHT_SCALE
 
 
 def get_categories(entities: Dict[str, int]) -> Set[str]:
     """Get set of categories present in entities."""
     categories = set()
     for entity_type in entities:
-        cat = ENTITY_CATEGORIES.get(entity_type.lower())
-        if cat:
+        cat = registry_get_category(entity_type.upper())
+        if cat and cat != "unknown":
             categories.add(cat)
     return categories
 
@@ -326,14 +240,14 @@ def score(
 # =============================================================================
 
 if __name__ == '__main__':
-    # Test cases
+    # Test cases - using canonical uppercase entity types
     tests = [
         ({}, 'PRIVATE', 'Empty'),
-        ({'ssn': 1}, 'PRIVATE', 'Single SSN (private)'),
-        ({'ssn': 1}, 'PUBLIC', 'Single SSN (public)'),
-        ({'ssn': 1, 'diagnosis': 1}, 'PRIVATE', 'HIPAA combo'),
-        ({'api_key': 1}, 'PRIVATE', 'API key'),
-        ({'email': 1, 'phone': 1}, 'PRIVATE', 'Contact info'),
+        ({'SSN': 1}, 'PRIVATE', 'Single SSN (private)'),
+        ({'SSN': 1}, 'PUBLIC', 'Single SSN (public)'),
+        ({'SSN': 1, 'DIAGNOSIS': 1}, 'PRIVATE', 'HIPAA combo'),
+        ({'API_KEY': 1}, 'PRIVATE', 'API key'),
+        ({'EMAIL': 1, 'PHONE': 1}, 'PRIVATE', 'Contact info'),
     ]
 
     print("OpenLabels Scorer Test")

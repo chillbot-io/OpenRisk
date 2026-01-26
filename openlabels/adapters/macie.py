@@ -17,55 +17,8 @@ from .base import (
     Entity, NormalizedContext, NormalizedInput,
     ExposureLevel, calculate_staleness_days, is_archive,
 )
+from ..core.registry import normalize_type
 
-# Entity type mapping: Macie -> OpenLabels canonical types
-ENTITY_MAP = {
-    # Credentials
-    "AWS_CREDENTIALS": "AWS_ACCESS_KEY",
-    "OPENSSH_PRIVATE_KEY": "PRIVATE_KEY",
-    "PGP_PRIVATE_KEY": "PRIVATE_KEY",
-    "PKCS": "PRIVATE_KEY",
-
-    # Financial
-    "CREDIT_CARD_NUMBER": "CREDIT_CARD",
-    "BANK_ACCOUNT_NUMBER": "BANK_ACCOUNT",
-
-    # US Identifiers
-    "USA_SOCIAL_SECURITY_NUMBER": "SSN",
-    "USA_PASSPORT_NUMBER": "PASSPORT",
-    "USA_DRIVERS_LICENSE": "DRIVERS_LICENSE",
-    "USA_INDIVIDUAL_TAX_IDENTIFICATION_NUMBER": "ITIN",
-    "USA_EMPLOYER_IDENTIFICATION_NUMBER": "EIN",
-    "USA_HEALTH_INSURANCE_CLAIM_NUMBER": "HICN",
-    "USA_MEDICARE_BENEFICIARY_IDENTIFIER": "MBI",
-    "USA_NATIONAL_PROVIDER_IDENTIFIER": "NPI",
-    "USA_DRUG_ENFORCEMENT_AGENCY_NUMBER": "DEA",
-    "USA_NATIONAL_DRUG_CODE": "NDC",
-
-    # Contact info
-    "EMAIL_ADDRESS": "EMAIL",
-    "PHONE_NUMBER": "PHONE",
-    "ADDRESS": "ADDRESS",
-    "NAME": "NAME",
-
-    # Dates
-    "DATE_OF_BIRTH": "DOB",
-
-    # Vehicle
-    "VEHICLE_IDENTIFICATION_NUMBER": "VIN",
-
-    # International
-    "CA_SOCIAL_INSURANCE_NUMBER": "SIN_CA",
-    "CA_HEALTH_NUMBER": "HEALTH_NUMBER_CA",
-    "UK_NATIONAL_INSURANCE_NUMBER": "NINO_UK",
-    "UK_NATIONAL_HEALTH_SERVICE_NUMBER": "NHS_UK",
-    "UK_UNIQUE_TAXPAYER_REFERENCE": "UTR_UK",
-    "FRANCE_NATIONAL_IDENTIFICATION_NUMBER": "INSEE_FR",
-    "GERMANY_NATIONAL_IDENTIFICATION_NUMBER": "PERSONALAUSWEIS_DE",
-    "ITALY_NATIONAL_IDENTIFICATION_NUMBER": "CODICE_FISCALE_IT",
-    "SPAIN_NATIONAL_IDENTIFICATION_NUMBER": "DNI_ES",
-    "BRAZIL_CPF_NUMBER": "CPF_BR",
-}
 
 class MacieAdapter:
     """
@@ -152,7 +105,7 @@ class MacieAdapter:
                     count = detection.get("count", 1)
 
                     # Map to canonical type
-                    entity_type = ENTITY_MAP.get(macie_type, macie_type)
+                    entity_type = normalize_type(macie_type, source="macie")
                     confidence = self._severity_to_confidence(severity_score)
 
                     # Aggregate by type

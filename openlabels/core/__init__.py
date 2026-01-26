@@ -5,8 +5,16 @@ Scoring engine, entity registry, and label primitives.
 The scoring standard, independent of any scanner.
 """
 
-from .registry import get_weight, get_category, normalize_type, ENTITY_REGISTRY
-from .scorer import score, ScoringResult
+from .registry import (
+    get_weight,
+    get_category,
+    normalize_type,
+    is_known_type,
+    ENTITY_WEIGHTS,
+    ENTITY_CATEGORIES,
+    VENDOR_ALIASES,
+)
+from .scorer import score, ScoringResult, RiskTier
 from .labels import (
     # Label ID and hashing
     generate_label_id,
@@ -29,10 +37,14 @@ __all__ = [
     "get_weight",
     "get_category",
     "normalize_type",
-    "ENTITY_REGISTRY",
+    "is_known_type",
+    "ENTITY_WEIGHTS",
+    "ENTITY_CATEGORIES",
+    "VENDOR_ALIASES",
     # Scoring
     "score",
     "ScoringResult",
+    "RiskTier",
     # Labels
     "generate_label_id",
     "compute_content_hash",
