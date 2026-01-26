@@ -15,7 +15,7 @@ from typing import Dict, Any, List, Optional
 
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days, is_archive,
+    ExposureLevel, EntityAggregator, calculate_staleness_days, is_archive,
 )
 from ..core.registry import normalize_type
 
@@ -85,47 +85,25 @@ class MacieAdapter:
 
     def _extract_entities(self, findings: Dict[str, Any]) -> List[Entity]:
         """Extract entities from Macie findings."""
-        entities = []
-        seen_types: Dict[str, Entity] = {}
+        aggregator = EntityAggregator("macie")
 
         for finding in findings.get("findings", []):
             severity = finding.get("severity", {})
             severity_score = severity.get("score", 2) if isinstance(severity, dict) else 2
 
-            # Get classification details
             class_details = finding.get("classificationDetails", {})
             result = class_details.get("result", {})
             sensitive_data = result.get("sensitiveData", [])
 
             for category_data in sensitive_data:
-                detections = category_data.get("detections", [])
-
-                for detection in detections:
+                for detection in category_data.get("detections", []):
                     macie_type = detection.get("type", "UNKNOWN")
                     count = detection.get("count", 1)
-
-                    # Map to canonical type
                     entity_type = normalize_type(macie_type, source="macie")
                     confidence = self._severity_to_confidence(severity_score)
+                    aggregator.add(entity_type, count=count, confidence=confidence)
 
-                    # Aggregate by type
-                    if entity_type in seen_types:
-                        existing = seen_types[entity_type]
-                        seen_types[entity_type] = Entity(
-                            type=entity_type,
-                            count=existing.count + count,
-                            confidence=max(existing.confidence, confidence),
-                            source="macie",
-                        )
-                    else:
-                        seen_types[entity_type] = Entity(
-                            type=entity_type,
-                            count=count,
-                            confidence=confidence,
-                            source="macie",
-                        )
-
-        return list(seen_types.values())
+        return aggregator.to_entities()
 
     def _severity_to_confidence(self, severity_score: int) -> float:
         """

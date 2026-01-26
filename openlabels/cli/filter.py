@@ -33,6 +33,26 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 
+# Exposure level ordinal values for comparison
+# Maps exposure level names to comparable integers
+# "over_exposed" is kept as legacy alias for "org_wide"
+EXPOSURE_LEVEL_VALUES = {
+    "private": 0,
+    "internal": 1,
+    "org_wide": 2,
+    "over_exposed": 2,  # Legacy alias
+    "public": 3,
+}
+
+# Duration multipliers (in days)
+DURATION_MULTIPLIERS = {
+    "d": 1,      # days
+    "w": 7,      # weeks
+    "m": 30,     # months (approximate)
+    "y": 365,    # years (approximate)
+}
+
+
 class TokenType(Enum):
     """Token types for the filter parser."""
     FIELD = "field"
@@ -136,13 +156,9 @@ class Condition:
             if re.match(r'^\d+[dwmy]$', value):
                 return self._duration_to_days(value)
             # Handle exposure levels
-            exposure_values = {
-                "private": 0, "internal": 1,
-                "org_wide": 2, "over_exposed": 2, "public": 3
-            }
             lower = value.lower()
-            if lower in exposure_values:
-                return exposure_values[lower]
+            if lower in EXPOSURE_LEVEL_VALUES:
+                return EXPOSURE_LEVEL_VALUES[lower]
             # Try numeric conversion
             try:
                 return float(value)
@@ -158,16 +174,7 @@ class Condition:
 
         num = int(match.group(1))
         unit = match.group(2)
-
-        if unit == 'd':
-            return num
-        elif unit == 'w':
-            return num * 7
-        elif unit == 'm':
-            return num * 30
-        elif unit == 'y':
-            return num * 365
-        return 0
+        return num * DURATION_MULTIPLIERS.get(unit, 0)
 
 
 @dataclass
@@ -216,18 +223,26 @@ class Filter:
 
 
 class FilterParser:
-    """Parser for filter expressions."""
+    """
+    Recursive descent parser for filter expressions.
 
-    FIELDS = {
+    Implements the grammar defined in the module docstring.
+    Uses simple character-by-character parsing with lookahead.
+    """
+
+    # Valid field names for filter conditions
+    FIELDS = frozenset({
         "score", "exposure", "encryption", "last_accessed",
         "last_modified", "size", "entity_count", "source",
         "staleness_days", "tier", "path", "owner", "file_type",
-    }
+    })
 
-    OPERATORS = {"=", "!=", ">", "<", ">=", "<=", "contains", "matches"}
+    # Comparison operators
+    OPERATORS = frozenset({"=", "!=", ">", "<", ">=", "<=", "contains", "matches"})
 
-    EXPOSURE_VALUES = {"public", "org_wide", "over_exposed", "internal", "private"}
-    ENCRYPTION_VALUES = {"none", "platform", "customer_managed"}
+    # Valid enum values (derived from module constants)
+    EXPOSURE_VALUES = frozenset(EXPOSURE_LEVEL_VALUES.keys())
+    ENCRYPTION_VALUES = frozenset({"none", "platform", "customer_managed"})
 
     def __init__(self, expression: str):
         self.expression = expression.strip()

@@ -139,10 +139,11 @@ TIER_THRESHOLDS = {
 }
 
 # Exposure multipliers (applied after content scoring)
+# Keys match ExposureLevel enum names (lowercase)
 EXPOSURE_MULTIPLIERS = {
     'private': 1.0,
     'internal': 1.2,
-    'over_exposed': 1.8,
+    'org_wide': 1.8,  # Consistent with adapters (was incorrectly 'over_exposed')
     'public': 2.5,
 }
 

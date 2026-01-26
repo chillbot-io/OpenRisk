@@ -1,17 +1,15 @@
 """
 OpenLabels move command.
 
-Move files matching filter criteria to a new location.
+Move local files matching filter criteria to a new location.
 
 Usage:
     openlabels move <source> --where "<filter>" --to <dest>
     openlabels move ./data --where "score < 20" --to ./archive
 """
 
-import shutil
 import sys
 from pathlib import Path
-from typing import Optional
 
 from openlabels import Client
 from openlabels.cli.commands.find import find_matching
@@ -28,13 +26,8 @@ def cmd_move(args) -> int:
         print("Error: --to destination is required", file=sys.stderr)
         return 1
 
-    source = Path(args.source) if not args.source.startswith(('s3://', 'gs://', 'azure://')) else args.source
-    dest = Path(args.to) if not args.to.startswith(('s3://', 'gs://', 'azure://')) else args.to
-
-    # Check for cloud paths
-    if isinstance(source, str) or isinstance(dest, str):
-        print("Cloud storage move not yet implemented", file=sys.stderr)
-        return 1
+    source = Path(args.source)
+    dest = Path(args.to)
 
     if not source.exists():
         print(f"Error: Source not found: {source}", file=sys.stderr)
@@ -128,7 +121,7 @@ def add_move_parser(subparsers):
     )
     parser.add_argument(
         "source",
-        help="Source path to search",
+        help="Local source path to search",
     )
     parser.add_argument(
         "--where", "-w",
@@ -138,7 +131,7 @@ def add_move_parser(subparsers):
     parser.add_argument(
         "--to", "-t",
         required=True,
-        help="Destination directory",
+        help="Local destination directory",
     )
     parser.add_argument(
         "--recursive", "-r",

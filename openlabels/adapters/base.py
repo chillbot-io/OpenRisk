@@ -15,135 +15,19 @@ class ExposureLevel(Enum):
     """
     Normalized exposure levels across all platforms.
 
-    PERMISSION MAPPING BY PLATFORM:
+    Levels:
+        PRIVATE (0): Only owner or explicitly named principals
+        INTERNAL (1): Same organization/tenant, requires authentication
+        ORG_WIDE (2): Overly broad access (all authenticated, large groups)
+        PUBLIC (3): Anonymous access, no authentication required
 
-    ┌─────────────┬──────────────────────────────────────────────────────────────┐
-    │ Level       │ Description                                                  │
-    ├─────────────┼──────────────────────────────────────────────────────────────┤
-    │ PRIVATE (0) │ Only owner or explicitly named principals                    │
-    │ INTERNAL(1) │ Same organization/tenant, requires authentication            │
-    │ ORG_WIDE(2) │ Overly broad access (all authenticated, large groups)        │
-    │ PUBLIC (3)  │ Anonymous access, no authentication required                 │
-    └─────────────┴──────────────────────────────────────────────────────────────┘
-
-    AWS S3 PERMISSIONS → EXPOSURE LEVEL:
-    ┌────────────────────────────────────────────┬─────────────┐
-    │ S3 Permission                              │ Level       │
-    ├────────────────────────────────────────────┼─────────────┤
-    │ ACL: private                               │ PRIVATE     │
-    │ ACL: bucket-owner-full-control             │ PRIVATE     │
-    │ ACL: bucket-owner-read                     │ PRIVATE     │
-    │ ACL: aws-exec-read                         │ INTERNAL    │
-    │ ACL: log-delivery-write                    │ INTERNAL    │
-    │ ACL: authenticated-read                    │ ORG_WIDE    │
-    │ ACL: public-read                           │ PUBLIC      │
-    │ ACL: public-read-write                     │ PUBLIC      │
-    │ Policy: Principal="*" (no Condition)       │ PUBLIC      │
-    │ Policy: Principal="*" + aws:SourceArn      │ INTERNAL    │
-    │ Cross-account access                       │ ORG_WIDE    │
-    │ Website hosting enabled                    │ PUBLIC      │
-    │ Public Access Block: all enabled           │ blocks→PRIV │
-    └────────────────────────────────────────────┴─────────────┘
-
-    GCP GCS PERMISSIONS → EXPOSURE LEVEL:
-    ┌────────────────────────────────────────────┬─────────────┐
-    │ GCS Permission                             │ Level       │
-    ├────────────────────────────────────────────┼─────────────┤
-    │ IAM: specific user/serviceAccount          │ PRIVATE     │
-    │ IAM: projectViewer/Editor/Owner            │ INTERNAL    │
-    │ IAM: group:*@domain.com                    │ INTERNAL    │
-    │ IAM: domain:domain.com                     │ INTERNAL    │
-    │ IAM: allAuthenticatedUsers                 │ ORG_WIDE    │
-    │ IAM: allUsers                              │ PUBLIC      │
-    │ ACL entity: user-* / group-*               │ PRIVATE     │
-    │ ACL entity: project-*                      │ INTERNAL    │
-    │ ACL entity: allAuthenticatedUsers          │ ORG_WIDE    │
-    │ ACL entity: allUsers                       │ PUBLIC      │
-    │ Cross-project service account access       │ ORG_WIDE    │
-    │ publicAccessPrevention: enforced           │ blocks→PRIV │
-    └────────────────────────────────────────────┴─────────────┘
-
-    AZURE BLOB PERMISSIONS → EXPOSURE LEVEL:
-    ┌────────────────────────────────────────────┬─────────────┐
-    │ Azure Blob Permission                      │ Level       │
-    ├────────────────────────────────────────────┼─────────────┤
-    │ access_level: private                      │ PRIVATE     │
-    │ RBAC: specific user/service principal      │ PRIVATE     │
-    │ RBAC: Owner/Contributor (resource scope)   │ INTERNAL    │
-    │ access_level: blob (blob-level anonymous)  │ ORG_WIDE    │
-    │ SAS token: limited scope + expiry          │ INTERNAL    │
-    │ SAS token: broad scope / no expiry         │ ORG_WIDE    │
-    │ access_level: container                    │ PUBLIC      │
-    │ SAS token: publicly shared                 │ PUBLIC      │
-    │ Cross-tenant access                        │ ORG_WIDE    │
-    │ Network rules: default=Allow               │ ORG_WIDE    │
-    │ Network rules: default=Deny + VNet rules   │ INTERNAL    │
-    │ Private endpoint only                      │ PRIVATE     │
-    └────────────────────────────────────────────┴─────────────┘
-
-    NTFS (WINDOWS) PERMISSIONS → EXPOSURE LEVEL:
-    ┌────────────────────────────────────────────┬─────────────┐
-    │ NTFS Permission                            │ Level       │
-    ├────────────────────────────────────────────┼─────────────┤
-    │ Owner only                                 │ PRIVATE     │
-    │ Specific user/group ACE                    │ PRIVATE     │
-    │ CREATOR OWNER                              │ PRIVATE     │
-    │ Domain Admins                              │ INTERNAL    │
-    │ Domain Users                               │ INTERNAL    │
-    │ Authenticated Users (domain)               │ INTERNAL    │
-    │ BUILTIN\\Users                             │ ORG_WIDE    │
-    │ Everyone (authenticated context)           │ ORG_WIDE    │
-    │ Anonymous Logon                            │ PUBLIC      │
-    │ Everyone (+ anonymous enabled)             │ PUBLIC      │
-    │ NULL SID                                   │ PUBLIC      │
-    │ Network share: Everyone Full Control       │ PUBLIC      │
-    │ Inherited broad permissions                │ ORG_WIDE    │
-    └────────────────────────────────────────────┴─────────────┘
-
-    NFS PERMISSIONS → EXPOSURE LEVEL:
-    ┌────────────────────────────────────────────┬─────────────┐
-    │ NFS Permission                             │ Level       │
-    ├────────────────────────────────────────────┼─────────────┤
-    │ root_squash + specific UID/GID             │ PRIVATE     │
-    │ Single host export (/path host)            │ PRIVATE     │
-    │ Kerberos auth (sec=krb5/krb5i/krb5p)       │ INTERNAL    │
-    │ Subnet export (/path 10.0.0.0/24)          │ INTERNAL    │
-    │ all_squash + anonuid mapping               │ INTERNAL    │
-    │ Large subnet (/16 or broader)              │ ORG_WIDE    │
-    │ no_root_squash                             │ ORG_WIDE    │
-    │ sec=sys (AUTH_SYS, UID trust)              │ ORG_WIDE    │
-    │ Export: * (all hosts)                      │ PUBLIC      │
-    │ insecure option (non-privileged ports)     │ PUBLIC      │
-    │ World-readable (mode 755/644) + * export   │ PUBLIC      │
-    │ no_auth_nlm                                │ PUBLIC      │
-    └────────────────────────────────────────────┴─────────────┘
-
-    M365 (SHAREPOINT/ONEDRIVE) PERMISSIONS → EXPOSURE LEVEL:
-    ┌────────────────────────────────────────────┬─────────────┐
-    │ M365 Permission                            │ Level       │
-    ├────────────────────────────────────────────┼─────────────┤
-    │ Specific users (direct permission)         │ PRIVATE     │
-    │ "Only people with existing access"         │ PRIVATE     │
-    │ Private channel membership                 │ PRIVATE     │
-    │ Security group (scoped)                    │ INTERNAL    │
-    │ "People in your organization" link         │ INTERNAL    │
-    │ M365 Group / Team membership               │ INTERNAL    │
-    │ Site collection scoped                     │ INTERNAL    │
-    │ "People in <org> with the link"            │ ORG_WIDE    │
-    │ "Anyone in org" (all employees)            │ ORG_WIDE    │
-    │ External sharing: specific guests          │ ORG_WIDE    │
-    │ External sharing: existing guests          │ ORG_WIDE    │
-    │ "Anyone with the link" (sign-in req)       │ ORG_WIDE    │
-    │ "Anyone with the link" (no sign-in)        │ PUBLIC      │
-    │ Anonymous guest links                      │ PUBLIC      │
-    │ Public site / Public CDN                   │ PUBLIC      │
-    │ Forms: anyone can respond                  │ PUBLIC      │
-    └────────────────────────────────────────────┴─────────────┘
+    For detailed platform-specific permission mappings (AWS S3, GCS, Azure,
+    NTFS, NFS, M365), see docs/exposure-level-mappings.md
     """
-    PRIVATE = 0       # Only owner/specific principals
-    INTERNAL = 1      # Same org/tenant
-    ORG_WIDE = 2      # Too broad (authenticated users, large groups)
-    PUBLIC = 3        # Anyone, anonymous
+    PRIVATE = 0
+    INTERNAL = 1
+    ORG_WIDE = 2
+    PUBLIC = 3
 
 
 @dataclass
@@ -253,3 +137,74 @@ def is_archive(filename: str) -> bool:
     """Check if file is an archive based on extension."""
     filename_lower = filename.lower()
     return any(filename_lower.endswith(ext) for ext in ARCHIVE_EXTENSIONS)
+
+
+# =============================================================================
+# ENTITY AGGREGATION HELPERS
+# =============================================================================
+
+class EntityAggregator:
+    """
+    Helper class for aggregating entities by type.
+
+    Used by adapters to deduplicate and combine entity detections.
+    Follows "most permissive wins" - keeps highest count and confidence.
+
+    Example:
+        >>> agg = EntityAggregator("macie")
+        >>> agg.add("SSN", count=3, confidence=0.85)
+        >>> agg.add("SSN", count=2, confidence=0.95)  # Aggregates
+        >>> entities = agg.to_entities()
+        >>> # Returns [Entity(type="SSN", count=5, confidence=0.95, source="macie")]
+    """
+
+    def __init__(self, source: str):
+        """Initialize aggregator with source name."""
+        self.source = source
+        self._types: dict = {}
+
+    def add(
+        self,
+        entity_type: str,
+        count: int = 1,
+        confidence: float = 0.8,
+        positions: Optional[List[Tuple[int, int]]] = None,
+    ) -> None:
+        """
+        Add or aggregate an entity.
+
+        Args:
+            entity_type: Canonical entity type (e.g., "SSN")
+            count: Number of occurrences
+            confidence: Detection confidence (0.0-1.0)
+            positions: Optional list of (start, end) positions
+        """
+        if entity_type in self._types:
+            existing = self._types[entity_type]
+            existing["count"] += count
+            existing["confidence"] = max(existing["confidence"], confidence)
+            if positions:
+                existing["positions"].extend(positions)
+        else:
+            self._types[entity_type] = {
+                "count": count,
+                "confidence": confidence,
+                "positions": positions or [],
+            }
+
+    def to_entities(self) -> List[Entity]:
+        """Convert aggregated data to list of Entity objects."""
+        return [
+            Entity(
+                type=etype,
+                count=data["count"],
+                confidence=data["confidence"],
+                source=self.source,
+                positions=data["positions"],
+            )
+            for etype, data in self._types.items()
+        ]
+
+    def __len__(self) -> int:
+        """Return number of unique entity types."""
+        return len(self._types)

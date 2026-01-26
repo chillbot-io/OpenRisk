@@ -1,13 +1,12 @@
 """
 OpenLabels scan command.
 
-Scan files and directories for sensitive data and compute risk scores.
+Scan local files and directories for sensitive data and compute risk scores.
 
 Usage:
     openlabels scan <path>
-    openlabels scan s3://bucket/prefix
-    openlabels scan gs://bucket/prefix
-    openlabels scan azure://container/path
+    openlabels scan ./data --recursive
+    openlabels scan /path/to/file.csv
 """
 
 import json
@@ -18,6 +17,26 @@ from dataclasses import dataclass
 
 from openlabels import Client
 from openlabels.core.scorer import ScoringResult
+
+
+# ANSI color codes for terminal output
+class TermColors:
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    ORANGE = "\033[33m"
+    GREEN = "\033[92m"
+    GRAY = "\033[90m"
+    RESET = "\033[0m"
+
+
+# Risk tier to color mapping
+TIER_COLORS = {
+    "CRITICAL": TermColors.RED,
+    "HIGH": TermColors.YELLOW,
+    "MEDIUM": TermColors.ORANGE,
+    "LOW": TermColors.GREEN,
+    "MINIMAL": TermColors.GRAY,
+}
 
 
 @dataclass
@@ -109,16 +128,8 @@ def format_scan_result(result: ScanResult, format: str = "text") -> str:
     if format == "jsonl":
         return json.dumps(result.to_dict())
 
-    # Text format
-    tier_colors = {
-        "CRITICAL": "\033[91m",  # Red
-        "HIGH": "\033[93m",      # Yellow
-        "MEDIUM": "\033[33m",    # Orange
-        "LOW": "\033[92m",       # Green
-        "MINIMAL": "\033[90m",   # Gray
-    }
-    reset = "\033[0m"
-    color = tier_colors.get(result.tier, "")
+    # Text format with color
+    color = TIER_COLORS.get(result.tier, "")
 
     if result.error:
         return f"{result.path}: ERROR - {result.error}"
@@ -127,18 +138,13 @@ def format_scan_result(result: ScanResult, format: str = "text") -> str:
         f"{k}({v})" for k, v in sorted(result.entities.items())
     ) if result.entities else "none"
 
-    return f"{result.path}: {color}{result.score:>3}{reset} ({result.tier:<8}) [{entities_str}]"
+    return f"{result.path}: {color}{result.score:>3}{TermColors.RESET} ({result.tier:<8}) [{entities_str}]"
 
 
 def cmd_scan(args) -> int:
     """Execute the scan command."""
     client = Client(default_exposure=args.exposure)
-    path = Path(args.path) if not args.path.startswith(('s3://', 'gs://', 'azure://')) else args.path
-
-    # Check for cloud paths (future support)
-    if isinstance(path, str):
-        print(f"Cloud storage scanning not yet implemented: {path}", file=sys.stderr)
-        return 1
+    path = Path(args.path)
 
     if not path.exists():
         print(f"Error: Path not found: {path}", file=sys.stderr)
@@ -218,7 +224,7 @@ def add_scan_parser(subparsers):
     )
     parser.add_argument(
         "path",
-        help="Path to file, directory, or cloud storage (s3://, gs://, azure://)",
+        help="Path to local file or directory",
     )
     parser.add_argument(
         "--recursive", "-r",
