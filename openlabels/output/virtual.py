@@ -88,8 +88,8 @@ class LinuxXattrHandler:
             return value.decode('utf-8')
         except ImportError:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"xattr read failed for {path}: {e}")
 
         # Fallback to getfattr command
         try:
@@ -102,8 +102,8 @@ class LinuxXattrHandler:
                 return result.stdout.strip()
         except FileNotFoundError:
             logger.debug("getfattr not found")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"getfattr failed for {path}: {e}")
 
         return None
 
@@ -115,8 +115,8 @@ class LinuxXattrHandler:
             return True
         except ImportError:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"xattr remove failed for {path}: {e}")
 
         try:
             result = subprocess.run(
@@ -124,7 +124,8 @@ class LinuxXattrHandler:
                 capture_output=True,
             )
             return result.returncode == 0
-        except Exception:
+        except Exception as e:
+            logger.debug(f"setfattr remove failed for {path}: {e}")
             return False
 
 
@@ -160,8 +161,8 @@ class MacOSXattrHandler:
             )
             if result.returncode == 0:
                 return result.stdout.strip()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"macOS xattr read failed for {path}: {e}")
         return None
 
     def remove(self, path: str) -> bool:
@@ -172,7 +173,8 @@ class MacOSXattrHandler:
                 capture_output=True,
             )
             return result.returncode == 0
-        except Exception:
+        except Exception as e:
+            logger.debug(f"macOS xattr remove failed for {path}: {e}")
             return False
 
 
@@ -204,7 +206,8 @@ class WindowsADSHandler:
                 return f.read().strip()
         except FileNotFoundError:
             return None
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Windows ADS read failed for {path}: {e}")
             return None
 
     def remove(self, path: str) -> bool:
@@ -213,7 +216,8 @@ class WindowsADSHandler:
         try:
             os.remove(ads_path)
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Windows ADS remove failed for {path}: {e}")
             return False
 
 
@@ -379,7 +383,8 @@ class S3MetadataHandler:
             response = client.head_object(Bucket=bucket, Key=key)
             metadata = response.get('Metadata', {})
             return metadata.get(self.METADATA_KEY)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"S3 metadata read failed for {bucket}/{key}: {e}")
             return None
 
 
@@ -429,7 +434,8 @@ class GCSMetadataHandler:
             blob.reload()
             metadata = blob.metadata or {}
             return metadata.get(self.METADATA_KEY)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"GCS metadata read failed for {bucket}/{blob_name}: {e}")
             return None
 
 
@@ -494,7 +500,8 @@ class AzureBlobMetadataHandler:
             props = blob_client.get_blob_properties()
             metadata = props.metadata or {}
             return metadata.get(self.METADATA_KEY)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Azure blob metadata read failed for {container}/{blob_name}: {e}")
             return None
 
 
