@@ -26,6 +26,16 @@ try:
 except ImportError:
     pass
 
+# OCR Priority Queue
+from .queue import (
+    OCRJob,
+    OCRPriorityQueue,
+    QueueStatus,
+    OCRQueueWorker,
+    calculate_priority,
+    calculate_priority_from_context,
+)
+
 __all__ = [
     # Core API
     "Detector",
@@ -49,4 +59,11 @@ __all__ = [
     # OCR (optional)
     "OCREngine",
     "_OCR_AVAILABLE",
+    # OCR Priority Queue
+    "OCRJob",
+    "OCRPriorityQueue",
+    "QueueStatus",
+    "OCRQueueWorker",
+    "calculate_priority",
+    "calculate_priority_from_context",
 ]
