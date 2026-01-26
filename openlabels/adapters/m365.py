@@ -309,10 +309,8 @@ class M365Adapter:
             group = granted_to["group"]
             group_name = group.get("displayName", "").lower()
 
-            # Check for broad groups
+            # Check for broad groups (Everyone, Everyone except external users)
             if "everyone" in group_name:
-                if "except external" in group_name:
-                    return ExposureLevel.ORG_WIDE
                 return ExposureLevel.ORG_WIDE
 
             # M365 Group / Team = INTERNAL

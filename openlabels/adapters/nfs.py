@@ -39,7 +39,7 @@ Expected file metadata format:
 """
 
 from typing import Dict, Any, List, Optional
-import re
+
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
     ExposureLevel, calculate_staleness_days, is_archive,

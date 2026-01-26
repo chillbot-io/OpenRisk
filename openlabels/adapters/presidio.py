@@ -39,22 +39,22 @@ class PresidioAdapter:
         # Direct identifiers
         "US_SSN": "SSN",
         "US_PASSPORT": "PASSPORT",
-        "US_DRIVER_LICENSE": "DRIVER_LICENSE",
+        "US_DRIVER_LICENSE": "DRIVERS_LICENSE",
         "UK_NHS": "NHS_NUMBER",
-        "US_ITIN": "ITIN",
+        "US_ITIN": "TAX_ID",
         "US_BANK_NUMBER": "BANK_ACCOUNT",
         "IBAN_CODE": "IBAN",
-        "SG_NRIC_FIN": "NRIC",
-        "AU_ABN": "ABN",
-        "AU_ACN": "ACN",
-        "AU_TFN": "TFN",
-        "AU_MEDICARE": "MEDICARE_NUMBER",
-        "IN_AADHAAR": "AADHAAR",
-        "IN_PAN": "PAN",
+        "SG_NRIC_FIN": "MY_NRIC",
+        "AU_ABN": "TAX_ID",
+        "AU_ACN": "TAX_ID",
+        "AU_TFN": "TFN_AU",
+        "AU_MEDICARE": "MEDICARE_ID",
+        "IN_AADHAAR": "AADHAAR_IN",
+        "IN_PAN": "PAN_IN",
 
         # Financial
         "CREDIT_CARD": "CREDIT_CARD",
-        "CRYPTO": "CRYPTO_ADDRESS",
+        "CRYPTO": "BITCOIN_ADDRESS",  # Generic crypto maps to most common
         "MEDICAL_LICENSE": "MEDICAL_LICENSE",
 
         # Contact
@@ -66,12 +66,12 @@ class PresidioAdapter:
         # Personal
         "PERSON": "NAME",
         "DATE_TIME": "DATE",
-        "NRP": "NATIONALITY",  # Nationality, religion, political group
+        "NRP": "RELIGION",  # Nationality, religion, political group - map to closest
         "LOCATION": "ADDRESS",
 
         # Credentials (if detected via custom recognizers)
         "AWS_ACCESS_KEY": "AWS_ACCESS_KEY",
-        "AZURE_AUTH_TOKEN": "AZURE_AUTH_TOKEN",
+        "AZURE_AUTH_TOKEN": "BEARER_TOKEN",  # Map to generic token type
         "GITHUB_TOKEN": "GITHUB_TOKEN",
     }
 

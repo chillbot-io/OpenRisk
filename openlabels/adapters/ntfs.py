@@ -39,7 +39,8 @@ Expected file metadata format:
     }
 """
 
-from typing import Dict, Any, List, Set
+from typing import Dict, Any, List
+
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
     ExposureLevel, calculate_staleness_days, is_archive,
