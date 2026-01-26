@@ -149,7 +149,7 @@ DEFAULT_WEIGHT = 5
 # =============================================================================
 
 ENTITY_CATEGORIES: Dict[str, str] = {
-    # Direct identifiers
+    # Direct identifiers (government-issued, uniquely identifying)
     "SSN": "direct_identifier",
     "PASSPORT": "direct_identifier",
     "DRIVERS_LICENSE": "direct_identifier",
@@ -159,14 +159,24 @@ ENTITY_CATEGORIES: Dict[str, str] = {
     "AADHAAR_IN": "direct_identifier",
     "A_NUMBER": "direct_identifier",
     "GREEN_CARD_NUMBER": "direct_identifier",
+    "VISA_NUMBER": "direct_identifier",
     "SIN_CA": "direct_identifier",
     "NINO_UK": "direct_identifier",
+    "UTR_UK": "direct_identifier",
     "INSEE_FR": "direct_identifier",
+    "PERSONALAUSWEIS_DE": "direct_identifier",
+    "CODICE_FISCALE_IT": "direct_identifier",
+    "DNI_ES": "direct_identifier",
     "CPF_BR": "direct_identifier",
+    "RG_BR": "direct_identifier",
+    "CURP_MX": "direct_identifier",
+    "PAN_IN": "direct_identifier",
+    "TFN_AU": "direct_identifier",
+    "MY_NRIC": "direct_identifier",
     "CHINA_RESIDENT_ID": "direct_identifier",
     "JAPAN_MY_NUMBER": "direct_identifier",
 
-    # Healthcare
+    # Healthcare / PHI
     "MRN": "health_info",
     "HEALTH_PLAN_ID": "health_info",
     "NPI": "health_info",
@@ -174,10 +184,13 @@ ENTITY_CATEGORIES: Dict[str, str] = {
     "DIAGNOSIS": "health_info",
     "MEDICATION": "health_info",
     "LAB_TEST": "health_info",
+    "ENCOUNTER_ID": "health_info",
     "MBI": "health_info",
     "HICN": "health_info",
     "MEDICARE_ID": "health_info",
     "NHS_NUMBER": "health_info",
+    "NAME_PATIENT": "health_info",
+    "NAME_PROVIDER": "health_info",
 
     # Financial
     "CREDIT_CARD": "financial",
@@ -185,6 +198,8 @@ ENTITY_CATEGORIES: Dict[str, str] = {
     "BANK_ROUTING": "financial",
     "IBAN": "financial",
     "SWIFT_BIC": "financial",
+    "CUSIP": "financial",
+    "ISIN": "financial",
     "BITCOIN_ADDRESS": "financial",
     "ETHEREUM_ADDRESS": "financial",
     "CRYPTO_SEED_PHRASE": "financial",
@@ -195,15 +210,29 @@ ENTITY_CATEGORIES: Dict[str, str] = {
     "ADDRESS": "contact",
     "ZIP": "contact",
     "CITY": "contact",
+    "STATE": "contact",
     "LOCATION": "contact",
+    "URL": "contact",
 
     # Quasi-identifiers
     "NAME": "quasi_identifier",
     "DATE_DOB": "quasi_identifier",
     "DOB": "quasi_identifier",
+    "DATE": "quasi_identifier",
     "AGE": "quasi_identifier",
     "GENDER": "quasi_identifier",
     "ETHNICITY": "quasi_identifier",
+    "RELIGION": "quasi_identifier",
+    "EMPLOYER": "quasi_identifier",
+    "PROFESSION": "quasi_identifier",
+
+    # Digital identifiers
+    "IP_ADDRESS": "digital_identifier",
+    "MAC_ADDRESS": "digital_identifier",
+    "DEVICE_ID": "digital_identifier",
+    "IMEI": "digital_identifier",
+    "USERNAME": "digital_identifier",
+    "VIN": "digital_identifier",
 
     # Credentials
     "PASSWORD": "credential",
@@ -211,24 +240,35 @@ ENTITY_CATEGORIES: Dict[str, str] = {
     "SECRET": "credential",
     "PRIVATE_KEY": "credential",
     "JWT": "credential",
+    "BEARER_TOKEN": "credential",
     "AWS_ACCESS_KEY": "credential",
     "AWS_SECRET_KEY": "credential",
     "AZURE_STORAGE_KEY": "credential",
     "AZURE_CONNECTION_STRING": "credential",
     "AZURE_SQL_CONNECTION": "credential",
+    "AZURE_SAS_TOKEN": "credential",
     "GCP_CREDENTIALS": "credential",
+    "GCP_API_KEY": "credential",
+    "GOOGLE_OAUTH_SECRET": "credential",
     "GITHUB_TOKEN": "credential",
+    "GITLAB_TOKEN": "credential",
     "SLACK_TOKEN": "credential",
+    "SLACK_WEBHOOK": "credential",
+    "DISCORD_TOKEN": "credential",
     "STRIPE_KEY": "credential",
+    "TWILIO_TOKEN": "credential",
+    "SENDGRID_KEY": "credential",
     "DATABASE_URL": "credential",
     "OPENAI_API_KEY": "credential",
     "ANTHROPIC_API_KEY": "credential",
+    "HUGGINGFACE_TOKEN": "credential",
 
-    # Classification
+    # Classification / Government
     "CLASSIFICATION_LEVEL": "classification_marking",
     "CLASSIFICATION_MARKING": "classification_marking",
     "SCI_MARKING": "classification_marking",
     "ITAR_MARKING": "classification_marking",
+    "CAGE_CODE": "classification_marking",
 }
 
 
