@@ -1048,8 +1048,8 @@ add_pattern(r'(?:NHS)[:\s#]+(\d{10})\b', 'NHS_NUMBER', 0.90, 1, re.I)
 
 # === Canadian SIN (9 digits, starts with specific digits) ===
 add_pattern(r'(?:SIN|Social\s+Insurance)[:\s#]+(\d{3}[-\s]?\d{3}[-\s]?\d{3})', 'SIN', 0.92, 1, re.I)
-# Bare SIN with Canadian context
-add_pattern(r'(?:Canada|Canadian|CA)[^.]{0,30}(\d{3}[-\s]?\d{3}[-\s]?\d{3})', 'SIN', 0.80, 1, re.I)
+# Bare SIN with Canadian context (require word boundary for CA to avoid matching "Call")
+add_pattern(r'(?:\bCanada\b|\bCanadian\b|\bCA\b)[^.]{0,30}(\d{3}[-\s]?\d{3}[-\s]?\d{3})', 'SIN', 0.80, 1, re.I)
 
 # === Australian TFN (Tax File Number - 8-9 digits) ===
 add_pattern(r'(?:TFN|Tax\s+File)[:\s#]+(\d{3}\s?\d{3}\s?\d{2,3})', 'TFN', 0.92, 1, re.I)
