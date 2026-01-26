@@ -8,6 +8,7 @@ Available adapters:
 - MacieAdapter: AWS Macie + S3
 - DLPAdapter: GCP DLP + GCS
 - PurviewAdapter: Azure Purview + Blob
+- PresidioAdapter: Microsoft Presidio
 - ScannerAdapter: OpenLabels native scanner (in scanner/)
 """
 
@@ -15,6 +16,7 @@ from .base import Adapter, Entity, NormalizedContext, NormalizedInput
 from .macie import MacieAdapter
 from .dlp import DLPAdapter
 from .purview import PurviewAdapter
+from .presidio import PresidioAdapter
 
 __all__ = [
     "Adapter",
@@ -24,4 +26,5 @@ __all__ = [
     "MacieAdapter",
     "DLPAdapter",
     "PurviewAdapter",
+    "PresidioAdapter",
 ]
