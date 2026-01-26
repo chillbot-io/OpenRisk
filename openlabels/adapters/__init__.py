@@ -8,23 +8,32 @@ Available adapters:
 - MacieAdapter: AWS Macie + S3
 - DLPAdapter: GCP DLP + GCS
 - PurviewAdapter: Azure Purview + Blob
-- PresidioAdapter: Microsoft Presidio
-- ScannerAdapter: OpenLabels native scanner (in scanner/)
+- NTFSAdapter: Windows NTFS + SMB shares
+- NFSAdapter: NFS exports
+- M365Adapter: SharePoint / OneDrive / Teams
+
+For the built-in scanner, use:
+    from openlabels.adapters.scanner import Detector, detect, detect_file
 """
 
-from .base import Adapter, Entity, NormalizedContext, NormalizedInput
+from .base import Adapter, Entity, NormalizedContext, NormalizedInput, ExposureLevel
 from .macie import MacieAdapter
 from .dlp import DLPAdapter
 from .purview import PurviewAdapter
-from .presidio import PresidioAdapter
+from .ntfs import NTFSAdapter
+from .nfs import NFSAdapter
+from .m365 import M365Adapter
 
 __all__ = [
     "Adapter",
     "Entity",
     "NormalizedContext",
     "NormalizedInput",
+    "ExposureLevel",
     "MacieAdapter",
     "DLPAdapter",
     "PurviewAdapter",
-    "PresidioAdapter",
+    "NTFSAdapter",
+    "NFSAdapter",
+    "M365Adapter",
 ]
