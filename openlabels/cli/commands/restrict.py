@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from openlabels import Client
+from openlabels.cli import MAX_PREVIEW_RESULTS
 
 logger = logging.getLogger(__name__)
 from openlabels.cli.commands.find import find_matching
@@ -93,10 +94,10 @@ def cmd_restrict(args) -> int:
     # Dry run - just show what would be restricted
     if args.dry_run:
         print(f"Would restrict {len(matches)} files to '{args.acl}':\n")
-        for result in matches[:20]:
+        for result in matches[:MAX_PREVIEW_RESULTS]:
             print(f"  {result.path} (score: {result.score})")
-        if len(matches) > 20:
-            print(f"  ... and {len(matches) - 20} more")
+        if len(matches) > MAX_PREVIEW_RESULTS:
+            print(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
         return 0
 
     # Confirm if not forced
