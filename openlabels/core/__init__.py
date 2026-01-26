@@ -31,6 +31,17 @@ from .labels import (
     is_valid_content_hash,
     is_valid_value_hash,
 )
+from .triggers import (
+    ScanTrigger,
+    should_scan,
+    needs_scan,
+    get_scan_urgency,
+    calculate_scan_priority,
+    get_trigger_descriptions,
+    CONFIDENCE_THRESHOLD,
+    HIGH_RISK_WEIGHT_THRESHOLD,
+    STALENESS_THRESHOLD_DAYS,
+)
 
 __all__ = [
     # Registry
@@ -57,4 +68,50 @@ __all__ = [
     "is_valid_label_id",
     "is_valid_content_hash",
     "is_valid_value_hash",
+    # Triggers
+    "ScanTrigger",
+    "should_scan",
+    "needs_scan",
+    "get_scan_urgency",
+    "calculate_scan_priority",
+    "get_trigger_descriptions",
+    "CONFIDENCE_THRESHOLD",
+    "HIGH_RISK_WEIGHT_THRESHOLD",
+    "STALENESS_THRESHOLD_DAYS",
+    # Types (re-exported for convenience)
+    "ScanResult",
+    "FilterCriteria",
+    "OperationResult",
+    "TreeNode",
+    "ReportFormat",
+    "ReportConfig",
+    # Merger
+    "MergeStrategy",
+    "MergedEntity",
+    "MergeResult",
+    "merge_inputs",
+    "merge_inputs_full",
+    "merge_entities",
+    "get_highest_exposure",
+    "merge_contexts",
 ]
+
+# Import additional types
+from .types import (
+    ScanResult,
+    FilterCriteria,
+    OperationResult,
+    TreeNode,
+    ReportFormat,
+    ReportConfig,
+)
+from .merger import (
+    MergeStrategy,
+    MergedEntity,
+    MergeResult,
+    merge_inputs,
+    merge_inputs_full,
+    merge_entities,
+    get_highest_exposure,
+    merge_contexts,
+)

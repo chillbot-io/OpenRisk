@@ -61,6 +61,17 @@ from .index import (
     DEFAULT_INDEX_PATH,
 )
 
+# Report generation
+from .report import (
+    ReportGenerator,
+    ReportSummary,
+    results_to_json,
+    results_to_csv,
+    results_to_html,
+    results_to_markdown,
+    generate_report,
+)
+
 __all__ = [
     # Unified interface
     'read_label',
@@ -95,4 +106,13 @@ __all__ = [
     'get_label',
     'resolve_pointer',
     'DEFAULT_INDEX_PATH',
+
+    # Reports
+    'ReportGenerator',
+    'ReportSummary',
+    'results_to_json',
+    'results_to_csv',
+    'results_to_html',
+    'results_to_markdown',
+    'generate_report',
 ]
