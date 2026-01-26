@@ -4,9 +4,19 @@ OpenLabels CLI - Command-line interface.
 Labels are the primitive. Risk is derived.
 
 Usage:
-    openlabels scan "text to scan"
-    openlabels scan-file document.pdf
-    openlabels scan-dir ./data --recursive
+    # Risk scoring commands
+    openlabels scan <path>                    # Scan and score files
+    openlabels find <path> --where "..."      # Find files matching criteria
+    openlabels quarantine <src> --to <dst>    # Move risky files
+    openlabels report <path> --format html    # Generate reports
+    openlabels heatmap <path>                 # Visual risk heatmap
+
+    # Detection commands (legacy)
+    openlabels detect "text to scan"
+    openlabels detect-file document.pdf
+    openlabels detect-dir ./data --recursive
+
+    # Info
     openlabels --version
 """
 
@@ -18,7 +28,6 @@ from pathlib import Path
 from typing import List, Optional
 
 from openlabels import __version__
-from openlabels.adapters.scanner import Detector, Config, DetectionResult
 
 
 def setup_logging(verbose: bool = False, quiet: bool = False):
@@ -36,7 +45,11 @@ def setup_logging(verbose: bool = False, quiet: bool = False):
     )
 
 
-def format_result(result: DetectionResult, output_format: str = "text") -> str:
+# =============================================================================
+# LEGACY DETECT COMMANDS (for backwards compatibility)
+# =============================================================================
+
+def format_result(result, output_format: str = "text") -> str:
     """Format detection result for output."""
     if output_format == "json":
         return json.dumps(result.to_dict(), indent=2)
@@ -64,9 +77,11 @@ def format_result(result: DetectionResult, output_format: str = "text") -> str:
 
 def cmd_detect(args):
     """Detect PII/PHI in text."""
+    from openlabels.adapters.scanner import Detector, Config
+
     config = Config(
         min_confidence=args.confidence,
-        enable_ocr=False,  # Not needed for text
+        enable_ocr=False,
     )
     detector = Detector(config)
 
@@ -77,13 +92,14 @@ def cmd_detect(args):
     result = detector.detect(text)
     print(format_result(result, args.format))
 
-    # Exit with error code if PII found and --fail-on-pii
     if args.fail_on_pii and result.has_pii:
         sys.exit(1)
 
 
 def cmd_detect_file(args):
     """Detect PII/PHI in a file."""
+    from openlabels.adapters.scanner import Detector, Config
+
     config = Config(
         min_confidence=args.confidence,
         enable_ocr=args.ocr,
@@ -111,6 +127,8 @@ def cmd_detect_file(args):
 
 def cmd_detect_dir(args):
     """Detect PII/PHI in all files in a directory."""
+    from openlabels.adapters.scanner import Detector, Config
+
     config = Config(
         min_confidence=args.confidence,
         enable_ocr=args.ocr,
@@ -132,10 +150,8 @@ def cmd_detect_dir(args):
     else:
         files = list(base_path.glob("*"))
 
-    # Filter to files only (not directories)
     files = [f for f in files if f.is_file()]
 
-    # Apply extension filter if provided
     if args.extensions:
         exts = {e.lower().lstrip(".") for e in args.extensions.split(",")}
         files = [f for f in files if f.suffix.lower().lstrip(".") in exts]
@@ -169,7 +185,6 @@ def cmd_detect_dir(args):
             if args.verbose:
                 print(f"Error processing {file_path}: {e}", file=sys.stderr)
 
-    # Print summary
     if args.format != "json":
         print(f"\n{'='*60}")
         print(f"Scanned {len(files)} files")
@@ -183,14 +198,36 @@ def cmd_detect_dir(args):
 def cmd_version(args):
     """Show version information."""
     print(f"openlabels {__version__}")
-    print("OpenRisk Content Scanner")
+    print("Universal Data Risk Scoring")
+    print()
+    print("Commands:")
+    print("  scan        Scan files and compute risk scores")
+    print("  find        Find files matching filter criteria")
+    print("  quarantine  Move matching files to quarantine")
+    print("  report      Generate risk reports")
+    print("  heatmap     Display risk heatmap")
+    print()
+    print("Run 'openlabels <command> --help' for details.")
 
+
+# =============================================================================
+# MAIN ENTRY POINT
+# =============================================================================
 
 def main(argv: Optional[List[str]] = None):
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         prog="openlabels",
-        description="OpenLabels Content Scanner - Detect PII/PHI in text and files",
+        description="OpenLabels - Universal Data Risk Scoring",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  openlabels scan ./data                          # Scan directory
+  openlabels find . --where "score > 75"          # Find high-risk files
+  openlabels quarantine ./data --where "score > 90" --to ./quarantine
+  openlabels report ./data -f html -o report.html
+  openlabels heatmap ./data --depth 3
+        """,
     )
     parser.add_argument(
         "--version", "-V",
@@ -209,6 +246,28 @@ def main(argv: Optional[List[str]] = None):
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
+
+    # ==========================================================================
+    # NEW RISK SCORING COMMANDS
+    # ==========================================================================
+
+    from openlabels.cli.commands import (
+        add_scan_parser,
+        add_find_parser,
+        add_quarantine_parser,
+        add_report_parser,
+        add_heatmap_parser,
+    )
+
+    add_scan_parser(subparsers)
+    add_find_parser(subparsers)
+    add_quarantine_parser(subparsers)
+    add_report_parser(subparsers)
+    add_heatmap_parser(subparsers)
+
+    # ==========================================================================
+    # LEGACY DETECT COMMANDS
+    # ==========================================================================
 
     # detect command
     detect_parser = subparsers.add_parser(
@@ -284,7 +343,7 @@ def main(argv: Optional[List[str]] = None):
     )
     dir_parser.add_argument(
         "--extensions", "-e",
-        help="Comma-separated list of file extensions to scan (e.g., txt,pdf,docx)",
+        help="Comma-separated list of file extensions to scan",
     )
     dir_parser.add_argument(
         "--confidence", "-c",
@@ -304,19 +363,31 @@ def main(argv: Optional[List[str]] = None):
     )
     dir_parser.set_defaults(func=cmd_detect_dir)
 
+    # ==========================================================================
+    # PARSE AND EXECUTE
+    # ==========================================================================
+
     args = parser.parse_args(argv)
 
     if args.version:
         cmd_version(args)
         return
 
-    setup_logging(verbose=getattr(args, "verbose", False), quiet=getattr(args, "quiet", False))
+    setup_logging(
+        verbose=getattr(args, "verbose", False),
+        quiet=getattr(args, "quiet", False),
+    )
 
     if args.command is None:
         parser.print_help()
         sys.exit(1)
 
-    args.func(args)
+    # Execute command
+    result = args.func(args)
+
+    # Handle return code
+    if isinstance(result, int):
+        sys.exit(result)
 
 
 if __name__ == "__main__":
