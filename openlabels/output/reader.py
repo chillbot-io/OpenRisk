@@ -21,7 +21,6 @@ from .virtual import (
     read_virtual_label,
     write_virtual_label,
     read_cloud_label,
-    write_cloud_label,
 )
 from .index import get_default_index, LabelIndex
 

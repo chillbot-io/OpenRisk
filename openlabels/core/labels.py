@@ -12,7 +12,7 @@ Per the OpenLabels Specification v1.0:
 import hashlib
 import secrets
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 
 from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE

@@ -29,7 +29,7 @@ import mimetypes
 from datetime import datetime
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Iterator
+from typing import Optional, List, Dict, Iterator
 
 from ..adapters.base import NormalizedContext, ExposureLevel
 from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE, PARTIAL_HASH_SIZE

@@ -165,7 +165,6 @@ class OfficeLabelWriter(EmbeddedLabelWriter):
         """Write to DOCX custom properties."""
         try:
             from docx import Document
-            from docx.opc.constants import RELATIONSHIP_TYPE as RT
         except ImportError:
             logger.warning("python-docx not installed, cannot write DOCX labels")
             return False

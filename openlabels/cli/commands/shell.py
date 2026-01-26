@@ -19,7 +19,7 @@ Commands in shell:
 """
 
 import sys
-import readline  # Enables command history
+import readline  # noqa: F401 - imported for side effect (enables command history)
 from pathlib import Path
 from typing import Optional, List
 
