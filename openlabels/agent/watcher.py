@@ -24,7 +24,6 @@ Example:
     >>> watcher.stop()
 """
 
-import os
 import logging
 import threading
 import queue
@@ -32,7 +31,7 @@ import time
 from enum import Enum
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Callable, List, Set
+from typing import Optional, Callable, List
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -41,17 +40,7 @@ logger = logging.getLogger(__name__)
 _WATCHDOG_AVAILABLE = False
 try:
     from watchdog.observers import Observer
-    from watchdog.events import (
-        FileSystemEventHandler,
-        FileCreatedEvent,
-        FileModifiedEvent,
-        FileDeletedEvent,
-        FileMovedEvent,
-        DirCreatedEvent,
-        DirModifiedEvent,
-        DirDeletedEvent,
-        DirMovedEvent,
-    )
+    from watchdog.events import FileSystemEventHandler
     _WATCHDOG_AVAILABLE = True
 except ImportError:
     Observer = None

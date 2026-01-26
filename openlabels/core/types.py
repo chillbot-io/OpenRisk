@@ -14,7 +14,7 @@ Usage:
     )
 """
 
-from typing import Dict, List, Optional, Any, Tuple, Union, Iterator
+from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path

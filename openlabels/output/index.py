@@ -15,10 +15,9 @@ Per the spec, the index MUST NOT leave the user's tenant.
 import json
 import sqlite3
 import logging
-import os
 import threading
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Iterator
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from contextlib import contextmanager
 

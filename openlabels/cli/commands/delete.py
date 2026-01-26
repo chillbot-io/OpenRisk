@@ -8,7 +8,6 @@ Usage:
     openlabels delete ./data --where "score < 10 AND last_accessed > 7y" --confirm
 """
 
-import os
 import sys
 from pathlib import Path
 

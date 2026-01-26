@@ -54,7 +54,7 @@ Expected item metadata format:
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
     ExposureLevel, EntityAggregator, calculate_staleness_days, is_archive,

@@ -26,11 +26,21 @@ Working with labels:
     >>>
     >>> # Write a label (auto-selects transport)
     >>> success, transport = write_label("data.csv", label_set)
+
+Architecture:
+    The Client is a facade over focused components. For direct access:
+    >>> from openlabels import Context
+    >>> from openlabels.components import Scorer, Scanner
+    >>>
+    >>> ctx = Context()
+    >>> scorer = Scorer(ctx)
+    >>> result = scorer.score_text("SSN: 123-45-6789")
 """
 
 __version__ = "0.1.0"
 
 from .client import Client
+from .context import Context, get_default_context, reset_default_context
 from .core.scorer import ScoringResult
 from .core.labels import (
     Label,
@@ -45,6 +55,10 @@ __all__ = [
     # Client
     "Client",
     "ScoringResult",
+    # Context (dependency injection)
+    "Context",
+    "get_default_context",
+    "reset_default_context",
     # Labels
     "Label",
     "LabelSet",

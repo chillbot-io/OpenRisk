@@ -28,7 +28,6 @@ Decision Matrix:
 
 from enum import Enum
 from typing import List, Tuple, Optional
-from dataclasses import dataclass
 
 from ..adapters.base import Entity, NormalizedContext, ExposureLevel
 from .registry import get_weight

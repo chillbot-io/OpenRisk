@@ -22,7 +22,10 @@ from pathlib import Path
 from typing import Optional, Union
 
 from ..core.labels import LabelSet, VirtualLabelPointer
-from ..adapters.scanner.constants import MAX_PATH_LENGTH, MAX_XATTR_VALUE_SIZE
+from ..utils.validation import (
+    validate_path_for_subprocess,
+    validate_xattr_value,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,31 +34,10 @@ XATTR_LINUX = "user.openlabels"
 XATTR_MACOS = "com.openlabels.label"
 XATTR_WINDOWS_ADS = "openlabels"  # Stored as file.txt:openlabels
 
-# Dangerous characters that could enable shell injection
-SHELL_METACHARACTERS = frozenset(['`', '$', '|', ';', '&', '>', '<', '\n', '\r', '\x00'])
 
-
-def _validate_path_for_subprocess(path: str) -> bool:
-    """Validate path is safe for subprocess calls."""
-    if not path:
-        return False
-    if any(c in path for c in SHELL_METACHARACTERS):
-        return False
-    if len(path) > MAX_PATH_LENGTH:
-        return False
-    return True
-
-
-def _validate_xattr_value(value: str) -> bool:
-    """Validate xattr value is safe."""
-    if not value:
-        return False
-    # Reject shell metacharacters in values
-    if any(c in value for c in SHELL_METACHARACTERS):
-        return False
-    if len(value) > MAX_XATTR_VALUE_SIZE:
-        return False
-    return True
+# Keep private aliases for backward compatibility within this module
+_validate_path_for_subprocess = validate_path_for_subprocess
+_validate_xattr_value = validate_xattr_value
 
 
 def _get_platform() -> str:

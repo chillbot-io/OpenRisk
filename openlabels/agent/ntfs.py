@@ -154,7 +154,8 @@ def _get_stub_permissions(path: str) -> NtfsPermissions:
     try:
         st = os.stat(path)
         owner = pwd.getpwuid(st.st_uid).pw_name
-    except Exception:
+    except (OSError, KeyError) as e:
+        logger.debug(f"Could not get owner for {path}: {e}")
         owner = "unknown"
 
     return NtfsPermissions(
@@ -168,7 +169,6 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
     try:
         import win32security
         import ntsecuritycon
-        import win32api
     except ImportError:
         logger.warning("pywin32 not installed, using stub permissions")
         return _get_stub_permissions(path)
@@ -186,7 +186,8 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
         try:
             owner_name, domain, _ = win32security.LookupAccountSid(None, owner_sid)
             owner = f"{domain}\\{owner_name}" if domain else owner_name
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Could not resolve owner SID {owner_sid}: {e}")
             owner = str(owner_sid)
 
         group_sid = sd.GetSecurityDescriptorGroup()
@@ -195,7 +196,8 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
             try:
                 group_name, domain, _ = win32security.LookupAccountSid(None, group_sid)
                 group = f"{domain}\\{group_name}" if domain else group_name
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Could not resolve group SID {group_sid}: {e}")
                 group = str(group_sid)
 
         dacl = sd.GetSecurityDescriptorDacl()
@@ -210,7 +212,8 @@ def _get_windows_permissions(path: str) -> NtfsPermissions:
                 try:
                     principal_name, domain, _ = win32security.LookupAccountSid(None, principal_sid)
                     principal = f"{domain}\\{principal_name}" if domain else principal_name
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Could not resolve principal SID {principal_sid}: {e}")
                     principal = str(principal_sid)
 
                 mask = ace[1]
