@@ -57,7 +57,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days, is_archive,
+    ExposureLevel, EntityAggregator, calculate_staleness_days, is_archive,
 )
 from ..core.registry import normalize_type
 
@@ -120,59 +120,20 @@ class M365Adapter:
         item_metadata: Dict[str, Any],
     ) -> List[Entity]:
         """Extract entities from DLP scan results if present."""
-        entities = []
-
-        # Check for DLP policy tips (indicates sensitive content detected)
-        dlp_tips = item_metadata.get("dlp_policy_tips", [])
-        scan_results = item_metadata.get("scan_results", {})
-
-        # Aggregate findings
-        type_aggregates: Dict[str, Dict[str, Any]] = {}
+        agg = EntityAggregator(source="m365")
 
         # From DLP policy tips
-        for tip in dlp_tips:
+        for tip in item_metadata.get("dlp_policy_tips", []):
             entity_type = normalize_type(tip.get("type", ""), "m365")
-            count = tip.get("count", 1)
-            confidence = tip.get("confidence", 0.85)
-
-            if entity_type not in type_aggregates:
-                type_aggregates[entity_type] = {
-                    "count": 0,
-                    "max_confidence": 0.0,
-                }
-            type_aggregates[entity_type]["count"] += count
-            type_aggregates[entity_type]["max_confidence"] = max(
-                type_aggregates[entity_type]["max_confidence"],
-                confidence
-            )
+            agg.add(entity_type, tip.get("count", 1), tip.get("confidence", 0.85))
 
         # From scan results
+        scan_results = item_metadata.get("scan_results", {})
         for finding in scan_results.get("findings", []):
             entity_type = normalize_type(finding.get("type", ""), "m365")
-            count = finding.get("count", 1)
-            confidence = finding.get("confidence", 0.8)
+            agg.add(entity_type, finding.get("count", 1), finding.get("confidence", 0.8))
 
-            if entity_type not in type_aggregates:
-                type_aggregates[entity_type] = {
-                    "count": 0,
-                    "max_confidence": 0.0,
-                }
-            type_aggregates[entity_type]["count"] += count
-            type_aggregates[entity_type]["max_confidence"] = max(
-                type_aggregates[entity_type]["max_confidence"],
-                confidence
-            )
-
-        for entity_type, agg in type_aggregates.items():
-            entities.append(Entity(
-                type=entity_type,
-                count=agg["count"],
-                confidence=agg["max_confidence"],
-                source="m365",
-                positions=[],
-            ))
-
-        return entities
+        return agg.to_entities()
 
     def _normalize_context(
         self,
@@ -309,10 +270,8 @@ class M365Adapter:
             group = granted_to["group"]
             group_name = group.get("displayName", "").lower()
 
-            # Check for broad groups
+            # Check for broad groups (Everyone, Everyone except external users)
             if "everyone" in group_name:
-                if "except external" in group_name:
-                    return ExposureLevel.ORG_WIDE
                 return ExposureLevel.ORG_WIDE
 
             # M365 Group / Team = INTERNAL

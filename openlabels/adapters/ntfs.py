@@ -39,10 +39,11 @@ Expected file metadata format:
     }
 """
 
-from typing import Dict, Any, List, Set
+from typing import Dict, Any, List
+
 from .base import (
     Entity, NormalizedContext, NormalizedInput,
-    ExposureLevel, calculate_staleness_days, is_archive,
+    ExposureLevel, EntityAggregator, calculate_staleness_days, is_archive,
 )
 from ..core.registry import normalize_type
 
@@ -137,43 +138,14 @@ class NTFSAdapter:
         file_metadata: Dict[str, Any],
     ) -> List[Entity]:
         """Extract entities from file content scan results if present."""
-        entities = []
+        agg = EntityAggregator(source="ntfs")
 
-        # If scan results are included in metadata
         scan_results = file_metadata.get("scan_results", {})
-        findings = scan_results.get("findings", [])
-
-        # Aggregate by type
-        type_aggregates: Dict[str, Dict[str, Any]] = {}
-
-        for finding in findings:
+        for finding in scan_results.get("findings", []):
             entity_type = normalize_type(finding.get("type", ""), "ntfs")
-            count = finding.get("count", 1)
-            confidence = finding.get("confidence", 0.8)
+            agg.add(entity_type, finding.get("count", 1), finding.get("confidence", 0.8))
 
-            if entity_type not in type_aggregates:
-                type_aggregates[entity_type] = {
-                    "count": 0,
-                    "max_confidence": 0.0,
-                    "positions": [],
-                }
-
-            type_aggregates[entity_type]["count"] += count
-            type_aggregates[entity_type]["max_confidence"] = max(
-                type_aggregates[entity_type]["max_confidence"],
-                confidence
-            )
-
-        for entity_type, agg in type_aggregates.items():
-            entities.append(Entity(
-                type=entity_type,
-                count=agg["count"],
-                confidence=agg["max_confidence"],
-                source="ntfs",
-                positions=agg["positions"],
-            ))
-
-        return entities
+        return agg.to_entities()
 
     def _normalize_context(
         self,

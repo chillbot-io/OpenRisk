@@ -78,7 +78,7 @@ class DLPAdapter:
 
     def _extract_entities(self, findings: Dict[str, Any]) -> List[Entity]:
         """Extract entities from DLP findings."""
-        aggregator = EntityAggregator("dlp")
+        agg = EntityAggregator(source="dlp")
 
         # Handle both direct findings array and nested result.findings
         findings_list = findings.get("findings", [])
@@ -88,13 +88,11 @@ class DLPAdapter:
         for finding in findings_list:
             info_type = finding.get("infoType", {})
             dlp_type = info_type.get("name", "UNKNOWN")
-            likelihood = finding.get("likelihood", "POSSIBLE")
-
             entity_type = normalize_type(dlp_type, source="dlp")
-            confidence = self._likelihood_to_confidence(likelihood)
-            aggregator.add(entity_type, count=1, confidence=confidence)
+            confidence = self._likelihood_to_confidence(finding.get("likelihood", "POSSIBLE"))
+            agg.add(entity_type, count=1, confidence=confidence)
 
-        return aggregator.to_entities()
+        return agg.to_entities()
 
     def _likelihood_to_confidence(self, likelihood: str) -> float:
         """Map DLP likelihood to confidence score."""

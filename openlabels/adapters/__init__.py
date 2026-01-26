@@ -39,6 +39,7 @@ __all__ = [
     "NormalizedContext",
     "NormalizedInput",
     "ExposureLevel",
+    "EntityAggregator",
     "MacieAdapter",
     "DLPAdapter",
     "PurviewAdapter",

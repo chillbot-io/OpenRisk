@@ -85,25 +85,22 @@ class MacieAdapter:
 
     def _extract_entities(self, findings: Dict[str, Any]) -> List[Entity]:
         """Extract entities from Macie findings."""
-        aggregator = EntityAggregator("macie")
+        agg = EntityAggregator(source="macie")
 
         for finding in findings.get("findings", []):
             severity = finding.get("severity", {})
             severity_score = severity.get("score", 2) if isinstance(severity, dict) else 2
+            confidence = self._severity_to_confidence(severity_score)
 
             class_details = finding.get("classificationDetails", {})
             result = class_details.get("result", {})
-            sensitive_data = result.get("sensitiveData", [])
 
-            for category_data in sensitive_data:
+            for category_data in result.get("sensitiveData", []):
                 for detection in category_data.get("detections", []):
-                    macie_type = detection.get("type", "UNKNOWN")
-                    count = detection.get("count", 1)
-                    entity_type = normalize_type(macie_type, source="macie")
-                    confidence = self._severity_to_confidence(severity_score)
-                    aggregator.add(entity_type, count=count, confidence=confidence)
+                    entity_type = normalize_type(detection.get("type", "UNKNOWN"), source="macie")
+                    agg.add(entity_type, detection.get("count", 1), confidence)
 
-        return aggregator.to_entities()
+        return agg.to_entities()
 
     def _severity_to_confidence(self, severity_score: int) -> float:
         """
