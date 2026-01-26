@@ -29,6 +29,7 @@ from typing import Optional, List, Tuple
 from pathlib import Path
 
 from ..adapters.base import ExposureLevel
+from ..utils.validation import validate_path_for_subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +243,11 @@ def _get_acl_entries(path: str) -> Tuple[bool, List[str]]:
 
     entries = []
     has_acl = False
+
+    # Validate path before subprocess calls
+    if not validate_path_for_subprocess(path):
+        logger.debug(f"Invalid path for ACL check: {path!r}")
+        return has_acl, entries
 
     try:
         if platform.system() == "Linux":

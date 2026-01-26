@@ -33,6 +33,7 @@ from typing import Optional, List, Dict, Any, Iterator
 
 from ..adapters.base import NormalizedContext, ExposureLevel
 from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE, PARTIAL_HASH_SIZE
+from ..utils.validation import validate_path_for_subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -387,9 +388,13 @@ class FileCollector:
         except ImportError:
             # xattr module not installed, try getfattr command
             import subprocess
+            path_str = str(path)
+            if not validate_path_for_subprocess(path_str):
+                logger.debug(f"Invalid path for xattr fallback: {path_str!r}")
+                return xattrs
             try:
                 result = subprocess.run(
-                    ["getfattr", "-d", str(path)],
+                    ["getfattr", "-d", path_str],
                     capture_output=True,
                     text=True,
                     timeout=5,
