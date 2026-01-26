@@ -347,6 +347,46 @@ class Client:
     # SCAN OPERATIONS
     # =========================================================================
 
+    def _iter_files(
+        self,
+        path: Path,
+        recursive: bool = True,
+        include_hidden: bool = False,
+        max_files: Optional[int] = None,
+        on_progress: Optional[Callable[[str], None]] = None,
+    ) -> Iterator[Path]:
+        """
+        Iterate over files in a directory.
+
+        Args:
+            path: Directory to iterate
+            recursive: Recurse into subdirectories
+            include_hidden: Include hidden files/directories
+            max_files: Maximum number of files to yield
+            on_progress: Optional callback for progress updates
+
+        Yields:
+            Path for each file found
+        """
+        walker = path.rglob("*") if recursive else path.glob("*")
+        files_yielded = 0
+
+        for file_path in walker:
+            if file_path.is_dir():
+                continue
+
+            if not include_hidden and any(part.startswith('.') for part in file_path.parts):
+                continue
+
+            if max_files and files_yielded >= max_files:
+                break
+
+            if on_progress:
+                on_progress(str(file_path))
+
+            yield file_path
+            files_yielded += 1
+
     def scan(
         self,
         path: Union[str, Path],
@@ -384,12 +424,7 @@ class Client:
         if not path.exists():
             raise FileNotFoundError(f"Path not found: {path}")
 
-        # Parse filter expression if provided
-        filter_obj = None
-        if filter_expr:
-            filter_obj = parse_filter(filter_expr)
-
-        files_scanned = 0
+        filter_obj = parse_filter(filter_expr) if filter_expr else None
 
         # Single file
         if path.is_file():
@@ -399,33 +434,11 @@ class Client:
             return
 
         # Directory
-        walker = path.rglob("*") if recursive else path.glob("*")
-
-        for file_path in walker:
-            # Skip directories
-            if file_path.is_dir():
-                continue
-
-            # Skip hidden files if requested
-            if not include_hidden and any(part.startswith('.') for part in file_path.parts):
-                continue
-
-            # Check max files limit
-            if max_files and files_scanned >= max_files:
-                break
-
-            # Progress callback
-            if on_progress:
-                on_progress(str(file_path))
-
+        for file_path in self._iter_files(path, recursive, include_hidden, max_files, on_progress):
             try:
                 result = self._scan_single_file(file_path)
-                files_scanned += 1
-
-                # Apply filter
                 if self._matches_filter(result, filter_criteria, filter_obj):
                     yield result
-
             except Exception as e:
                 logger.warning(f"Error scanning {file_path}: {e}")
                 yield ScanResult(
