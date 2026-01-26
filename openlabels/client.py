@@ -2,13 +2,66 @@
 OpenLabels Client.
 
 High-level API for scoring files and objects.
+
+The Client provides a unified interface for:
+- Scoring individual files or text
+- Scanning directories recursively
+- Finding files matching filter criteria
+- Data management operations (quarantine, move, delete)
+- Generating reports
 """
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Iterator, Any
 from pathlib import Path
+from dataclasses import dataclass
 
 from .adapters.base import Adapter, NormalizedInput
 from .core.scorer import ScoringResult, score as score_entities
+
+
+@dataclass
+class QuarantineResult:
+    """Result of a quarantine operation."""
+    moved_count: int
+    error_count: int
+    moved_files: List[Dict[str, Any]]
+    errors: List[Dict[str, str]]
+    destination: str
+
+
+@dataclass
+class DeleteResult:
+    """Result of a delete operation."""
+    deleted_count: int
+    error_count: int
+    deleted_files: List[str]
+    errors: List[Dict[str, str]]
+
+
+@dataclass
+class ScanResultItem:
+    """A single scan result with file metadata."""
+    path: str
+    score: int
+    tier: str
+    content_score: float
+    exposure: str
+    exposure_multiplier: float
+    entities: Dict[str, int]
+    co_occurrence_rules: List[str]
+    label_set: Optional[Any] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "path": self.path,
+            "score": self.score,
+            "tier": self.tier,
+            "content_score": self.content_score,
+            "exposure": self.exposure,
+            "exposure_multiplier": self.exposure_multiplier,
+            "entities": self.entities,
+            "co_occurrence_rules": self.co_occurrence_rules,
+        }
 
 
 class Client:
