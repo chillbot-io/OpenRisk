@@ -126,7 +126,7 @@ class Condition:
             ">=": lambda: to_comparable(actual) >= to_comparable(expected),
             "<=": lambda: to_comparable(actual) <= to_comparable(expected),
             "contains": lambda: str(expected).lower() in str(actual).lower(),
-            "matches": lambda: bool(re.search(str(expected), str(actual), re.IGNORECASE)),
+            "matches": lambda: self._safe_regex_match(str(expected), str(actual)),
             "has": lambda: isinstance(actual, list) and expected.upper() in [str(x).upper() for x in actual],
             "missing": lambda: actual is None,
         }
@@ -169,6 +169,30 @@ class Condition:
         num = int(match.group(1))
         unit = match.group(2)
         return num * DURATION_MULTIPLIERS.get(unit, 0)
+
+    def _safe_regex_match(self, pattern: str, text: str, timeout_ms: int = 100) -> bool:
+        """
+        Safely execute regex match with protection against ReDoS.
+
+        Limits pattern length and uses a simple approach to avoid catastrophic backtracking.
+        """
+        MAX_PATTERN_LENGTH = 500
+        if len(pattern) > MAX_PATTERN_LENGTH:
+            return False
+
+        # Reject patterns with known ReDoS-prone constructs: nested quantifiers
+        redos_patterns = [
+            r'\([^)]*[+*][^)]*\)[+*]',  # (a+)+ or (a*)*
+            r'\([^)]*\|[^)]*\)[+*]',     # (a|b)+
+        ]
+        for dangerous in redos_patterns:
+            if re.search(dangerous, pattern):
+                return False
+
+        try:
+            return bool(re.search(pattern, text, re.IGNORECASE))
+        except re.error:
+            return False
 
 
 @dataclass

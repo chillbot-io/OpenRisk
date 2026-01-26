@@ -162,7 +162,7 @@ def get_posix_permissions(path: str) -> PosixPermissions:
         # World permissions
         world_read=bool(mode & stat.S_IROTH),
         world_write=bool(mode & stat.S_IWOTH),
-        world_execute=bool(mode & stat.S_IWOTH),
+        world_execute=bool(mode & stat.S_IXOTH),
 
         # Special bits
         suid=bool(mode & stat.S_ISUID),

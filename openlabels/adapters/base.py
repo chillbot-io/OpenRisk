@@ -9,6 +9,9 @@ from typing import Protocol, List, Any, Optional, Tuple, Dict
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ExposureLevel(Enum):
