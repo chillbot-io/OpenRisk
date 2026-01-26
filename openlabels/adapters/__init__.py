@@ -8,7 +8,9 @@ Available adapters:
 - MacieAdapter: AWS Macie + S3
 - DLPAdapter: GCP DLP + GCS
 - PurviewAdapter: Azure Purview + Blob
-- ScannerAdapter: OpenLabels native scanner (in scanner/)
+
+For the built-in scanner, use:
+    from openlabels.adapters.scanner import Detector, detect, detect_file
 """
 
 from .base import Adapter, Entity, NormalizedContext, NormalizedInput

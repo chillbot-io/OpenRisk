@@ -143,7 +143,15 @@ class PurviewAdapter:
                 "MICROSOFT.PERSONAL.ADDRESS": "Address",
                 "MICROSOFT.PERSONAL.IPADDRESS": "IP Address",
             }
-            return mapping.get(type_name, type_name)
+            if type_name in mapping:
+                return mapping[type_name]
+            # Fallback: extract last component and format it
+            # MICROSOFT.PERSONAL.UK.NINO -> NINO_UK (or just NINO if no country)
+            parts = type_name.split(".")
+            if len(parts) >= 3:
+                # Try to extract meaningful name from last parts
+                # e.g., MICROSOFT.FINANCIAL.IBAN -> IBAN
+                return parts[-1].upper()
         return type_name
 
     def _normalize_blob_context(self, meta: Dict[str, Any]) -> NormalizedContext:

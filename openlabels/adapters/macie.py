@@ -184,8 +184,13 @@ class MacieAdapter:
     def _determine_exposure(self, meta: Dict[str, Any]) -> ExposureLevel:
         """Determine exposure level from S3 ACL and public access settings."""
         # Check public access block first
+        # Handle bool, string "true"/"false", or missing (default True)
         public_block = meta.get("public_access_block", True)
-        if public_block is False or public_block == "False":
+        public_block_enabled = (
+            public_block is True or
+            (isinstance(public_block, str) and public_block.lower() == "true")
+        )
+        if not public_block_enabled:
             acl = meta.get("acl", "private").lower()
 
             if "public-read" in acl or "public-read-write" in acl:
