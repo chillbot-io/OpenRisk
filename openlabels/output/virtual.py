@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 from ..core.labels import LabelSet, VirtualLabelPointer
+from ..adapters.scanner.constants import MAX_PATH_LENGTH, MAX_XATTR_VALUE_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,7 @@ def _validate_path_for_subprocess(path: str) -> bool:
         return False
     if any(c in path for c in SHELL_METACHARACTERS):
         return False
-    # Check path length (filesystem limits)
-    if len(path) > 4096:
+    if len(path) > MAX_PATH_LENGTH:
         return False
     return True
 
@@ -53,8 +53,7 @@ def _validate_xattr_value(value: str) -> bool:
     # Reject shell metacharacters in values
     if any(c in value for c in SHELL_METACHARACTERS):
         return False
-    # Reasonable size limit for xattr values
-    if len(value) > 65536:
+    if len(value) > MAX_XATTR_VALUE_SIZE:
         return False
     return True
 

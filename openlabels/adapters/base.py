@@ -126,7 +126,8 @@ def calculate_staleness_days(last_modified: Optional[str]) -> int:
             dt = last_modified
         delta = datetime.now(dt.tzinfo) - dt
         return max(0, delta.days)
-    except Exception:
+    except (ValueError, TypeError, AttributeError) as e:
+        logger.debug(f"Could not calculate staleness from '{last_modified}': {e}")
         return 0
 
 

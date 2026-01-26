@@ -562,6 +562,19 @@ class Client:
     # DATA MANAGEMENT OPERATIONS
     # =========================================================================
 
+    def _build_filter_criteria(
+        self,
+        filter_criteria: Optional[FilterCriteria],
+        min_score: Optional[int],
+    ) -> Optional[FilterCriteria]:
+        """Build filter criteria, merging min_score if provided."""
+        if min_score is None:
+            return filter_criteria
+        if filter_criteria is None:
+            return FilterCriteria(min_score=min_score)
+        filter_criteria.min_score = min_score
+        return filter_criteria
+
     def quarantine(
         self,
         source: Union[str, Path],
@@ -600,13 +613,7 @@ class Client:
         """
         source = Path(source)
         destination = Path(destination)
-
-        # Build filter criteria if min_score provided
-        if min_score is not None:
-            if filter_criteria is None:
-                filter_criteria = FilterCriteria(min_score=min_score)
-            else:
-                filter_criteria.min_score = min_score
+        filter_criteria = self._build_filter_criteria(filter_criteria, min_score)
 
         moved_files: List[Dict[str, Any]] = []
         errors: List[Dict[str, str]] = []
@@ -745,12 +752,7 @@ class Client:
             >>> print(f"Would delete {result.deleted_count} files")
         """
         path = Path(path)
-
-        if min_score is not None:
-            if filter_criteria is None:
-                filter_criteria = FilterCriteria(min_score=min_score)
-            else:
-                filter_criteria.min_score = min_score
+        filter_criteria = self._build_filter_criteria(filter_criteria, min_score)
 
         if confirm and not dry_run:
             # In a real implementation, this would require user confirmation

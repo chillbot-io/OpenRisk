@@ -12,10 +12,13 @@ Usage:
 import os
 import stat
 import sys
+import logging
 from pathlib import Path
 from typing import Optional
 
 from openlabels import Client
+
+logger = logging.getLogger(__name__)
 from openlabels.cli.commands.find import find_matching
 
 
@@ -32,7 +35,8 @@ def restrict_posix(file_path: Path, mode: str) -> bool:
             # Read-only for owner: r--------
             os.chmod(file_path, stat.S_IRUSR)
         return True
-    except Exception:
+    except OSError as e:
+        logger.warning(f"Could not apply ACL '{mode}' to {file_path}: {e}")
         return False
 
 
