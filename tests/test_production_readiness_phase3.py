@@ -25,6 +25,7 @@ from openlabels.core.exceptions import (
     NotFoundError,
     ValidationError,
     PermissionDeniedError,
+    OperationTimeoutError,
     FileErrorType,
     FileOperationError,
 )

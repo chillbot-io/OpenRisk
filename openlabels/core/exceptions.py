@@ -102,16 +102,12 @@ class NetworkError(TransientError):
         self.url = url
 
 
-class TimeoutError(TransientError):
+class OperationTimeoutError(TransientError):
     """
-    Operation timed out.
+    Operation timed out. May be retryable with longer timeout.
 
-    May be due to:
-    - Slow processing
-    - Resource contention
-    - Large input size
-
-    May be retryable with longer timeout or smaller input.
+    Note: Named OperationTimeoutError to avoid shadowing Python's
+    built-in TimeoutError.
     """
 
     def __init__(
@@ -418,51 +414,6 @@ class FileOperationError(OpenLabelsError):
 
 
 # =============================================================================
-# DETECTION ERRORS
-# =============================================================================
-
-class DetectionError(OpenLabelsError):
-    """Base class for detection-related errors."""
-    pass
-
-
-class DetectorFailedError(DetectionError):
-    """
-    A detector failed during execution.
-
-    Contains information about which detector failed and why.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        detector_name: str,
-        original_error: Optional[Exception] = None,
-        **kwargs
-    ):
-        super().__init__(message, kwargs)
-        self.detector_name = detector_name
-        self.original_error = original_error
-
-
-class AllDetectorsFailedError(DetectionError):
-    """
-    All detectors failed during execution.
-
-    This is a critical error - no detection results are available.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        failed_detectors: list,
-        **kwargs
-    ):
-        super().__init__(message, kwargs)
-        self.failed_detectors = failed_detectors
-
-
-# =============================================================================
 # EXPORTS
 # =============================================================================
 
@@ -473,7 +424,7 @@ __all__ = [
     "TransientError",
     "DatabaseError",
     "NetworkError",
-    "TimeoutError",
+    "OperationTimeoutError",
     "ResourceBusyError",
     # Permanent
     "PermanentError",
@@ -485,8 +436,4 @@ __all__ = [
     # File operations
     "FileErrorType",
     "FileOperationError",
-    # Detection
-    "DetectionError",
-    "DetectorFailedError",
-    "AllDetectorsFailedError",
 ]
