@@ -1200,9 +1200,9 @@ Use this checklist to track remediation progress:
 - [x] 5.6 Define confidence threshold constants
 
 ### Phase 6: Concurrency & Long-term
-- [ ] 6.1 Add feedback for queue overflow
-- [ ] 6.2 Fix polling watcher race condition
-- [ ] 6.3 Isolate detection queue per context
+- [x] 6.1 Add feedback for queue overflow
+- [x] 6.2 Fix polling watcher race condition
+- [x] 6.3 Isolate detection queue per context (addressed by Phase 4.1)
 
 ---
 
