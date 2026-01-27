@@ -23,7 +23,7 @@ import secrets
 from typing import List, Tuple
 
 from ..types import Span, Tier
-from .base import BaseDetector
+from .base import BasePatternDetector
 from .constants import (
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,
@@ -549,60 +549,23 @@ _add(r'(?:seed|mnemonic|recovery|backup)\s*(?:phrase|words?)?[:\s]+([a-z]+(?:\s+
 
 
 # --- DETECTOR CLASS ---
-class FinancialDetector(BaseDetector):
+class FinancialDetector(BasePatternDetector):
     """
     Detects financial security identifiers and cryptocurrency addresses.
-    
+
     Uses checksum validation where applicable for high confidence.
     """
-    
+
     name = "financial"
     tier = Tier.CHECKSUM  # Uses validation like checksum.py
-    
-    def detect(self, text: str) -> List[Span]:
-        spans = []
-        seen = set()
-        
-        for pattern, entity_type, confidence, group_idx, validator in FINANCIAL_PATTERNS:
-            for match in pattern.finditer(text):
-                if group_idx > 0 and match.lastindex and group_idx <= match.lastindex:
-                    value = match.group(group_idx)
-                    start = match.start(group_idx)
-                    end = match.end(group_idx)
-                else:
-                    value = match.group(0)
-                    start = match.start()
-                    end = match.end()
-                
-                if not value or not value.strip():
-                    continue
-                
-                # Dedupe
-                key = (start, end)
-                if key in seen:
-                    continue
-                
-                # Run validator if present
-                if validator:
-                    if not validator(value):
-                        continue
-                
-                seen.add(key)
-                
-                # Boost confidence if validator passed
-                final_confidence = confidence
-                if validator:
-                    final_confidence = min(CONFIDENCE_PERFECT, confidence + 0.02)
-                
-                span = Span(
-                    start=start,
-                    end=end,
-                    text=value,
-                    entity_type=entity_type,
-                    confidence=final_confidence,
-                    detector=self.name,
-                    tier=self.tier,
-                )
-                spans.append(span)
-        
-        return spans
+
+    def get_patterns(self):
+        """Return financial patterns."""
+        return FINANCIAL_PATTERNS
+
+    def _adjust_confidence(self, entity_type: str, confidence: float,
+                           value: str, has_validator: bool) -> float:
+        """Boost confidence if validator passed."""
+        if has_validator:
+            return min(CONFIDENCE_PERFECT, confidence + 0.02)
+        return confidence

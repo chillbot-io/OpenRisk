@@ -39,7 +39,7 @@ import re
 from typing import List, Tuple
 
 from ..types import Span, Tier
-from .base import BaseDetector
+from .base import BasePatternDetector
 from .constants import (
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,
@@ -309,59 +309,27 @@ _add(r'(?:private[_\s]?key|priv[_\s]?key)["\s:=]+["\']([a-zA-Z0-9+/=\-_]{20,})["
 
 
 # --- DETECTOR CLASS ---
-class SecretsDetector(BaseDetector):
+class SecretsDetector(BasePatternDetector):
     """
     Detects API keys, tokens, and other secrets.
-    
+
     High confidence patterns - these formats are distinctive
     and unlikely to appear in normal text.
     """
-    
+
     name = "secrets"
     tier = Tier.PATTERN  # Same tier as patterns - format-based detection
-    
-    def detect(self, text: str) -> List[Span]:
-        spans = []
-        seen = set()  # Avoid duplicates
-        
-        for pattern, entity_type, confidence, group_idx in SECRETS_PATTERNS:
-            for match in pattern.finditer(text):
-                if group_idx > 0 and match.lastindex and group_idx <= match.lastindex:
-                    value = match.group(group_idx)
-                    start = match.start(group_idx)
-                    end = match.end(group_idx)
-                else:
-                    value = match.group(0)
-                    start = match.start()
-                    end = match.end()
-                
-                if not value or not value.strip():
-                    continue
-                
-                # Dedupe
-                key = (start, end, value)
-                if key in seen:
-                    continue
-                seen.add(key)
-                
-                # Additional validation for specific types
-                if entity_type == 'JWT':
-                    if not self._validate_jwt(value):
-                        continue
-                
-                span = Span(
-                    start=start,
-                    end=end,
-                    text=value,
-                    entity_type=entity_type,
-                    confidence=confidence,
-                    detector=self.name,
-                    tier=self.tier,
-                )
-                spans.append(span)
-        
-        return spans
-    
+
+    def get_patterns(self):
+        """Return secrets patterns."""
+        return SECRETS_PATTERNS
+
+    def _validate_match(self, entity_type: str, value: str) -> bool:
+        """Validate matched values, especially JWTs."""
+        if entity_type == 'JWT':
+            return self._validate_jwt(value)
+        return True
+
     def _validate_jwt(self, token: str) -> bool:
         """Basic JWT structure validation."""
         parts = token.split('.')

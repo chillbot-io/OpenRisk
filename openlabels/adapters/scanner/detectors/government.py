@@ -22,7 +22,7 @@ import re
 from typing import List, Tuple
 
 from ..types import Span, Tier
-from .base import BaseDetector
+from .base import BasePatternDetector
 from .constants import (
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,
@@ -218,78 +218,44 @@ _add(r'\b(DOD\s+UNCLASSIFIED\s+CONTROLLED)\b', 'CLASSIFICATION_LEVEL', CONFIDENC
 
 
 # --- DETECTOR CLASS ---
-class GovernmentDetector(BaseDetector):
+class GovernmentDetector(BasePatternDetector):
     """
     Detects government classification markings and identifiers.
-    
+
     Catches security classification levels, SCI compartments,
     dissemination controls, contract numbers, and CAGE codes.
     """
-    
+
     name = "government"
     tier = Tier.PATTERN
-    
-    def detect(self, text: str) -> List[Span]:
-        spans = []
-        seen = set()
-        
-        for pattern, entity_type, confidence, group_idx in GOVERNMENT_PATTERNS:
-            for match in pattern.finditer(text):
-                if group_idx > 0 and match.lastindex and group_idx <= match.lastindex:
-                    value = match.group(group_idx)
-                    start = match.start(group_idx)
-                    end = match.end(group_idx)
-                else:
-                    value = match.group(0)
-                    start = match.start()
-                    end = match.end()
-                
-                if not value or not value.strip():
-                    continue
-                
-                # Dedupe by position
-                key = (start, end)
-                if key in seen:
-                    continue
-                seen.add(key)
-                
-                # Filter false positives for common words
-                if entity_type == 'CLASSIFICATION_LEVEL':
-                    if self._is_false_positive_classification(value, text, start):
-                        continue
-                
-                span = Span(
-                    start=start,
-                    end=end,
-                    text=value,
-                    entity_type=entity_type,
-                    confidence=confidence,
-                    detector=self.name,
-                    tier=self.tier,
-                )
-                spans.append(span)
-        
-        return spans
-    
-    def _is_false_positive_classification(self, value: str, text: str, start: int) -> bool:
+
+    def get_patterns(self):
+        """Return government patterns."""
+        return GOVERNMENT_PATTERNS
+
+    def _is_false_positive(self, entity_type: str, value: str,
+                           text: str, start: int) -> bool:
         """Filter false positives for classification words."""
+        if entity_type != 'CLASSIFICATION_LEVEL':
+            return False
+
         value_lower = value.lower()
-        
+
         # "SECRET" has many false positives
         if 'secret' in value_lower and 'top' not in value_lower:
             # Check surrounding context for classification indicators
             context_start = max(0, start - 50)
             context_end = min(len(text), start + len(value) + 50)
             context = text[context_start:context_end].lower()
-            
+
             # Must have classification context
             classification_context = [
                 '//', 'classified', 'clearance', 'noforn', 'sci', 'fouo',
                 'dissem', 'caveat', 'portion', 'marking', 'unclassified',
                 'secret//', '//secret'
             ]
-            
+
             if not any(ctx in context for ctx in classification_context):
                 return True
-        
+
         return False

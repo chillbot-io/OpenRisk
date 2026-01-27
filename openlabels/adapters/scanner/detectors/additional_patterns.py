@@ -15,7 +15,7 @@ import re
 from typing import List, Tuple
 
 from ..types import Span, Tier
-from .base import BaseDetector
+from .base import BasePatternDetector
 from .constants import (
     CONFIDENCE_BORDERLINE,
     CONFIDENCE_HIGH,
@@ -165,10 +165,10 @@ _add(
 
 
 # --- Detector Class ---
-class AdditionalPatternDetector(BaseDetector):
+class AdditionalPatternDetector(BasePatternDetector):
     """
     Pattern detector for additional entity types.
-    
+
     Detects:
     - EMPLOYER: Company and organization names
     - AGE: Age expressions in various formats
@@ -178,76 +178,41 @@ class AdditionalPatternDetector(BaseDetector):
     - BANK_ROUTING: ABA routing numbers
     - EMPLOYEE_ID: Employee identifiers
     """
-    
+
     name = "additional_patterns"
     tier = Tier.PATTERN
-    
+
     def __init__(self):
         self._compiled_patterns: List[Tuple[re.Pattern, str, float, int]] = []
         self._compile_patterns()
-    
+
     def _compile_patterns(self):
         """Compile all patterns."""
+        import logging
         for pattern, entity_type, confidence, group, flags in ADDITIONAL_PATTERNS:
             try:
                 compiled = re.compile(pattern, flags)
                 self._compiled_patterns.append((compiled, entity_type, confidence, group))
             except re.error as e:
-                import logging
                 logging.warning(f"Invalid regex pattern for {entity_type}: {e}")
-    
+
     def is_available(self) -> bool:
         return len(self._compiled_patterns) > 0
-    
-    def detect(self, text: str) -> List[Span]:
-        """Detect additional entity types in text."""
-        spans = []
-        
-        for pattern, entity_type, confidence, group in self._compiled_patterns:
-            for match in pattern.finditer(text):
-                try:
-                    if group > 0 and group <= len(match.groups()):
-                        # Use specific capture group
-                        value = match.group(group)
-                        if value:
-                            start = match.start(group)
-                            end = match.end(group)
-                        else:
-                            continue
-                    else:
-                        # Use whole match
-                        value = match.group(0)
-                        start = match.start()
-                        end = match.end()
-                    
-                    # Skip empty or too short matches
-                    if not value or len(value.strip()) < 2:
-                        continue
-                    
-                    # Validate AGE is reasonable (0-120)
-                    if entity_type == "AGE":
-                        try:
-                            # Extract just the number
-                            age_num = re.search(r'\d+', value)
-                            if age_num:
-                                age = int(age_num.group())
-                                if age < 0 or age > 120:
-                                    continue
-                        except ValueError:
-                            continue
-                    
-                    spans.append(Span(
-                        start=start,
-                        end=end,
-                        text=text[start:end],
-                        entity_type=entity_type,
-                        confidence=confidence,
-                        detector=self.name,
-                        tier=self.tier,
-                    ))
 
-                except (IndexError, AttributeError, ValueError):
-                    # Skip problematic matches (bad regex group, None match, etc.)
-                    continue
-        
-        return spans
+    def get_patterns(self):
+        """Return compiled patterns."""
+        return self._compiled_patterns
+
+    def _validate_match(self, entity_type: str, value: str) -> bool:
+        """Validate matched values, especially AGE."""
+        if entity_type == "AGE":
+            try:
+                # Extract just the number
+                age_num = re.search(r'\d+', value)
+                if age_num:
+                    age = int(age_num.group())
+                    if age < 0 or age > 120:
+                        return False
+            except ValueError:
+                return False
+        return True
