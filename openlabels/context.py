@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Any, List
 
 from .adapters.scanner.constants import MAX_DETECTOR_WORKERS
+from .adapters.base import normalize_exposure_level
 
 logger = logging.getLogger(__name__)
 
@@ -158,9 +159,17 @@ class Context:
     _shutdown: bool = field(default=False, repr=False)
 
     def __post_init__(self):
-        """Register cleanup on exit using weak references (Phase 4.3)."""
+        """
+        Initialize context with validation and cleanup registration.
+
+        Phase 4.3: Register cleanup on exit using weak references.
+        Phase 5.2: Validate and normalize default_exposure level.
+        """
+        # Phase 5.2: Validate and normalize exposure level
+        self.default_exposure = normalize_exposure_level(self.default_exposure)
+
+        # Phase 4.3: Register cleanup via weak reference mechanism
         # Don't use atexit.register(self.close) directly - it leaks!
-        # Instead, register via weak reference mechanism
         _register_context(self)
 
     def get_executor(self) -> ThreadPoolExecutor:

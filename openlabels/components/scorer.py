@@ -9,6 +9,8 @@ from typing import Dict, List, Optional, Union, TYPE_CHECKING
 
 from ..adapters.base import Adapter, NormalizedInput
 from ..core.scorer import ScoringResult, score as score_entities
+from ..core.entity_types import normalize_entity_type
+from ..core.constants import CONFIDENCE_WHEN_NO_SPANS
 
 if TYPE_CHECKING:
     from ..context import Context
@@ -139,16 +141,17 @@ class Scorer:
         self,
         entity_counts: Dict[str, int],
     ) -> Dict[str, int]:
-        """Normalize entity type names to lowercase."""
+        """Normalize entity type names to UPPERCASE (Phase 5.1)."""
         return {
-            entity_type.lower(): count
+            normalize_entity_type(entity_type): count
             for entity_type, count in entity_counts.items()
         }
 
     def _calculate_average_confidence(self, spans) -> float:
         """Calculate average confidence from detection spans."""
         if not spans:
-            return 0.90
+            # Phase 5.6: Use named constant instead of magic number
+            return CONFIDENCE_WHEN_NO_SPANS
 
         total_confidence = sum(span.confidence for span in spans)
         return total_confidence / len(spans)
@@ -167,7 +170,8 @@ class Scorer:
 
         for inp in inputs:
             for entity in inp.entities:
-                entity_type = entity.type.lower()
+                # Phase 5.1: Use centralized normalization (always UPPERCASE)
+                entity_type = normalize_entity_type(entity.type)
 
                 if entity_type not in merged:
                     merged[entity_type] = {
@@ -191,7 +195,8 @@ class Scorer:
                 data["confidence"] for data in merged.values()
             ) / len(merged)
         else:
-            avg_confidence = 0.90
+            # Phase 5.6: Use named constant instead of magic number
+            avg_confidence = CONFIDENCE_WHEN_NO_SPANS
 
         return entities, avg_confidence
 

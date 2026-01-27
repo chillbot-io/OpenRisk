@@ -1,6 +1,7 @@
 """Configuration for the OpenLabels Scanner."""
 
 import os
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -8,6 +9,15 @@ from typing import Optional, Set, List
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# PHASE 5.5: CONFIGURATION SCHEMA VERSIONING
+# =============================================================================
+# Increment this when making breaking changes to Config fields.
+# The migration system will help upgrade old configs to new format.
+
+CURRENT_SCHEMA_VERSION = 1
 
 
 class DeviceMode(str, Enum):
@@ -75,7 +85,17 @@ def default_data_dir() -> Path:
 
 @dataclass
 class Config:
-    """OpenLabels Scanner configuration."""
+    """
+    OpenLabels Scanner configuration.
+
+    Phase 5.5: Schema versioning support.
+    - schema_version tracks the config format version
+    - _migrate_config() upgrades old configs to current format
+    - Warnings issued for outdated configs
+    """
+
+    # Phase 5.5: Schema version for migration support
+    schema_version: int = CURRENT_SCHEMA_VERSION
 
     # Paths
     data_dir: Path = field(default_factory=default_data_dir)
@@ -126,7 +146,11 @@ class Config:
     max_file_size: int = 100 * 1024 * 1024  # 100 MB max file size
 
     def __post_init__(self):
-        """Validate configuration values."""
+        """Validate configuration values and migrate if needed."""
+        # Phase 5.5: Check schema version and migrate if needed
+        if self.schema_version != CURRENT_SCHEMA_VERSION:
+            self._migrate_config()
+
         if not validate_data_path(self.data_dir):
             raise ValueError(
                 f"Invalid data_dir '{self.data_dir}'. "
@@ -161,6 +185,43 @@ class Config:
 
         if self.max_file_size < 1:
             raise ValueError("max_file_size must be at least 1")
+
+    def _migrate_config(self) -> None:
+        """
+        Migrate config from older schema version to current (Phase 5.5).
+
+        This method handles upgrades when loading configs from older versions.
+        Add migration steps here as schema evolves.
+        """
+        original_version = self.schema_version
+
+        # Future migrations would be added here:
+        # if self.schema_version < 2:
+        #     # Migrate from v1 to v2
+        #     self.new_field = self.old_field  # Example migration
+        #     self.schema_version = 2
+
+        if self.schema_version < CURRENT_SCHEMA_VERSION:
+            # Config is from the future or unknown - warn but allow
+            warnings.warn(
+                f"Config schema_version {original_version} is older than current "
+                f"version {CURRENT_SCHEMA_VERSION}. Config has been migrated. "
+                "Please update your config file.",
+                UserWarning,
+                stacklevel=3,
+            )
+        elif self.schema_version > CURRENT_SCHEMA_VERSION:
+            # Config is from a newer version of OpenLabels
+            warnings.warn(
+                f"Config schema_version {self.schema_version} is newer than "
+                f"current version {CURRENT_SCHEMA_VERSION}. Some features may "
+                "not work as expected. Consider upgrading OpenLabels.",
+                UserWarning,
+                stacklevel=3,
+            )
+
+        # Update to current version after migration
+        self.schema_version = CURRENT_SCHEMA_VERSION
 
     def ensure_directories(self) -> None:
         """Create data directories with secure permissions (0700)."""

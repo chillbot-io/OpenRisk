@@ -129,6 +129,9 @@ def format_scan_result(result: ScanResult, format: str = "text") -> str:
         return json.dumps(result.to_dict())
 
     # Text format with color
+    # Phase 5.3: Handle Optional score/tier fields
+    tier_str = result.tier if result.tier is not None else "N/A"
+    score_str = str(result.score) if result.score is not None else "N/A"
     color = TIER_COLORS.get(result.tier, "")
 
     if result.error:
@@ -138,7 +141,7 @@ def format_scan_result(result: ScanResult, format: str = "text") -> str:
         f"{k}({v})" for k, v in sorted(result.entities.items())
     ) if result.entities else "none"
 
-    return f"{result.path}: {color}{result.score:>3}{TermColors.RESET} ({result.tier:<8}) [{entities_str}]"
+    return f"{result.path}: {color}{score_str:>3}{TermColors.RESET} ({tier_str:<8}) [{entities_str}]"
 
 
 def cmd_scan(args) -> int:

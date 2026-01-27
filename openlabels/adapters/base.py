@@ -33,6 +33,49 @@ class ExposureLevel(Enum):
     PUBLIC = 3
 
 
+# Valid exposure level names (Phase 5.2)
+VALID_EXPOSURE_LEVELS = frozenset({"PRIVATE", "INTERNAL", "ORG_WIDE", "PUBLIC"})
+
+
+def normalize_exposure_level(exposure) -> str:
+    """
+    Normalize exposure level to canonical UPPERCASE string (Phase 5.2).
+
+    Accepts:
+        - ExposureLevel enum member
+        - String (case-insensitive)
+
+    Returns:
+        Canonical UPPERCASE string: "PRIVATE", "INTERNAL", "ORG_WIDE", or "PUBLIC"
+
+    Raises:
+        ValueError: If exposure is not a valid level
+
+    Examples:
+        >>> normalize_exposure_level(ExposureLevel.PRIVATE)
+        'PRIVATE'
+        >>> normalize_exposure_level("public")
+        'PUBLIC'
+        >>> normalize_exposure_level("org_wide")
+        'ORG_WIDE'
+    """
+    if isinstance(exposure, ExposureLevel):
+        return exposure.name
+
+    if isinstance(exposure, str):
+        normalized = exposure.strip().upper()
+        if normalized in VALID_EXPOSURE_LEVELS:
+            return normalized
+        raise ValueError(
+            f"Invalid exposure level: '{exposure}'. "
+            f"Valid levels: {sorted(VALID_EXPOSURE_LEVELS)}"
+        )
+
+    raise TypeError(
+        f"Exposure must be string or ExposureLevel enum, got {type(exposure).__name__}"
+    )
+
+
 @dataclass
 class Entity:
     """A detected entity with metadata."""
@@ -50,9 +93,12 @@ class NormalizedContext:
 
     Used by the scoring engine to apply exposure multipliers and
     additional context adjustments to the risk score.
+
+    Phase 5.2: exposure field is validated and normalized to uppercase.
+    Accepts ExposureLevel enum or case-insensitive string.
     """
     # Exposure factors
-    exposure: str                   # PRIVATE, INTERNAL, ORG_WIDE, PUBLIC
+    exposure: str = "PRIVATE"       # PRIVATE, INTERNAL, ORG_WIDE, PUBLIC
     cross_account_access: bool = False    # Access from other accounts/tenants
     anonymous_access: bool = False        # Anonymous/public access
 
@@ -77,6 +123,10 @@ class NormalizedContext:
     size_bytes: int = 0             # File size
     file_type: str = ""             # MIME type or extension
     is_archive: bool = False        # Whether this is a compressed archive
+
+    def __post_init__(self):
+        """Phase 5.2: Validate and normalize exposure level."""
+        self.exposure = normalize_exposure_level(self.exposure)
 
 
 @dataclass

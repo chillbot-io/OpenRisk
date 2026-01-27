@@ -1192,12 +1192,12 @@ Use this checklist to track remediation progress:
 - [x] 4.5 Fix detection queue counter leak
 
 ### Phase 5: Contract Consistency
-- [ ] 5.1 Centralize entity type normalization
-- [ ] 5.2 Enforce ExposureLevel enum everywhere
-- [ ] 5.3 Clarify optional vs required fields
-- [ ] 5.4 Warn on unknown filter fields
-- [ ] 5.5 Add config schema versioning
-- [ ] 5.6 Define confidence threshold constants
+- [x] 5.1 Centralize entity type normalization
+- [x] 5.2 Enforce ExposureLevel enum everywhere
+- [x] 5.3 Clarify optional vs required fields
+- [x] 5.4 Warn on unknown filter fields
+- [x] 5.5 Add config schema versioning
+- [x] 5.6 Define confidence threshold constants
 
 ### Phase 6: Concurrency & Long-term
 - [ ] 6.1 Add feedback for queue overflow
