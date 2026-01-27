@@ -9,6 +9,7 @@ import re
 from typing import List
 
 from ...types import Span
+from ..constants import (CONFIDENCE_MEDIUM_LOW)
 
 
 # Pattern for street addresses (without labels)
@@ -55,7 +56,7 @@ def detect_unlabeled_addresses(text: str, existing_spans: List[Span]) -> List[Sp
                 end=match.start() + len(value),
                 text=value,
                 entity_type="ADDRESS",
-                confidence=0.88,
+                confidence=CONFIDENCE_MEDIUM_LOW,
                 detector="structured",
                 tier=3,
             ))
@@ -68,7 +69,7 @@ def detect_unlabeled_addresses(text: str, existing_spans: List[Span]) -> List[Sp
                 end=match.end(),
                 text=match.group(1),
                 entity_type="ADDRESS",
-                confidence=0.88,
+                confidence=CONFIDENCE_MEDIUM_LOW,
                 detector="structured",
                 tier=3,
             ))

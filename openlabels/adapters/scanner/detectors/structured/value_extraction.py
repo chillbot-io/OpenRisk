@@ -13,6 +13,7 @@ from typing import Dict, Optional
 from ...constants import MAX_STRUCTURED_VALUE_LENGTH
 from .label_detection import DetectedLabel
 from .prose_detection import looks_like_prose, clean_field_value
+from ..constants import (CONFIDENCE_RELIABLE)
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +208,7 @@ def extract_value(
         value=value,
         value_start=actual_start,
         value_end=actual_end,
-        confidence=0.92,  # High confidence for label-based extraction
+        confidence=CONFIDENCE_RELIABLE,  # High confidence for label-based extraction
     )
 
 

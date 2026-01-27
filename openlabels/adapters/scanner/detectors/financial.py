@@ -23,7 +23,15 @@ import secrets
 from typing import List, Tuple
 
 from ..types import Span, Tier
-from .base import BaseDetector
+from .base import BasePatternDetector
+from .constants import (
+    CONFIDENCE_HIGH,
+    CONFIDENCE_LOW,
+    CONFIDENCE_LOWEST,
+    CONFIDENCE_PERFECT,
+    CONFIDENCE_VERY_HIGH,
+    CONFIDENCE_WEAK,
+)
 
 
 # --- CHECKSUM VALIDATORS ---
@@ -462,139 +470,102 @@ def _add(pattern: str, entity_type: str, confidence: float, group: int = 0,
 
 # --- SECURITY IDENTIFIERS ---
 # CUSIP: 9 alphanumeric (labeled)
-_add(r'(?:CUSIP)[:\s#]+([A-Z0-9]{9})\b', 'CUSIP', 0.98, 1, _validate_cusip, re.I)
+_add(r'(?:CUSIP)[:\s#]+([A-Z0-9]{9})\b', 'CUSIP', CONFIDENCE_VERY_HIGH, 1, _validate_cusip, re.I)
 # CUSIP: Bare format (requires validation)
-_add(r'\b([0-9]{3}[A-Z0-9]{5}[0-9])\b', 'CUSIP', 0.85, 1, _validate_cusip)
+_add(r'\b([0-9]{3}[A-Z0-9]{5}[0-9])\b', 'CUSIP', CONFIDENCE_LOW, 1, _validate_cusip)
 
 # ISIN: 12 characters, starts with country code
-_add(r'(?:ISIN)[:\s#]+([A-Z]{2}[A-Z0-9]{10})\b', 'ISIN', 0.98, 1, _validate_isin, re.I)
-_add(r'\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b', 'ISIN', 0.85, 1, _validate_isin)
+_add(r'(?:ISIN)[:\s#]+([A-Z]{2}[A-Z0-9]{10})\b', 'ISIN', CONFIDENCE_VERY_HIGH, 1, _validate_isin, re.I)
+_add(r'\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b', 'ISIN', CONFIDENCE_LOW, 1, _validate_isin)
 
 # SEDOL: 7 alphanumeric, no vowels
-_add(r'(?:SEDOL)[:\s#]+([B-DF-HJ-NP-TV-Z0-9]{7})\b', 'SEDOL', 0.98, 1, _validate_sedol, re.I)
-_add(r'\b([B-DF-HJ-NP-TV-Z0-9]{7})\b', 'SEDOL', 0.70, 1, _validate_sedol)  # Lower confidence bare
+_add(r'(?:SEDOL)[:\s#]+([B-DF-HJ-NP-TV-Z0-9]{7})\b', 'SEDOL', CONFIDENCE_VERY_HIGH, 1, _validate_sedol, re.I)
+_add(r'\b([B-DF-HJ-NP-TV-Z0-9]{7})\b', 'SEDOL', CONFIDENCE_LOWEST, 1, _validate_sedol)  # Lower confidence bare
 
 # SWIFT/BIC: 8 or 11 characters
 # Note: Standalone pattern disabled (0.40) - too many false positives on common words
 # Use only with SWIFT/BIC prefix for reliable detection
-_add(r'(?:SWIFT|BIC)[:\s#]+([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b', 'SWIFT_BIC', 0.98, 1, _validate_swift, re.I)
+_add(r'(?:SWIFT|BIC)[:\s#]+([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b', 'SWIFT_BIC', CONFIDENCE_VERY_HIGH, 1, _validate_swift, re.I)
 _add(r'\b([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b', 'SWIFT_BIC', 0.40, 1, _validate_swift)
 
 # LEI: 20 alphanumeric
-_add(r'(?:LEI)[:\s#]+([A-Z0-9]{20})\b', 'LEI', 0.98, 1, _validate_lei, re.I)
-_add(r'\b([A-Z0-9]{18}[0-9]{2})\b', 'LEI', 0.80, 1, _validate_lei)
+_add(r'(?:LEI)[:\s#]+([A-Z0-9]{20})\b', 'LEI', CONFIDENCE_VERY_HIGH, 1, _validate_lei, re.I)
+_add(r'\b([A-Z0-9]{18}[0-9]{2})\b', 'LEI', CONFIDENCE_WEAK, 1, _validate_lei)
 
 # FIGI: 12 characters, starts with BBG
-_add(r'(?:FIGI)[:\s#]+([A-Z0-9]{12})\b', 'FIGI', 0.98, 1, _validate_figi, re.I)
-_add(r'\b(BBG[A-Z0-9]{9})\b', 'FIGI', 0.95, 1, _validate_figi)
+_add(r'(?:FIGI)[:\s#]+([A-Z0-9]{12})\b', 'FIGI', CONFIDENCE_VERY_HIGH, 1, _validate_figi, re.I)
+_add(r'\b(BBG[A-Z0-9]{9})\b', 'FIGI', CONFIDENCE_HIGH, 1, _validate_figi)
 
 
 # --- CRYPTOCURRENCY ---
 # Bitcoin Legacy (P2PKH): starts with 1
 _add(r'\b(1[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{25,34})\b', 
-     'BITCOIN_ADDRESS', 0.95, 1, _validate_bitcoin_base58)
+     'BITCOIN_ADDRESS', CONFIDENCE_HIGH, 1, _validate_bitcoin_base58)
 
 # Bitcoin P2SH: starts with 3
 _add(r'\b(3[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{25,34})\b', 
-     'BITCOIN_ADDRESS', 0.95, 1, _validate_bitcoin_base58)
+     'BITCOIN_ADDRESS', CONFIDENCE_HIGH, 1, _validate_bitcoin_base58)
 
 # Bitcoin Bech32 (SegWit): starts with bc1q
 _add(r'\b(bc1q[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38,})\b', 
-     'BITCOIN_ADDRESS', 0.98, 1, _validate_bitcoin_bech32, re.I)
+     'BITCOIN_ADDRESS', CONFIDENCE_VERY_HIGH, 1, _validate_bitcoin_bech32, re.I)
 
 # Bitcoin Bech32m (Taproot): starts with bc1p
 _add(r'\b(bc1p[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{58,})\b', 
-     'BITCOIN_ADDRESS', 0.98, 1, _validate_bitcoin_bech32, re.I)
+     'BITCOIN_ADDRESS', CONFIDENCE_VERY_HIGH, 1, _validate_bitcoin_bech32, re.I)
 
 # Ethereum: 0x + 40 hex
-_add(r'\b(0x[a-fA-F0-9]{40})\b', 'ETHEREUM_ADDRESS', 0.98, 1, _validate_ethereum)
+_add(r'\b(0x[a-fA-F0-9]{40})\b', 'ETHEREUM_ADDRESS', CONFIDENCE_VERY_HIGH, 1, _validate_ethereum)
 
 # Solana: Base58, 32-44 characters
 _add(r'\b([1-9A-HJ-NP-Za-km-z]{32,44})\b(?=.*(?:solana|sol|phantom|wallet))', 
-     'SOLANA_ADDRESS', 0.85, 1, None, re.I)
+     'SOLANA_ADDRESS', CONFIDENCE_LOW, 1, None, re.I)
 
 # Cardano: starts with addr1 or addr_test1
-_add(r'\b(addr1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{50,})\b', 'CARDANO_ADDRESS', 0.95, 1, None, re.I)
+_add(r'\b(addr1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{50,})\b', 'CARDANO_ADDRESS', CONFIDENCE_HIGH, 1, None, re.I)
 
 # Litecoin: starts with L, M, or ltc1
 _add(r'\b([LM][123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{26,34})\b', 
-     'LITECOIN_ADDRESS', 0.85, 1, None)
-_add(r'\b(ltc1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38,})\b', 'LITECOIN_ADDRESS', 0.95, 1, None, re.I)
+     'LITECOIN_ADDRESS', CONFIDENCE_LOW, 1, None)
+_add(r'\b(ltc1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38,})\b', 'LITECOIN_ADDRESS', CONFIDENCE_HIGH, 1, None, re.I)
 
 # Dogecoin: starts with D
 _add(r'\b(D[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{26,34})\b', 
-     'DOGECOIN_ADDRESS', 0.80, 1, None)
+     'DOGECOIN_ADDRESS', CONFIDENCE_WEAK, 1, None)
 
 # XRP/Ripple: starts with r
 _add(r'\b(r[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{24,34})\b', 
-     'XRP_ADDRESS', 0.80, 1, None)
+     'XRP_ADDRESS', CONFIDENCE_WEAK, 1, None)
 
 
 # --- SEED PHRASES ---
 # 12-word seed phrase (contextual)
 _add(r'(?:seed|mnemonic|recovery|backup)\s*(?:phrase|words?)?[:\s]+([a-z]+(?:\s+[a-z]+){11})\b', 
-     'CRYPTO_SEED_PHRASE', 0.95, 1, _validate_seed_phrase, re.I)
+     'CRYPTO_SEED_PHRASE', CONFIDENCE_HIGH, 1, _validate_seed_phrase, re.I)
 
 # 24-word seed phrase (contextual)
 _add(r'(?:seed|mnemonic|recovery|backup)\s*(?:phrase|words?)?[:\s]+([a-z]+(?:\s+[a-z]+){23})\b', 
-     'CRYPTO_SEED_PHRASE', 0.95, 1, _validate_seed_phrase, re.I)
+     'CRYPTO_SEED_PHRASE', CONFIDENCE_HIGH, 1, _validate_seed_phrase, re.I)
 
 
 # --- DETECTOR CLASS ---
-class FinancialDetector(BaseDetector):
+class FinancialDetector(BasePatternDetector):
     """
     Detects financial security identifiers and cryptocurrency addresses.
-    
+
     Uses checksum validation where applicable for high confidence.
     """
-    
+
     name = "financial"
     tier = Tier.CHECKSUM  # Uses validation like checksum.py
-    
-    def detect(self, text: str) -> List[Span]:
-        spans = []
-        seen = set()
-        
-        for pattern, entity_type, confidence, group_idx, validator in FINANCIAL_PATTERNS:
-            for match in pattern.finditer(text):
-                if group_idx > 0 and match.lastindex and group_idx <= match.lastindex:
-                    value = match.group(group_idx)
-                    start = match.start(group_idx)
-                    end = match.end(group_idx)
-                else:
-                    value = match.group(0)
-                    start = match.start()
-                    end = match.end()
-                
-                if not value or not value.strip():
-                    continue
-                
-                # Dedupe
-                key = (start, end)
-                if key in seen:
-                    continue
-                
-                # Run validator if present
-                if validator:
-                    if not validator(value):
-                        continue
-                
-                seen.add(key)
-                
-                # Boost confidence if validator passed
-                final_confidence = confidence
-                if validator:
-                    final_confidence = min(0.99, confidence + 0.02)
-                
-                span = Span(
-                    start=start,
-                    end=end,
-                    text=value,
-                    entity_type=entity_type,
-                    confidence=final_confidence,
-                    detector=self.name,
-                    tier=self.tier,
-                )
-                spans.append(span)
-        
-        return spans
+
+    def get_patterns(self):
+        """Return financial patterns."""
+        return FINANCIAL_PATTERNS
+
+    def _adjust_confidence(self, entity_type: str, confidence: float,
+                           value: str, has_validator: bool) -> float:
+        """Boost confidence if validator passed."""
+        if has_validator:
+            return min(CONFIDENCE_PERFECT, confidence + 0.02)
+        return confidence
