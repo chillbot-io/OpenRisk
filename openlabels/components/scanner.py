@@ -272,12 +272,16 @@ class Scanner:
             return False
 
         if criteria:
-            if criteria.min_score is not None and result.score < criteria.min_score:
-                return False
-            if criteria.max_score is not None and result.score > criteria.max_score:
-                return False
-            if criteria.tier and result.tier.upper() != criteria.tier.upper():
-                return False
+            # Phase 5.3: Handle Optional score/tier fields
+            if criteria.min_score is not None:
+                if result.score is None or result.score < criteria.min_score:
+                    return False
+            if criteria.max_score is not None:
+                if result.score is None or result.score > criteria.max_score:
+                    return False
+            if criteria.tier:
+                if result.tier is None or result.tier.upper() != criteria.tier.upper():
+                    return False
             if criteria.path_pattern and not fnmatch.fnmatch(result.path, criteria.path_pattern):
                 return False
             if criteria.file_type:
