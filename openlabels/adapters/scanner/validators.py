@@ -24,46 +24,86 @@ class FileValidationError(Exception):
     pass
 
 
+# SECURITY FIX (LOW-002): Reserved Windows device names that could cause issues
+# These names (with or without extensions) are special on Windows
+WINDOWS_RESERVED_NAMES = frozenset([
+    "CON", "PRN", "AUX", "NUL",
+    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+])
+
+
 def sanitize_filename(filename: str) -> str:
     """
     Sanitize uploaded filename to prevent injection attacks.
-    
-    Removes:
+
+    Removes/replaces:
     - Path components (prevents directory traversal)
     - Null bytes and control characters
     - Characters dangerous for HTML/logs (<, >, quotes)
     - Shell metacharacters
-    
+    - Reserved Windows device names (CON, PRN, NUL, etc.)
+    - Leading dashes (confuses CLI tools)
+    - Percent-encoded sequences that could bypass checks
+    - Non-ASCII characters (prevents homoglyph attacks)
+
     Args:
         filename: Original filename from upload
-        
+
     Returns:
         Sanitized filename safe for storage and display
+
+    Security Note (LOW-002):
+        This function is intentionally strict to prevent edge-case attacks.
+        It normalizes to ASCII-only filenames for maximum compatibility.
     """
     if not filename:
         return "unknown"
-    
+
     # Remove path components (handles both Unix and Windows paths)
     filename = os.path.basename(filename)
-    
-    # Remove null bytes and control characters (0x00-0x1f)
+
+    # SECURITY FIX (LOW-002): Decode percent-encoded sequences first
+    # This prevents %00 (null byte) or %2F (slash) from bypassing checks
+    try:
+        # Only decode if it looks like it has percent encoding
+        if '%' in filename:
+            import urllib.parse
+            filename = urllib.parse.unquote(filename)
+    except (ValueError, UnicodeDecodeError):
+        pass  # If decoding fails, continue with original
+
+    # SECURITY FIX (LOW-002): Replace non-ASCII characters to prevent homoglyph attacks
+    # e.g., Cyrillic 'а' (U+0430) looks like Latin 'a' but is different
+    filename = filename.encode('ascii', errors='replace').decode('ascii')
+
+    # Remove null bytes and control characters (0x00-0x1f, 0x7f)
     # Also remove: < > : " / \ | ? * (dangerous for various systems)
-    filename = re.sub(r'[\x00-\x1f<>:"/\\|?*\'`$;!&()]', '_', filename)
-    
+    # Also remove: ' ` $ ; ! & ( ) # ~ { } [ ] @ (shell/HTML dangerous)
+    filename = re.sub(r'[\x00-\x1f\x7f<>:"/\\|?*\'`$;!&()#~{}\[\]@]', '_', filename)
+
+    # SECURITY FIX (LOW-002): Remove leading dashes (confuses CLI tools like rm, ls)
+    filename = filename.lstrip('-')
+
     # Collapse multiple underscores/dots
     filename = re.sub(r'_+', '_', filename)
     filename = re.sub(r'\.+', '.', filename)
-    
+
     # Remove leading/trailing underscores and dots
     filename = filename.strip('_. ')
-    
+
+    # SECURITY FIX (LOW-002): Check for Windows reserved names
+    name_without_ext = os.path.splitext(filename)[0].upper()
+    if name_without_ext in WINDOWS_RESERVED_NAMES:
+        filename = f"file_{filename}"
+
     # Limit length (255 is common filesystem limit, use MAX_FILENAME_LENGTH for safety)
     if len(filename) > MAX_FILENAME_LENGTH:
         # Preserve extension
         name, ext = os.path.splitext(filename)
         max_name_len = MAX_FILENAME_LENGTH - len(ext)
         filename = name[:max_name_len] + ext
-    
+
     return filename or "unknown"
 
 

@@ -18,6 +18,29 @@ Phase 4 Changes:
     - When Context is provided, uses context.detection_slot() instead of module globals
     - Module-level globals are kept for backward compatibility but deprecated
     - Issue 4.5: Uses context.detection_slot() for safe semaphore handling
+
+SECURITY NOTE (LOW-005): Thread Timeout Limitations
+    Python threads cannot be forcibly killed - only cancelled gracefully via
+    Future.cancel(). When a detector times out:
+
+    1. If the thread hasn't started yet, it can be cancelled (good)
+    2. If the thread is running, cancel() has NO EFFECT (problematic)
+
+    Runaway threads (those that can't be cancelled) will continue executing
+    in the background, consuming CPU and memory. This is a fundamental Python
+    limitation, not a bug in this code.
+
+    Mitigations:
+    - We track runaway thread count via get_runaway_detection_count()
+    - Critical warnings are logged when runaway count exceeds threshold
+    - Use detect_with_metadata() to check metadata.detectors_timed_out
+    - For true isolation, consider process-based parallelism (multiprocessing)
+    - Monitor and restart long-running processes if runaway count grows
+
+    The timeout mechanism still provides value:
+    - Fast-responding detectors return results immediately
+    - Callers don't wait indefinitely for slow detectors
+    - Results are available even if some detectors hang
 """
 
 import atexit
@@ -91,6 +114,32 @@ class DetectionQueueFullError(Exception):
         super().__init__(
             f"Detection queue full: {queue_depth} pending requests "
             f"(max: {max_depth}). Try again later."
+        )
+
+
+class DetectorFailureError(Exception):
+    """
+    Raised when detector(s) fail in strict mode (LOW-004).
+
+    SECURITY FIX (LOW-004): By default, detector failures are logged but don't
+    fail the scan (tolerant mode). In strict mode, any detector failure raises
+    this exception to ensure complete coverage.
+
+    Use strict mode when:
+    - Complete detection coverage is required (compliance scanning)
+    - False negatives are more dangerous than performance impact
+    - Running in validation/testing mode
+
+    Attributes:
+        failed_detectors: List of detector names that failed
+        metadata: Full detection metadata for debugging
+    """
+    def __init__(self, failed_detectors: List[str], metadata: "DetectionMetadata"):
+        self.failed_detectors = failed_detectors
+        self.metadata = metadata
+        super().__init__(
+            f"Detector(s) failed in strict mode: {', '.join(failed_detectors)}. "
+            f"Detection results may be incomplete."
         )
 
 
@@ -612,6 +661,7 @@ class DetectorOrchestrator:
         text: str,
         timeout: float = DETECTOR_TIMEOUT,
         known_entities: Optional[Dict[str, tuple]] = None,
+        strict_mode: bool = False,
     ) -> Tuple[List[Span], DetectionMetadata]:
         """
         Run all detectors on text and return metadata about the detection process.
@@ -623,6 +673,9 @@ class DetectorOrchestrator:
             text: Normalized input text
             timeout: Max seconds per detector
             known_entities: Optional dict of known entities from TokenStore
+            strict_mode: If True, raise DetectorFailureError when any detector
+                        fails (LOW-004). Use for compliance scanning where
+                        complete coverage is required. Default: False (tolerant).
 
         Returns:
             Tuple of (spans, metadata) where metadata contains:
@@ -634,6 +687,7 @@ class DetectorOrchestrator:
 
         Raises:
             DetectionQueueFullError: If queue depth exceeds MAX_QUEUE_DEPTH
+            DetectorFailureError: If strict_mode=True and any detector fails (LOW-004)
         """
         if not text:
             return [], DetectionMetadata()
@@ -644,6 +698,12 @@ class DetectorOrchestrator:
             metadata = DetectionMetadata()
             spans = self._detect_impl_with_metadata(text, timeout, known_entities, metadata)
             metadata.finalize()
+
+            # SECURITY FIX (LOW-004): Strict mode fails if any detector failed
+            if strict_mode and (metadata.detectors_failed or metadata.detectors_timed_out):
+                all_failed = metadata.detectors_failed + metadata.detectors_timed_out
+                raise DetectorFailureError(all_failed, metadata)
+
             return spans, metadata
 
     def _detect_impl(
