@@ -79,6 +79,9 @@ def cmd_detect(args):
     """Detect PII/PHI in text."""
     from openlabels.adapters.scanner import Detector, Config
 
+    # Maximum stdin input size (10MB) to prevent memory exhaustion
+    MAX_STDIN_SIZE = 10 * 1024 * 1024
+
     config = Config(
         min_confidence=args.confidence,
         enable_ocr=False,
@@ -87,7 +90,14 @@ def cmd_detect(args):
 
     text = args.text
     if text == "-":
-        text = sys.stdin.read()
+        # SECURITY FIX (CVE-READY-001): Limit stdin read to prevent OOM
+        text = sys.stdin.read(MAX_STDIN_SIZE + 1)
+        if len(text) > MAX_STDIN_SIZE:
+            print(
+                f"Error: stdin input exceeds maximum size ({MAX_STDIN_SIZE // (1024*1024)}MB)",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     result = detector.detect(text)
     print(format_result(result, args.format))

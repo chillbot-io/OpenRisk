@@ -623,18 +623,24 @@ class LabelIndex:
 
         Returns:
             True if successful
+
+        Security notes:
+            SECURITY FIX (HIGH-004): Uses cursor iteration instead of fetchall()
+            to prevent loading entire result set into memory for large datasets.
         """
         try:
             with self._get_connection() as conn:
-                rows = conn.execute("""
+                # SECURITY FIX (HIGH-004): Use cursor iteration instead of fetchall()
+                # This streams results instead of loading all into memory
+                cursor = conn.execute("""
                     SELECT v.labels_json, v.risk_score, v.risk_tier, o.file_path
                     FROM label_versions v
                     JOIN label_objects o ON v.label_id = o.label_id
                     WHERE o.tenant_id = ?
-                """, (self.tenant_id,)).fetchall()
+                """, (self.tenant_id,))
 
                 with open(output_path, 'w') as f:
-                    for row in rows:
+                    for row in cursor:
                         record = json.loads(row['labels_json'])
                         record['_risk_score'] = row['risk_score']
                         record['_risk_tier'] = row['risk_tier']

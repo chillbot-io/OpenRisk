@@ -496,6 +496,9 @@ class DetectorOrchestrator:
             return self._context.track_runaway_detection(detector_name)
         return _track_runaway_detection(detector_name)
 
+    # SECURITY FIX (HIGH-009): Maximum matches per search term to prevent memory exhaustion
+    MAX_MATCHES_PER_TERM = 100
+
     def _detect_known_entities(
         self,
         text: str,
@@ -531,9 +534,15 @@ class DetectorOrchestrator:
 
             for search_term in search_terms:
                 start = 0
+                match_count = 0
                 while True:
                     idx = text_lower.find(search_term, start)
                     if idx == -1:
+                        break
+
+                    # SECURITY FIX (HIGH-009): Limit matches per term to prevent OOM
+                    if match_count >= self.MAX_MATCHES_PER_TERM:
+                        logger.debug(f"Reached max matches ({self.MAX_MATCHES_PER_TERM}) for known entity")
                         break
 
                     end = idx + len(search_term)
@@ -558,6 +567,7 @@ class DetectorOrchestrator:
                                 tier=Tier.STRUCTURED,  # High tier to bypass context enhancement
                             )
                             spans.append(span)
+                            match_count += 1
                             logger.debug(
                                 f"Known entity match: '{original_text}' -> {token}"
                             )

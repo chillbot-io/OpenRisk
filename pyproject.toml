@@ -30,16 +30,22 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-pdf = ["pymupdf>=1.23.0"]
-office = ["python-docx>=1.0.0", "openpyxl>=3.1.0"]
-images = ["pillow>=10.0.0"]
-ocr = [
-    "numpy>=1.24.0",
-    "onnxruntime>=1.16.0",
-    "rapidocr-onnxruntime>=1.3.0",
+pdf = ["pymupdf>=1.23.0,<1.25.0"]  # SECURITY: Pin upper bound to avoid breaking changes
+office = [
+    "python-docx>=1.0.0,<2.0.0",
+    "openpyxl>=3.1.0,<4.0.0",
+    "xlrd>=2.0.0,<3.0.0",  # SECURITY FIX (HIGH-014): Declare XLS dependency
+    "striprtf>=0.0.26,<1.0.0",  # SECURITY FIX (HIGH-014): Declare RTF dependency
 ]
-performance = ["pyahocorasick>=2.0.0"]
-security = ["regex>=2023.0.0"]  # Enables ReDoS timeout protection
+images = ["pillow>=10.0.0,<11.0.0"]  # SECURITY: Pin upper bound
+ocr = [
+    "numpy>=1.24.0,<2.0.0",
+    "onnxruntime>=1.16.0,<2.0.0",
+    "rapidocr-onnxruntime>=1.3.0,<2.0.0",
+    "intervaltree>=3.1.0,<4.0.0",  # SECURITY FIX (HIGH-014): Declare OCR dependency
+]
+performance = ["pyahocorasick>=2.0.0,<3.0.0"]
+security = ["regex>=2023.0.0,<2025.0.0"]  # REQUIRED for ReDoS timeout protection
 all = [
     "openlabels[pdf,office,images,ocr,performance,security]",
 ]

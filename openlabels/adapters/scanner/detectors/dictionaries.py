@@ -334,6 +334,9 @@ class DictionaryDetector(BaseDetector):
         
         return spans
 
+    # SECURITY FIX (HIGH-008): Maximum matches per term to prevent memory exhaustion
+    MAX_MATCHES_PER_TERM = 100
+
     def _find_terms(
         self,
         text: str,
@@ -343,16 +346,22 @@ class DictionaryDetector(BaseDetector):
     ) -> List[Span]:
         """Find all occurrences of terms with word boundary checking (fallback)."""
         spans = []
-        
+
         for term in terms:
             pos = 0
+            match_count = 0
             while True:
                 idx = text_lower.find(term, pos)
                 if idx == -1:
                     break
-                
+
+                # SECURITY FIX (HIGH-008): Limit matches per term to prevent OOM
+                if match_count >= self.MAX_MATCHES_PER_TERM:
+                    logger.debug(f"Reached max matches ({self.MAX_MATCHES_PER_TERM}) for term")
+                    break
+
                 end_idx = idx + len(term)
-                
+
                 # Only accept matches at word boundaries
                 if self._is_word_boundary(text, idx, end_idx):
                     spans.append(Span(
@@ -364,9 +373,10 @@ class DictionaryDetector(BaseDetector):
                         detector=self.name,
                         tier=self.tier,
                     ))
-                
+                    match_count += 1
+
                 pos = idx + 1
-        
+
         return spans
 
     def detect(self, text: str) -> List[Span]:

@@ -166,9 +166,22 @@ class FileWatcher:
         self._observer: Optional[Observer] = None
         self._handler: Optional[_WatchdogHandler] = None
 
-        # State
-        self._running = False
+        # State - SECURITY FIX (HIGH-001): Use threading.Event for thread-safe state
+        self._running_event = threading.Event()
         self._processor_thread: Optional[threading.Thread] = None
+
+    @property
+    def _running(self) -> bool:
+        """Thread-safe check if watcher is running."""
+        return self._running_event.is_set()
+
+    @_running.setter
+    def _running(self, value: bool) -> None:
+        """Thread-safe set running state."""
+        if value:
+            self._running_event.set()
+        else:
+            self._running_event.clear()
 
     def start(self) -> None:
         """Start watching for changes."""
@@ -469,10 +482,19 @@ def watch_directory(
         >>> for event in watch_directory("/data", timeout=60):
         ...     print(f"{event.event_type}: {event.path}")
     """
-    event_queue: queue.Queue = queue.Queue()
+    # SECURITY FIX (CVE-READY-004): Add maxsize to prevent memory exhaustion
+    # from rapid file system changes
+    max_queue_size = kwargs.pop("max_queue_size", 10000)
+    event_queue: queue.Queue = queue.Queue(maxsize=max_queue_size)
 
     def on_change(event: WatchEvent):
-        event_queue.put(event)
+        try:
+            # Non-blocking put - if queue is full, we drop the event
+            # This prevents memory exhaustion from rapid file changes
+            event_queue.put_nowait(event)
+        except queue.Full:
+            logger.warning("Event queue full - dropping event (consider increasing max_queue_size)")
+            pass
 
     watcher = start_watcher(path, on_change=on_change, recursive=recursive, **kwargs)
 
@@ -538,13 +560,27 @@ class PollingWatcher:
         self.hash_threshold = hash_threshold if hash_threshold is not None else self.DEFAULT_HASH_THRESHOLD
         self.on_queue_full = on_queue_full
 
-        self._running = False
+        # SECURITY FIX (HIGH-001): Use threading.Event for thread-safe state
+        self._running_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._known_files: dict = {}  # path -> (mtime, size, content_hash)
 
         # Phase 6.1: Dropped events tracking
         self._dropped_events: int = 0
         self._dropped_events_lock = threading.Lock()
+
+    @property
+    def _running(self) -> bool:
+        """Thread-safe check if watcher is running."""
+        return self._running_event.is_set()
+
+    @_running.setter
+    def _running(self, value: bool) -> None:
+        """Thread-safe set running state."""
+        if value:
+            self._running_event.set()
+        else:
+            self._running_event.clear()
 
     def start(self) -> None:
         """Start polling."""
@@ -576,7 +612,11 @@ class PollingWatcher:
         """
         while self._running:
             try:
-                time.sleep(self.interval)
+                # SECURITY FIX (HIGH-010/011): Use Event.wait() for interruptible sleep
+                # This allows immediate response when stopped instead of waiting for timeout
+                self._running_event.wait(self.interval)
+                if not self._running:
+                    break
 
                 current_files = self._scan_directory()
 
