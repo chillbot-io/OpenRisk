@@ -28,21 +28,9 @@ from pathlib import Path
 from typing import List, Optional
 
 from openlabels import __version__
-
-
-def setup_logging(verbose: bool = False, quiet: bool = False):
-    """Configure logging based on verbosity flags."""
-    if quiet:
-        level = logging.ERROR
-    elif verbose:
-        level = logging.DEBUG
-    else:
-        level = logging.WARNING
-
-    logging.basicConfig(
-        level=level,
-        format="%(levelname)s: %(message)s",
-    )
+from openlabels.logging_config import setup_logging
+from openlabels.cli.output import set_progress_enabled
+from openlabels.shutdown import install_signal_handlers, get_shutdown_coordinator
 
 
 # =============================================================================
@@ -230,6 +218,9 @@ def cmd_version(args):
 
 def main(argv: Optional[List[str]] = None):
     """Main CLI entry point."""
+    # Install signal handlers for graceful shutdown (Ctrl+C, SIGTERM)
+    install_signal_handlers()
+
     parser = argparse.ArgumentParser(
         prog="openlabels",
         description="OpenLabels - Universal Data Risk Scoring",
@@ -258,6 +249,26 @@ Examples:
         action="store_true",
         help="Quiet mode (errors only)",
     )
+    parser.add_argument(
+        "--log-file",
+        metavar="PATH",
+        help="Write logs to file (JSON format)",
+    )
+    parser.add_argument(
+        "--audit-log",
+        metavar="PATH",
+        help="Write audit logs to file (default: ~/.openlabels/audit.log)",
+    )
+    parser.add_argument(
+        "--no-audit",
+        action="store_true",
+        help="Disable audit logging",
+    )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress bars",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -269,27 +280,25 @@ Examples:
         add_scan_parser,
         add_find_parser,
         add_quarantine_parser,
-        add_move_parser,
-        add_delete_parser,
         add_tag_parser,
         add_encrypt_parser,
         add_restrict_parser,
         add_report_parser,
         add_heatmap_parser,
         add_shell_parser,
+        add_health_parser,
     )
 
     add_scan_parser(subparsers)
     add_find_parser(subparsers)
     add_quarantine_parser(subparsers)
-    add_move_parser(subparsers)
-    add_delete_parser(subparsers)
     add_tag_parser(subparsers)
     add_encrypt_parser(subparsers)
     add_restrict_parser(subparsers)
     add_report_parser(subparsers)
     add_heatmap_parser(subparsers)
     add_shell_parser(subparsers)
+    add_health_parser(subparsers)
 
     # ==========================================================================
     # LEGACY DETECT COMMANDS
@@ -399,10 +408,18 @@ Examples:
         cmd_version(args)
         return
 
+    # Configure logging
     setup_logging(
         verbose=getattr(args, "verbose", False),
         quiet=getattr(args, "quiet", False),
+        log_file=getattr(args, "log_file", None),
+        audit_log=getattr(args, "audit_log", None),
+        no_audit=getattr(args, "no_audit", False),
     )
+
+    # Configure progress bars
+    if getattr(args, "no_progress", False):
+        set_progress_enabled(False)
 
     if args.command is None:
         parser.print_help()

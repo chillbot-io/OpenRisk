@@ -11,16 +11,16 @@ Usage:
 
 import os
 import stat
-import sys
-import logging
 from pathlib import Path
-from typing import Optional
 
 from openlabels import Client
 from openlabels.cli import MAX_PREVIEW_RESULTS
-
-logger = logging.getLogger(__name__)
 from openlabels.cli.commands.find import find_matching
+from openlabels.cli.output import echo, error, warn, success, dim, info, progress, confirm, divider
+from openlabels.logging_config import get_logger, get_audit_logger
+
+logger = get_logger(__name__)
+audit = get_audit_logger()
 
 
 def restrict_posix(file_path: Path, mode: str) -> bool:
@@ -44,11 +44,11 @@ def restrict_posix(file_path: Path, mode: str) -> bool:
 def cmd_restrict(args) -> int:
     """Execute the restrict command."""
     if not args.where:
-        print("Error: --where filter is required for restrict", file=sys.stderr)
+        error("--where filter is required for restrict")
         return 1
 
     if not args.acl:
-        print("Error: --acl is required", file=sys.stderr)
+        error("--acl is required")
         return 1
 
     source = Path(args.source) if not args.source.startswith(('s3://', 'gs://', 'azure://')) else args.source
@@ -57,22 +57,28 @@ def cmd_restrict(args) -> int:
     if isinstance(source, str):
         if source.startswith('s3://'):
             bucket = source.replace('s3://', '').split('/')[0]
-            print(f"For S3 access restriction, use AWS CLI:")
+            info("For S3 access restriction, use AWS CLI:")
             if args.acl == "private":
-                print(f"  aws s3api put-object-acl --bucket {bucket} --acl private --key <key>")
-                print(f"  # Or block public access at bucket level:")
-                print(f"  aws s3api put-public-access-block --bucket {bucket} --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true")
+                echo(f"  aws s3api put-object-acl --bucket {bucket} --acl private --key <key>")
+                echo(f"  # Or block public access at bucket level:")
+                echo(f"  aws s3api put-public-access-block --bucket {bucket} --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true")
         elif source.startswith('gs://'):
-            print("For GCS access restriction, use gsutil:")
-            print(f"  gsutil acl set private {source}")
+            info("For GCS access restriction, use gsutil:")
+            echo(f"  gsutil acl set private {source}")
         elif source.startswith('azure://'):
-            print("For Azure Blob, configure private access in portal or use az cli:")
-            print("  az storage container set-permission --name <container> --public-access off")
+            info("For Azure Blob, configure private access in portal or use az cli:")
+            echo("  az storage container set-permission --name <container> --public-access off")
         return 1
 
     if not source.exists():
-        print(f"Error: Source not found: {source}", file=sys.stderr)
+        error(f"Source not found: {source}")
         return 1
+
+    logger.info(f"Starting restrict operation", extra={
+        "source": str(source),
+        "acl": args.acl,
+        "filter": args.where,
+    })
 
     client = Client(default_exposure=args.exposure)
     extensions = args.extensions.split(",") if args.extensions else None
@@ -88,57 +94,80 @@ def cmd_restrict(args) -> int:
     ))
 
     if not matches:
-        print("No files match the filter criteria")
+        echo("No files match the filter criteria")
+        logger.info("No files matched filter criteria")
         return 0
+
+    logger.info(f"Found {len(matches)} files matching filter")
 
     # Dry run - just show what would be restricted
     if args.dry_run:
-        print(f"Would restrict {len(matches)} files to '{args.acl}':\n")
+        echo(f"Would restrict [bold]{len(matches)}[/bold] files to '{args.acl}':\n")
         for result in matches[:MAX_PREVIEW_RESULTS]:
-            print(f"  {result.path} (score: {result.score})")
+            dim(f"  {result.path} (score: {result.score})")
         if len(matches) > MAX_PREVIEW_RESULTS:
-            print(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
+            dim(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
         return 0
 
     # Confirm if not forced
     if not args.force:
-        print(f"About to restrict {len(matches)} files to '{args.acl}'")
-        print(f"Filter: {args.where}")
-        print()
+        echo(f"About to restrict [bold]{len(matches)}[/bold] files to '{args.acl}'")
+        echo(f"Filter: {args.where}")
+        echo("")
 
-        confirm = input("Proceed? [y/N] ")
-        if confirm.lower() not in ("y", "yes"):
-            print("Aborted")
+        if not confirm("Proceed?"):
+            echo("Aborted")
+            logger.info("Restrict aborted by user")
             return 1
 
     # Restrict files
     restricted_count = 0
     errors = []
 
-    for i, result in enumerate(matches):
-        try:
-            file_path = Path(result.path)
+    with progress("Restricting permissions", total=len(matches)) as p:
+        for i, result in enumerate(matches):
+            try:
+                file_path = Path(result.path)
 
-            if restrict_posix(file_path, args.acl):
-                restricted_count += 1
-                if not args.quiet:
-                    print(f"[{i+1}/{len(matches)}] Restricted: {result.path}")
-            else:
-                errors.append({"path": result.path, "error": "Permission change failed"})
-                if not args.quiet:
-                    print(f"[{i+1}/{len(matches)}] Failed: {result.path}", file=sys.stderr)
+                if restrict_posix(file_path, args.acl):
+                    restricted_count += 1
 
-        except OSError as e:
-            errors.append({"path": result.path, "error": str(e)})
-            if not args.quiet:
-                print(f"[{i+1}/{len(matches)}] Error: {result.path} - {e}", file=sys.stderr)
+                    # Audit log for each restricted file
+                    audit.access_restrict(
+                        path=result.path,
+                        mode=args.acl,
+                        score=result.score,
+                    )
+
+                    logger.debug(f"Restricted {result.path} to {args.acl}")
+
+                    if not args.quiet:
+                        p.set_description(f"[{i+1}/{len(matches)}] {file_path.name}")
+                else:
+                    errors.append({"path": result.path, "error": "Permission change failed"})
+                    warn(f"Failed: {result.path}")
+
+            except OSError as e:
+                errors.append({"path": result.path, "error": str(e)})
+                logger.warning(f"Failed to restrict {result.path}: {e}")
+                if not args.quiet:
+                    warn(f"Error: {result.path} - {e}")
+
+            p.advance()
 
     # Summary
-    print()
-    print("=" * 60)
-    print(f"Restricted: {restricted_count} files")
+    echo("")
+    divider()
     if errors:
-        print(f"Errors: {len(errors)} files")
+        warn(f"Restricted: {restricted_count} files ({len(errors)} errors)")
+    else:
+        success(f"Restricted: {restricted_count} files")
+
+    logger.info(f"Restrict complete", extra={
+        "files_restricted": restricted_count,
+        "errors": len(errors),
+        "acl": args.acl,
+    })
 
     return 0 if not errors else 1
 

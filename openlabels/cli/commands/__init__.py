@@ -5,51 +5,47 @@ Commands:
     scan        Scan files for sensitive data and compute risk scores
     find        Find files matching filter criteria
     quarantine  Move matching files to quarantine location
-    move        Move files matching filter criteria
-    delete      Delete files matching filter criteria
     tag         Apply OpenLabels tags to files
     encrypt     Encrypt files matching filter criteria
     restrict    Restrict access permissions on files
     report      Generate risk reports (json, csv, html)
     heatmap     Display risk heatmap of directory structure
     shell       Interactive shell for exploring data risk
+    health      Run system health checks
 """
 
 from .scan import add_scan_parser, cmd_scan
 from .find import add_find_parser, cmd_find
 from .quarantine import add_quarantine_parser, cmd_quarantine
-from .move import add_move_parser, cmd_move
-from .delete import add_delete_parser, cmd_delete
 from .tag import add_tag_parser, cmd_tag
 from .encrypt import add_encrypt_parser, cmd_encrypt
 from .restrict import add_restrict_parser, cmd_restrict
 from .report import add_report_parser, cmd_report
 from .heatmap import add_heatmap_parser, cmd_heatmap
 from .shell import add_shell_parser, cmd_shell
+from .health import add_health_parser, cmd_health
 
 __all__ = [
     # Parsers
     "add_scan_parser",
     "add_find_parser",
     "add_quarantine_parser",
-    "add_move_parser",
-    "add_delete_parser",
     "add_tag_parser",
     "add_encrypt_parser",
     "add_restrict_parser",
     "add_report_parser",
     "add_heatmap_parser",
     "add_shell_parser",
+    "add_health_parser",
     # Commands
     "cmd_scan",
     "cmd_find",
     "cmd_quarantine",
-    "cmd_move",
-    "cmd_delete",
     "cmd_tag",
     "cmd_encrypt",
     "cmd_restrict",
     "cmd_report",
     "cmd_heatmap",
     "cmd_shell",
+    "cmd_health",
 ]

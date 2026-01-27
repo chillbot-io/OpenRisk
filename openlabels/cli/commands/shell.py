@@ -18,15 +18,18 @@ Commands in shell:
     exit              - Exit the shell
 """
 
-import sys
 import readline  # noqa: F401 - imported for side effect (enables command history)
 from pathlib import Path
-from typing import Optional, List
+from typing import List
 
 from openlabels import Client
 from openlabels.cli import MAX_PREVIEW_RESULTS
 from openlabels.cli.commands.find import find_matching
 from openlabels.cli.commands.scan import ScanResult
+from openlabels.cli.output import echo, error, warn, success, info, dim, console, divider
+from openlabels.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class OpenLabelsShell:
@@ -41,25 +44,29 @@ class OpenLabelsShell:
 
     def run(self):
         """Run the interactive shell."""
-        print(f"OpenLabels Shell")
-        print(f"Base path: {self.base_path}")
-        print(f"Type 'help' for available commands, 'exit' to quit")
-        print()
+        console.print("[bold blue]OpenLabels Shell[/bold blue]")
+        echo(f"Base path: {self.base_path}")
+        dim("Type 'help' for available commands, 'exit' to quit")
+        echo("")
+
+        logger.info(f"Shell started", extra={"base_path": self.base_path})
 
         while self.running:
             try:
-                line = input("openlabels> ").strip()
+                line = console.input("[green]openlabels>[/green] ").strip()
                 if not line:
                     continue
 
                 self.execute(line)
 
             except KeyboardInterrupt:
-                print()
+                echo("")
                 continue
             except EOFError:
-                print()
+                echo("")
                 break
+
+        logger.info("Shell exited")
 
     def execute(self, line: str):
         """Execute a shell command."""
@@ -84,21 +91,21 @@ class OpenLabelsShell:
         if handler:
             handler(args)
         else:
-            print(f"Unknown command: {cmd}")
-            print("Type 'help' for available commands")
+            error(f"Unknown command: {cmd}")
+            dim("Type 'help' for available commands")
 
     def cmd_find(self, args: str):
         """Find files matching filter."""
         if not args:
-            print("Usage: find <filter>")
-            print("Example: find score > 50 AND has(SSN)")
+            echo("Usage: find <filter>")
+            dim("Example: find score > 50 AND has(SSN)")
             return
 
         try:
             source = Path(self.base_path) if not self.base_path.startswith(('s3://', 'gs://', 'azure://')) else self.base_path
 
             if isinstance(source, str):
-                print("Cloud storage not yet supported in shell")
+                warn("Cloud storage not yet supported in shell")
                 return
 
             results = list(find_matching(
@@ -112,26 +119,27 @@ class OpenLabelsShell:
             self.results_cache = results
 
             if not results:
-                print("No files match the filter")
+                echo("No files match the filter")
                 return
 
-            print(f"\nFound {len(results)} files:\n")
+            echo(f"\nFound [bold]{len(results)}[/bold] files:\n")
             for r in results[:MAX_PREVIEW_RESULTS]:
                 entities = ", ".join(f"{k}({v})" for k, v in r.entities.items()) if r.entities else "none"
-                print(f"  {r.score:3d} {r.tier:8s} {r.path}")
+                console.print(f"  {r.score:3d} {r.tier:8s} {r.path}")
                 if r.entities:
-                    print(f"      entities: {entities}")
+                    dim(f"      entities: {entities}")
 
             if len(results) > MAX_PREVIEW_RESULTS:
-                print(f"\n  ... and {len(results) - MAX_PREVIEW_RESULTS} more")
+                dim(f"\n  ... and {len(results) - MAX_PREVIEW_RESULTS} more")
 
         except Exception as e:
-            print(f"Error: {e}")
+            error(str(e))
+            logger.warning(f"Shell find error: {e}")
 
     def cmd_scan(self, args: str):
         """Scan a specific file."""
         if not args:
-            print("Usage: scan <path>")
+            echo("Usage: scan <path>")
             return
 
         try:
@@ -141,26 +149,27 @@ class OpenLabelsShell:
                 path = base / args
 
             if not path.exists():
-                print(f"File not found: {path}")
+                error(f"File not found: {path}")
                 return
 
             result = self.client.score_file(str(path), exposure=self.exposure)
 
-            print(f"\nFile: {path}")
-            print(f"Score: {result.score} ({result.tier})")
-            print(f"Content score: {result.content_score}")
-            print(f"Exposure: {result.exposure} (×{result.exposure_multiplier})")
+            echo(f"\n[bold]File:[/bold] {path}")
+            echo(f"[bold]Score:[/bold] {result.score} ({result.tier})")
+            echo(f"[bold]Content score:[/bold] {result.content_score}")
+            echo(f"[bold]Exposure:[/bold] {result.exposure} (×{result.exposure_multiplier})")
 
             if result.entities:
-                print(f"\nEntities:")
+                echo(f"\n[bold]Entities:[/bold]")
                 for k, v in result.entities.items():
-                    print(f"  {k}: {v}")
+                    echo(f"  {k}: {v}")
 
             if result.co_occurrence_rules:
-                print(f"\nCo-occurrence rules: {', '.join(result.co_occurrence_rules)}")
+                echo(f"\n[bold]Co-occurrence rules:[/bold] {', '.join(result.co_occurrence_rules)}")
 
         except Exception as e:
-            print(f"Error: {e}")
+            error(str(e))
+            logger.warning(f"Shell scan error: {e}")
 
     def cmd_info(self, args: str):
         """Show detailed info for a file."""
@@ -172,11 +181,11 @@ class OpenLabelsShell:
         try:
             source = Path(self.base_path)
             if not source.exists():
-                print(f"Path not found: {source}")
+                error(f"Path not found: {source}")
                 return
 
             # Quick scan
-            print(f"Scanning {source}...")
+            info(f"Scanning {source}...")
 
             results = list(find_matching(
                 source,
@@ -189,7 +198,7 @@ class OpenLabelsShell:
             self.results_cache = results
 
             if not results:
-                print("No files found")
+                echo("No files found")
                 return
 
             # Calculate statistics
@@ -208,30 +217,32 @@ class OpenLabelsShell:
                 for k, v in r.entities.items():
                     entity_counts[k] = entity_counts.get(k, 0) + v
 
-            print(f"\n{'='*60}")
-            print(f"Statistics for: {source}")
-            print(f"{'='*60}")
-            print(f"Total files:  {total}")
-            print(f"Avg score:    {avg_score:.1f}")
-            print(f"Max score:    {max_score}")
-            print(f"Min score:    {min_score}")
-            print()
-            print("By tier:")
+            echo("")
+            divider()
+            echo(f"[bold]Statistics for:[/bold] {source}")
+            divider()
+            echo(f"Total files:  {total}")
+            echo(f"Avg score:    {avg_score:.1f}")
+            echo(f"Max score:    {max_score}")
+            echo(f"Min score:    {min_score}")
+            echo("")
+            echo("[bold]By tier:[/bold]")
             for tier in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "MINIMAL"]:
                 count = tiers.get(tier, 0)
                 pct = count / total * 100
                 bar = "█" * int(pct / 5)
-                print(f"  {tier:8s}: {count:4d} ({pct:5.1f}%) {bar}")
+                echo(f"  {tier:8s}: {count:4d} ({pct:5.1f}%) {bar}")
 
             if entity_counts:
-                print()
-                print("Top entities:")
+                echo("")
+                echo("[bold]Top entities:[/bold]")
                 sorted_entities = sorted(entity_counts.items(), key=lambda x: -x[1])[:10]
                 for k, v in sorted_entities:
-                    print(f"  {k}: {v}")
+                    echo(f"  {k}: {v}")
 
         except Exception as e:
-            print(f"Error: {e}")
+            error(str(e))
+            logger.warning(f"Shell stats error: {e}")
 
     def cmd_top(self, args: str):
         """Show top N riskiest files."""
@@ -253,14 +264,14 @@ class OpenLabelsShell:
                 ))
 
         if not self.results_cache:
-            print("No files scanned. Run 'stats' or 'find' first.")
+            warn("No files scanned. Run 'stats' or 'find' first.")
             return
 
         sorted_results = sorted(self.results_cache, key=lambda x: -x.score)[:n]
 
-        print(f"\nTop {n} riskiest files:\n")
+        echo(f"\n[bold]Top {n} riskiest files:[/bold]\n")
         for i, r in enumerate(sorted_results, 1):
-            print(f"  {i:2d}. [{r.score:3d}] {r.tier:8s} {r.path}")
+            echo(f"  {i:2d}. [{r.score:3d}] {r.tier:8s} {r.path}")
 
     def cmd_ls(self, args: str):
         """List files in current scope."""
@@ -270,24 +281,24 @@ class OpenLabelsShell:
                 path = Path(self.base_path) / args
 
             if not path.exists():
-                print(f"Path not found: {path}")
+                error(f"Path not found: {path}")
                 return
 
             if path.is_file():
-                print(path)
+                echo(str(path))
                 return
 
             for item in sorted(path.iterdir()):
                 prefix = "d" if item.is_dir() else "-"
-                print(f"  {prefix} {item.name}")
+                echo(f"  {prefix} {item.name}")
 
         except Exception as e:
-            print(f"Error: {e}")
+            error(str(e))
 
     def cmd_cd(self, args: str):
         """Change base path."""
         if not args:
-            print(f"Current path: {self.base_path}")
+            echo(f"Current path: {self.base_path}")
             return
 
         new_path = Path(args)
@@ -297,31 +308,31 @@ class OpenLabelsShell:
         if new_path.exists():
             self.base_path = str(new_path.resolve())
             self.results_cache = []
-            print(f"Changed to: {self.base_path}")
+            success(f"Changed to: {self.base_path}")
         else:
-            print(f"Path not found: {new_path}")
+            error(f"Path not found: {new_path}")
 
     def cmd_help(self, args: str):
         """Show help."""
-        print("""
-OpenLabels Shell Commands:
+        console.print("""
+[bold blue]OpenLabels Shell Commands:[/bold blue]
 
-  find <filter>    Find files matching filter expression
+  [bold]find <filter>[/bold]    Find files matching filter expression
                    Example: find score > 50 AND has(SSN)
 
-  scan <path>      Scan and show details for a specific file
-  info <path>      Same as scan
+  [bold]scan <path>[/bold]      Scan and show details for a specific file
+  [bold]info <path>[/bold]      Same as scan
 
-  stats            Show statistics for the current scope
-  top [n]          Show top N riskiest files (default: 10)
+  [bold]stats[/bold]            Show statistics for the current scope
+  [bold]top [n][/bold]          Show top N riskiest files (default: 10)
 
-  ls [path]        List files in path
-  cd <path>        Change base path
+  [bold]ls [path][/bold]        List files in path
+  [bold]cd <path>[/bold]        Change base path
 
-  help             Show this help message
-  exit / quit      Exit the shell
+  [bold]help[/bold]             Show this help message
+  [bold]exit / quit[/bold]      Exit the shell
 
-Filter syntax:
+[bold]Filter syntax:[/bold]
   score > 50                     Score greater than 50
   exposure = public              Public exposure
   has(SSN)                       Contains SSN entities
@@ -332,7 +343,7 @@ Filter syntax:
     def cmd_exit(self, args: str):
         """Exit the shell."""
         self.running = False
-        print("Goodbye!")
+        success("Goodbye!")
 
 
 def cmd_shell(args) -> int:
@@ -343,7 +354,7 @@ def cmd_shell(args) -> int:
     if not source.startswith(('s3://', 'gs://', 'azure://')):
         path = Path(source)
         if not path.exists():
-            print(f"Error: Path not found: {source}", file=sys.stderr)
+            error(f"Path not found: {source}")
             return 1
 
     shell = OpenLabelsShell(source, exposure=args.exposure)

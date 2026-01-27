@@ -10,7 +10,7 @@ Usage:
 
 import json
 import shutil
-import sys
+import os
 from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
@@ -18,6 +18,11 @@ from datetime import datetime
 from openlabels import Client
 from openlabels.cli import MAX_PREVIEW_RESULTS
 from openlabels.cli.commands.find import find_matching
+from openlabels.cli.output import echo, error, warn, success, dim, progress, confirm, divider
+from openlabels.logging_config import get_logger, get_audit_logger
+
+logger = get_logger(__name__)
+audit = get_audit_logger()
 
 
 def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, base_path: Optional[Path] = None) -> Path:
@@ -62,7 +67,6 @@ def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, bas
 
     # SECURITY FIX (CVE-READY-002): Use os.rename for atomic same-filesystem moves
     # when possible, falling back to shutil.move for cross-filesystem moves
-    import os
     try:
         os.rename(str(source), str(dest_path))
     except OSError:
@@ -97,19 +101,25 @@ def write_manifest(
 def cmd_quarantine(args) -> int:
     """Execute the quarantine command."""
     if not args.where:
-        print("Error: --where filter is required for quarantine", file=sys.stderr)
+        error("--where filter is required for quarantine")
         return 1
 
     if not args.to:
-        print("Error: --to destination is required", file=sys.stderr)
+        error("--to destination is required")
         return 1
 
     source = Path(args.source)
     dest = Path(args.to)
 
     if not source.exists():
-        print(f"Error: Source not found: {source}", file=sys.stderr)
+        error(f"Source not found: {source}")
         return 1
+
+    logger.info(f"Starting quarantine operation", extra={
+        "source": str(source),
+        "destination": str(dest),
+        "filter": args.where,
+    })
 
     client = Client(default_exposure=args.exposure)
     extensions = args.extensions.split(",") if args.extensions else None
@@ -125,32 +135,35 @@ def cmd_quarantine(args) -> int:
     ))
 
     if not matches:
-        print("No files match the filter criteria")
+        echo("No files match the filter criteria")
+        logger.info("No files matched filter criteria")
         return 0
+
+    logger.info(f"Found {len(matches)} files matching filter")
 
     # Dry run - just show what would be moved
     if args.dry_run:
-        print(f"Would quarantine {len(matches)} files to {dest}:\n")
+        echo(f"Would quarantine [bold]{len(matches)}[/bold] files to {dest}:\n")
         for result in matches[:MAX_PREVIEW_RESULTS]:
-            print(f"  {result.path} (score: {result.score})")
+            dim(f"  {result.path} (score: {result.score})")
         if len(matches) > MAX_PREVIEW_RESULTS:
-            print(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
+            dim(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
         return 0
 
     # Confirm if not forced
     if not args.force:
-        print(f"About to quarantine {len(matches)} files to {dest}")
-        print(f"Filter: {args.where}")
-        print()
+        echo(f"About to quarantine [bold]{len(matches)}[/bold] files to {dest}")
+        echo(f"Filter: {args.where}")
+        echo("")
         for result in matches[:5]:
-            print(f"  {result.path} (score: {result.score})")
+            dim(f"  {result.path} (score: {result.score})")
         if len(matches) > 5:
-            print(f"  ... and {len(matches) - 5} more")
-        print()
+            dim(f"  ... and {len(matches) - 5} more")
+        echo("")
 
-        confirm = input("Proceed? [y/N] ")
-        if confirm.lower() not in ("y", "yes"):
-            print("Aborted")
+        if not confirm("Proceed?"):
+            echo("Aborted")
+            logger.info("Quarantine aborted by user")
             return 1
 
     # Create destination directory
@@ -161,44 +174,66 @@ def cmd_quarantine(args) -> int:
     errors = []
     base_path = source if source.is_dir() else source.parent
 
-    for i, result in enumerate(matches):
-        try:
-            source_path = Path(result.path)
-            new_path = move_file(
-                source_path,
-                dest,
-                preserve_structure=args.preserve_structure,
-                base_path=base_path,
-            )
+    with progress("Quarantining files", total=len(matches)) as p:
+        for i, result in enumerate(matches):
+            try:
+                source_path = Path(result.path)
+                new_path = move_file(
+                    source_path,
+                    dest,
+                    preserve_structure=args.preserve_structure,
+                    base_path=base_path,
+                )
 
-            moved_files.append({
-                "original_path": result.path,
-                "new_path": str(new_path),
-                "score": result.score,
-                "tier": result.tier,
-                "entities": result.entities,
-            })
+                moved_files.append({
+                    "original_path": result.path,
+                    "new_path": str(new_path),
+                    "score": result.score,
+                    "tier": result.tier,
+                    "entities": result.entities,
+                })
 
-            if not args.quiet:
-                print(f"[{i+1}/{len(matches)}] Moved: {result.path} -> {new_path}")
+                # Audit log for each quarantined file
+                audit.file_quarantine(
+                    source=result.path,
+                    destination=str(new_path),
+                    score=result.score,
+                    tier=result.tier,
+                )
 
-        except (OSError, ValueError) as e:
-            errors.append({"path": result.path, "error": str(e)})
-            if not args.quiet:
-                print(f"[{i+1}/{len(matches)}] Error: {result.path} - {e}", file=sys.stderr)
+                logger.debug(f"Moved {result.path} -> {new_path}")
+
+                if not args.quiet:
+                    p.set_description(f"[{i+1}/{len(matches)}] {Path(result.path).name}")
+
+            except (OSError, ValueError) as e:
+                errors.append({"path": result.path, "error": str(e)})
+                logger.warning(f"Failed to quarantine {result.path}: {e}")
+                if not args.quiet:
+                    warn(f"Failed: {result.path} - {e}")
+
+            p.advance()
 
     # Write manifest
     if args.manifest and moved_files:
         manifest_path = write_manifest(dest, moved_files, args.where)
-        print(f"\nManifest written to: {manifest_path}")
+        echo(f"\nManifest written to: {manifest_path}")
+        logger.info(f"Manifest written to {manifest_path}")
 
     # Summary
-    print()
-    print("=" * 60)
-    print(f"Quarantined: {len(moved_files)} files")
+    echo("")
+    divider()
     if errors:
-        print(f"Errors: {len(errors)} files")
-    print(f"Destination: {dest}")
+        warn(f"Quarantined: {len(moved_files)} files ({len(errors)} errors)")
+    else:
+        success(f"Quarantined: {len(moved_files)} files")
+    echo(f"Destination: {dest}")
+
+    logger.info(f"Quarantine complete", extra={
+        "files_moved": len(moved_files),
+        "errors": len(errors),
+        "destination": str(dest),
+    })
 
     return 0 if not errors else 1
 

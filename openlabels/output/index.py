@@ -494,6 +494,7 @@ class LabelIndex:
         entity_type: Optional[str] = None,
         since: Optional[str] = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """
         Query the index for labels matching criteria.
@@ -504,11 +505,16 @@ class LabelIndex:
             risk_tier: Risk tier filter
             entity_type: Entity type filter (e.g., "SSN")
             since: ISO timestamp for scanned_at filter
-            limit: Maximum results
+            limit: Maximum results per page (default: 100)
+            offset: Number of results to skip for pagination (default: 0)
 
         Returns:
             List of matching label metadata
         """
+        # Validate pagination params
+        limit = max(1, min(limit, 10000))  # Cap at 10k per page
+        offset = max(0, offset)
+
         params: List[Any] = []
 
         base_query = """
@@ -546,8 +552,9 @@ class LabelIndex:
             base_query += " AND v.scanned_at >= ?"
             params.append(since)
 
-        base_query += " ORDER BY v.scanned_at DESC LIMIT ?"
+        base_query += " ORDER BY v.scanned_at DESC LIMIT ? OFFSET ?"
         params.append(limit)
+        params.append(offset)
 
         try:
             with self._get_connection() as conn:
@@ -557,6 +564,65 @@ class LabelIndex:
         except sqlite3.Error as e:
             logger.error(f"Query failed: {e}")
             return []
+
+    def query_count(
+        self,
+        min_score: Optional[int] = None,
+        max_score: Optional[int] = None,
+        risk_tier: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        since: Optional[str] = None,
+    ) -> int:
+        """
+        Count labels matching criteria (for pagination).
+
+        Args:
+            min_score: Minimum risk score
+            max_score: Maximum risk score
+            risk_tier: Risk tier filter
+            entity_type: Entity type filter (e.g., "SSN")
+            since: ISO timestamp for scanned_at filter
+
+        Returns:
+            Total count of matching labels
+        """
+        params: List[Any] = []
+
+        count_query = """
+            SELECT COUNT(*)
+            FROM label_objects o
+            JOIN label_versions v ON o.label_id = v.label_id
+            WHERE 1=1
+        """
+
+        if min_score is not None:
+            count_query += " AND v.risk_score >= ?"
+            params.append(min_score)
+
+        if max_score is not None:
+            count_query += " AND v.risk_score <= ?"
+            params.append(max_score)
+
+        if risk_tier:
+            count_query += " AND v.risk_tier = ?"
+            params.append(risk_tier)
+
+        if entity_type:
+            count_query += " AND v.entity_types LIKE ?"
+            params.append("%" + entity_type + "%")
+
+        if since:
+            count_query += " AND v.scanned_at >= ?"
+            params.append(since)
+
+        try:
+            with self._get_connection() as conn:
+                result = conn.execute(count_query, params).fetchone()
+                return result[0] if result else 0
+
+        except sqlite3.Error as e:
+            logger.error(f"Query count failed: {e}")
+            return 0
 
     def delete(self, label_id: str) -> bool:
         """
@@ -614,44 +680,142 @@ class LabelIndex:
             logger.error(f"Count failed: {e}")
             return {"labels": 0, "versions": 0}
 
-    def export(self, output_path: str) -> bool:
+    def export(
+        self,
+        output_path: str,
+        batch_size: int = 1000,
+        min_score: Optional[int] = None,
+        max_score: Optional[int] = None,
+        risk_tier: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
-        Export all labels to a JSONL file.
+        Export labels to a JSONL file with pagination support.
 
         Args:
             output_path: Path to output file
+            batch_size: Number of records to process per batch (default: 1000)
+            min_score: Optional minimum risk score filter
+            max_score: Optional maximum risk score filter
+            risk_tier: Optional risk tier filter
 
         Returns:
-            True if successful
+            Dict with export stats: {"success": bool, "count": int, "error": str|None}
 
         Security notes:
             SECURITY FIX (HIGH-004): Uses cursor iteration instead of fetchall()
             to prevent loading entire result set into memory for large datasets.
         """
+        count = 0
         try:
             with self._get_connection() as conn:
-                # SECURITY FIX (HIGH-004): Use cursor iteration instead of fetchall()
-                # This streams results instead of loading all into memory
-                cursor = conn.execute("""
+                # Build query with optional filters
+                params: List[Any] = [self.tenant_id]
+                query = """
                     SELECT v.labels_json, v.risk_score, v.risk_tier, o.file_path
                     FROM label_versions v
                     JOIN label_objects o ON v.label_id = o.label_id
                     WHERE o.tenant_id = ?
-                """, (self.tenant_id,))
+                """
+
+                if min_score is not None:
+                    query += " AND v.risk_score >= ?"
+                    params.append(min_score)
+
+                if max_score is not None:
+                    query += " AND v.risk_score <= ?"
+                    params.append(max_score)
+
+                if risk_tier:
+                    query += " AND v.risk_tier = ?"
+                    params.append(risk_tier)
+
+                query += " ORDER BY v.scanned_at DESC"
+
+                # SECURITY FIX (HIGH-004): Use cursor iteration instead of fetchall()
+                # This streams results instead of loading all into memory
+                cursor = conn.execute(query, params)
 
                 with open(output_path, 'w') as f:
+                    batch = []
                     for row in cursor:
                         record = json.loads(row['labels_json'])
                         record['_risk_score'] = row['risk_score']
                         record['_risk_tier'] = row['risk_tier']
                         record['_file_path'] = row['file_path']
-                        f.write(json.dumps(record) + '\n')
+                        batch.append(json.dumps(record))
+                        count += 1
 
-                return True
+                        # Write in batches for better I/O performance
+                        if len(batch) >= batch_size:
+                            f.write('\n'.join(batch) + '\n')
+                            batch.clear()
+
+                    # Write remaining records
+                    if batch:
+                        f.write('\n'.join(batch) + '\n')
+
+                return {"success": True, "count": count, "error": None}
 
         except (sqlite3.Error, OSError) as e:
             logger.error(f"Export failed: {e}")
-            return False
+            return {"success": False, "count": count, "error": str(e)}
+
+    def export_iter(
+        self,
+        min_score: Optional[int] = None,
+        max_score: Optional[int] = None,
+        risk_tier: Optional[str] = None,
+    ):
+        """
+        Iterator for streaming export of labels.
+
+        Yields one record at a time for memory-efficient processing.
+
+        Args:
+            min_score: Optional minimum risk score filter
+            max_score: Optional maximum risk score filter
+            risk_tier: Optional risk tier filter
+
+        Yields:
+            Dict containing label data with _risk_score, _risk_tier, _file_path
+        """
+        try:
+            with self._get_connection() as conn:
+                # Build query with optional filters
+                params: List[Any] = [self.tenant_id]
+                query = """
+                    SELECT v.labels_json, v.risk_score, v.risk_tier, o.file_path
+                    FROM label_versions v
+                    JOIN label_objects o ON v.label_id = o.label_id
+                    WHERE o.tenant_id = ?
+                """
+
+                if min_score is not None:
+                    query += " AND v.risk_score >= ?"
+                    params.append(min_score)
+
+                if max_score is not None:
+                    query += " AND v.risk_score <= ?"
+                    params.append(max_score)
+
+                if risk_tier:
+                    query += " AND v.risk_tier = ?"
+                    params.append(risk_tier)
+
+                query += " ORDER BY v.scanned_at DESC"
+
+                cursor = conn.execute(query, params)
+
+                for row in cursor:
+                    record = json.loads(row['labels_json'])
+                    record['_risk_score'] = row['risk_score']
+                    record['_risk_tier'] = row['risk_tier']
+                    record['_file_path'] = row['file_path']
+                    yield record
+
+        except sqlite3.Error as e:
+            logger.error(f"Export iteration failed: {e}")
+            return
 
 
 # =============================================================================

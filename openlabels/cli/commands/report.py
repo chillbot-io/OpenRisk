@@ -11,7 +11,6 @@ Usage:
 import csv
 import io
 import json
-import sys
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -19,7 +18,11 @@ from collections import Counter
 
 from openlabels import Client
 from openlabels.cli.commands.scan import scan_directory, scan_file, ScanResult
+from openlabels.cli.output import echo, error, info, progress
+from openlabels.logging_config import get_logger
 from openlabels.core.scorer import TIER_THRESHOLDS
+
+logger = get_logger(__name__)
 
 
 def generate_summary(results: List[ScanResult]) -> Dict[str, Any]:
@@ -274,12 +277,18 @@ def cmd_report(args) -> int:
 
     # Check for cloud paths
     if isinstance(path, str):
-        print(f"Cloud storage not yet implemented: {path}", file=sys.stderr)
+        error(f"Cloud storage not yet implemented: {path}")
         return 1
 
     if not path.exists():
-        print(f"Error: Path not found: {path}", file=sys.stderr)
+        error(f"Path not found: {path}")
         return 1
+
+    logger.info(f"Starting report generation", extra={
+        "path": str(path),
+        "format": args.format,
+        "recursive": args.recursive,
+    })
 
     # Collect results
     results = []
@@ -290,20 +299,30 @@ def cmd_report(args) -> int:
         results.append(result)
     else:
         if not args.quiet:
-            print(f"Scanning {path}...", file=sys.stderr)
+            info(f"Scanning {path}...")
 
-        for result in scan_directory(
-            path, client,
-            recursive=args.recursive,
-            exposure=args.exposure,
-            extensions=extensions,
-        ):
-            results.append(result)
-            if not args.quiet and len(results) % 100 == 0:
-                print(f"  Scanned {len(results)} files...", file=sys.stderr)
+        # Count files for progress
+        if args.recursive:
+            all_files = list(path.rglob("*"))
+        else:
+            all_files = list(path.glob("*"))
+        all_files = [f for f in all_files if f.is_file()]
+        if extensions:
+            exts = {e.lower().lstrip(".") for e in extensions}
+            all_files = [f for f in all_files if f.suffix.lower().lstrip(".") in exts]
+
+        with progress("Scanning files", total=len(all_files)) as p:
+            for result in scan_directory(
+                path, client,
+                recursive=args.recursive,
+                exposure=args.exposure,
+                extensions=extensions,
+            ):
+                results.append(result)
+                p.advance()
 
     if not args.quiet:
-        print(f"Scanned {len(results)} files, generating report...", file=sys.stderr)
+        info(f"Scanned {len(results)} files, generating report...")
 
     # Generate summary
     summary = generate_summary(results)
@@ -322,9 +341,16 @@ def cmd_report(args) -> int:
     if args.output:
         with open(args.output, "w") as f:
             f.write(content)
-        print(f"Report written to {args.output}", file=sys.stderr)
+        echo(f"Report written to {args.output}")
+        logger.info(f"Report written to {args.output}")
     else:
         print(content)
+
+    logger.info(f"Report generation complete", extra={
+        "total_files": summary["total_files"],
+        "files_at_risk": summary["files_at_risk"],
+        "format": args.format,
+    })
 
     return 0
 

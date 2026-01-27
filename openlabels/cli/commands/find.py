@@ -10,13 +10,16 @@ Usage:
 """
 
 import json
-import sys
 from pathlib import Path
 from typing import Iterator, Optional, Dict, Any, List
 
 from openlabels import Client
 from openlabels.cli.filter import Filter, parse_filter
 from openlabels.cli.commands.scan import scan_file, scan_directory, ScanResult
+from openlabels.cli.output import echo, error, dim, progress
+from openlabels.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def result_to_filter_dict(result: ScanResult) -> Dict[str, Any]:
@@ -84,8 +87,14 @@ def cmd_find(args) -> int:
     path = Path(args.path)
 
     if not path.exists():
-        print(f"Error: Path not found: {path}", file=sys.stderr)
+        error(f"Path not found: {path}")
         return 1
+
+    logger.info(f"Starting find", extra={
+        "path": str(path),
+        "filter": args.where,
+        "recursive": args.recursive,
+    })
 
     extensions = args.extensions.split(",") if args.extensions else None
     match_count = 0
@@ -105,17 +114,20 @@ def cmd_find(args) -> int:
             # Limit output
             if args.limit and match_count >= args.limit:
                 if args.format == "text":
-                    print(f"\n... (limited to {args.limit} results)")
+                    dim(f"\n... (limited to {args.limit} results)")
                 break
 
     except ValueError as e:
-        print(f"Filter error: {e}", file=sys.stderr)
+        error(f"Filter error: {e}")
+        logger.warning(f"Filter error: {e}")
         return 1
 
     # Print summary
     if args.format == "text" and not args.quiet:
-        print()
-        print(f"Found {match_count} matching files")
+        echo("")
+        echo(f"Found {match_count} matching files")
+
+    logger.info(f"Find complete", extra={"matches": match_count})
 
     # Exit code
     if args.count:
