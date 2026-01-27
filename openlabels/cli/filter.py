@@ -220,7 +220,8 @@ class Condition:
                 logger.debug("Regex pattern rejected: contains ReDoS-prone construct")
                 return False
 
-        # Try to use the 'regex' module for actual timeout support
+        # SECURITY FIX (CVE-READY-003): Require 'regex' module for timeout enforcement
+        # Without it, user-controlled patterns could cause ReDoS attacks
         try:
             import regex
             try:
@@ -238,19 +239,22 @@ class Condition:
                 logger.warning(f"Regex match timed out after {timeout_ms}ms")
                 return False
         except ImportError:
-            # Fall back to standard re module without timeout
-            # Log warning once per process
+            # SECURITY FIX: Don't fall back to unsafe re module without timeout
+            # Log warning and reject the pattern instead of risking ReDoS
             if not _regex_import_warning_issued:
-                logger.warning(
-                    "ReDoS timeout protection degraded: 'regex' module not installed. "
+                logger.error(
+                    "SECURITY: ReDoS protection disabled - 'regex' module not installed. "
+                    "Pattern matching with 'matches' operator is disabled. "
                     "Install with: pip install regex"
                 )
                 _regex_import_warning_issued = True
 
-            try:
-                return bool(re.search(pattern, text, re.IGNORECASE))
-            except re.error:
-                return False
+            # Reject pattern rather than risk ReDoS attack
+            logger.warning(
+                "Regex pattern rejected: 'regex' module required for safe execution. "
+                "Install with: pip install regex"
+            )
+            return False
 
 
 @dataclass

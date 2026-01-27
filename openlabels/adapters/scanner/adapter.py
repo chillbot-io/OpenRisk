@@ -212,6 +212,8 @@ def _make_config(**kwargs) -> Config:
     for key, value in kwargs.items():
         if hasattr(config, key):
             setattr(config, key, value)
+    # SECURITY FIX (HIGH-006): Re-validate config after dynamic attribute assignment
+    config.__post_init__()
     return config
 
 

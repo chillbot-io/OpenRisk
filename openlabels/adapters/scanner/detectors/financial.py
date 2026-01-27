@@ -19,6 +19,7 @@ Entity Types:
 
 import re
 import hashlib
+import secrets
 from typing import List, Tuple
 
 from ..types import Span, Tier
@@ -332,7 +333,8 @@ def _validate_bitcoin_base58(address: str) -> bool:
         hash1 = hashlib.sha256(payload).digest()
         hash2 = hashlib.sha256(hash1).digest()
 
-        return hash2[:4] == checksum
+        # SECURITY FIX (CVE-READY-005): Use constant-time comparison to prevent timing attacks
+        return secrets.compare_digest(hash2[:4], checksum)
     except (OverflowError, ValueError):
         return False
 

@@ -378,23 +378,31 @@ class FileOps:
             OperationResult indicating success or failure.
             Error is a string for backward compatibility, but metadata
             contains structured error info (Phase 3, Issue 3.5).
+
+        Security notes:
+            - SECURITY FIX (CVE-READY-002): Removed TOCTOU race condition by
+              eliminating exists() check before move. Errors are caught instead.
+            - SECURITY FIX (HIGH-002): Rejects symlinks to prevent symlink attacks.
         """
         source = Path(source)
         destination = Path(destination)
 
         try:
-            if not source.exists():
+            # SECURITY FIX (HIGH-002): Reject symlinks to prevent symlink attacks
+            if source.is_symlink():
                 return OperationResult(
                     success=False,
                     operation="move",
                     source_path=str(source),
-                    error=f"Source not found: {source}",
+                    error=f"Symlinks not allowed for security reasons: {source}",
                     metadata={
-                        "error_type": FileErrorType.NOT_FOUND.value,
+                        "error_type": FileErrorType.PERMISSION_DENIED.value,
                         "retryable": False,
                     },
                 )
 
+            # SECURITY FIX (CVE-READY-002): Don't check exists() - catch errors instead
+            # This eliminates the TOCTOU race window between check and operation
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(source), str(destination))
 

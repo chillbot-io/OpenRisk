@@ -16,26 +16,31 @@ import atexit
 import logging
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 from typing import Iterator, List, Optional
 import uuid
 
 logger = logging.getLogger(__name__)
 
-# Track all active temp dirs for cleanup on exit
+# SECURITY FIX (HIGH-012): Track all active temp dirs with thread-safe access
 _active_temp_dirs: List[Path] = []
+_active_temp_dirs_lock = threading.Lock()
 
 
 def _cleanup_on_exit() -> None:
     """Clean up any remaining temp directories on process exit."""
-    for temp_dir in _active_temp_dirs.copy():
+    with _active_temp_dirs_lock:
+        dirs_to_clean = _active_temp_dirs.copy()
+        _active_temp_dirs.clear()
+
+    for temp_dir in dirs_to_clean:
         try:
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
                 logger.debug(f"Cleaned up orphaned temp dir: {temp_dir}")
         except OSError as e:
             logger.warning(f"Failed to clean up temp dir {temp_dir}: {e}")
-    _active_temp_dirs.clear()
 
 
 # Register cleanup handler
@@ -99,17 +104,18 @@ class SecureTempDir:
         
         # Create with restricted permissions
         self._path.mkdir(mode=0o700, parents=True, exist_ok=True)
-        
-        # Track for cleanup on exit
-        _active_temp_dirs.append(self._path)
-        
+
+        # Track for cleanup on exit (thread-safe)
+        with _active_temp_dirs_lock:
+            _active_temp_dirs.append(self._path)
+
         logger.debug(f"Created secure temp dir: {self._path}")
         return self._path
     
     def cleanup(self) -> None:
         """
         Clean up the temp directory.
-        
+
         Safe to call multiple times.
         """
         if self._path and self._path.exists():
@@ -118,11 +124,12 @@ class SecureTempDir:
                 logger.debug(f"Cleaned up temp dir: {self._path}")
             except OSError as e:
                 logger.warning(f"Failed to clean up temp dir {self._path}: {e}")
-            
-            # Remove from tracking list
-            if self._path in _active_temp_dirs:
-                _active_temp_dirs.remove(self._path)
-            
+
+            # Remove from tracking list (thread-safe)
+            with _active_temp_dirs_lock:
+                if self._path in _active_temp_dirs:
+                    _active_temp_dirs.remove(self._path)
+
             self._path = None
     
     def __enter__(self) -> Path:
