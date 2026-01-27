@@ -11,12 +11,16 @@ Usage:
 
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 from openlabels import Client
 from openlabels.cli import MAX_PREVIEW_RESULTS
 from openlabels.cli.commands.find import find_matching
+from openlabels.cli.output import echo, error, warn, success, dim, progress, confirm, divider
+from openlabels.logging_config import get_logger, get_audit_logger
+
+logger = get_logger(__name__)
+audit = get_audit_logger()
 
 
 # Dangerous shell metacharacters that could enable injection
@@ -120,17 +124,17 @@ def encrypt_file_age(file_path: Path, recipient: str) -> bool:
 def cmd_encrypt(args) -> int:
     """Execute the encrypt command."""
     if not args.where:
-        print("Error: --where filter is required for encrypt", file=sys.stderr)
+        error("--where filter is required for encrypt")
         return 1
 
     if not args.key:
-        print("Error: --key is required for encryption", file=sys.stderr)
+        error("--key is required for encryption")
         return 1
 
     source = Path(args.source)
 
     if not source.exists():
-        print(f"Error: Source not found: {source}", file=sys.stderr)
+        error(f"Source not found: {source}")
         return 1
 
     # Check for encryption tool
@@ -145,13 +149,19 @@ def cmd_encrypt(args) -> int:
                 subprocess.run(["gpg", "--version"], capture_output=True)
                 tool = "gpg"
             except (FileNotFoundError, OSError, subprocess.SubprocessError):
-                print("Error: No encryption tool found. Install 'age' or 'gpg'", file=sys.stderr)
+                error("No encryption tool found. Install 'age' or 'gpg'")
                 return 1
 
     # Validate recipient/key early
     if not validate_recipient(args.key, tool):
-        print(f"Error: Invalid key format for {tool}. Check key ID or recipient.", file=sys.stderr)
+        error(f"Invalid key format for {tool}. Check key ID or recipient.")
         return 1
+
+    logger.info(f"Starting encrypt operation", extra={
+        "source": str(source),
+        "tool": tool,
+        "filter": args.where,
+    })
 
     client = Client(default_exposure=args.exposure)
     extensions = args.extensions.split(",") if args.extensions else None
@@ -167,30 +177,33 @@ def cmd_encrypt(args) -> int:
     ))
 
     if not matches:
-        print("No files match the filter criteria")
+        echo("No files match the filter criteria")
+        logger.info("No files matched filter criteria")
         return 0
+
+    logger.info(f"Found {len(matches)} files matching filter")
 
     # Dry run - just show what would be encrypted
     if args.dry_run:
-        print(f"Would encrypt {len(matches)} files using {tool}:\n")
+        echo(f"Would encrypt [bold]{len(matches)}[/bold] files using {tool}:\n")
         for result in matches[:MAX_PREVIEW_RESULTS]:
-            print(f"  {result.path} (score: {result.score})")
+            dim(f"  {result.path} (score: {result.score})")
         if len(matches) > MAX_PREVIEW_RESULTS:
-            print(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
+            dim(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
         return 0
 
     # Confirm if not forced
     if not args.force:
-        print(f"About to encrypt {len(matches)} files using {tool}")
-        print(f"Key/Recipient: {args.key}")
-        print(f"Filter: {args.where}")
-        print()
-        print("WARNING: Original files will be replaced with encrypted versions!")
-        print()
+        echo(f"About to encrypt [bold]{len(matches)}[/bold] files using {tool}")
+        echo(f"Key/Recipient: {args.key}")
+        echo(f"Filter: {args.where}")
+        echo("")
+        warn("Original files will be replaced with encrypted versions!")
+        echo("")
 
-        confirm = input("Proceed? [y/N] ")
-        if confirm.lower() not in ("y", "yes"):
-            print("Aborted")
+        if not confirm("Proceed?"):
+            echo("Aborted")
+            logger.info("Encrypt aborted by user")
             return 1
 
     # Encrypt files
@@ -199,30 +212,50 @@ def cmd_encrypt(args) -> int:
 
     encrypt_func = encrypt_file_age if tool == "age" else encrypt_file_gpg
 
-    for i, result in enumerate(matches):
-        try:
-            file_path = Path(result.path)
+    with progress("Encrypting files", total=len(matches)) as p:
+        for i, result in enumerate(matches):
+            try:
+                file_path = Path(result.path)
 
-            if encrypt_func(file_path, args.key):
-                encrypted_count += 1
-                if not args.quiet:
-                    print(f"[{i+1}/{len(matches)}] Encrypted: {result.path}")
-            else:
-                errors.append({"path": result.path, "error": "Encryption failed"})
-                if not args.quiet:
-                    print(f"[{i+1}/{len(matches)}] Failed: {result.path}", file=sys.stderr)
+                if encrypt_func(file_path, args.key):
+                    encrypted_count += 1
 
-        except (OSError, ValueError) as e:
-            errors.append({"path": result.path, "error": str(e)})
-            if not args.quiet:
-                print(f"[{i+1}/{len(matches)}] Error: {result.path} - {e}", file=sys.stderr)
+                    # Audit log for each encrypted file
+                    audit.file_encrypt(
+                        path=result.path,
+                        tool=tool,
+                        score=result.score,
+                    )
+
+                    logger.debug(f"Encrypted {result.path} with {tool}")
+
+                    if not args.quiet:
+                        p.set_description(f"[{i+1}/{len(matches)}] {file_path.name}")
+                else:
+                    errors.append({"path": result.path, "error": "Encryption failed"})
+                    warn(f"Failed: {result.path}")
+
+            except (OSError, ValueError) as e:
+                errors.append({"path": result.path, "error": str(e)})
+                logger.warning(f"Failed to encrypt {result.path}: {e}")
+                if not args.quiet:
+                    warn(f"Error: {result.path} - {e}")
+
+            p.advance()
 
     # Summary
-    print()
-    print("=" * 60)
-    print(f"Encrypted: {encrypted_count} files")
+    echo("")
+    divider()
     if errors:
-        print(f"Errors: {len(errors)} files")
+        warn(f"Encrypted: {encrypted_count} files ({len(errors)} errors)")
+    else:
+        success(f"Encrypted: {encrypted_count} files")
+
+    logger.info(f"Encrypt complete", extra={
+        "files_encrypted": encrypted_count,
+        "errors": len(errors),
+        "tool": tool,
+    })
 
     return 0 if not errors else 1
 

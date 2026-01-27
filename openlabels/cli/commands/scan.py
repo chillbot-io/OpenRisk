@@ -10,32 +10,26 @@ Usage:
 """
 
 import json
-import sys
 from pathlib import Path
 from typing import Iterator, Optional, Dict, Any, List
 from dataclasses import dataclass
 
 from openlabels import Client
 from openlabels.core.scorer import ScoringResult
+from openlabels.cli.output import echo, error, success, dim, progress, divider, console
+from openlabels.logging_config import get_logger, get_audit_logger
+
+logger = get_logger(__name__)
+audit = get_audit_logger()
 
 
-# ANSI color codes for terminal output
-class TermColors:
-    RED = "\033[91m"
-    YELLOW = "\033[93m"
-    ORANGE = "\033[33m"
-    GREEN = "\033[92m"
-    GRAY = "\033[90m"
-    RESET = "\033[0m"
-
-
-# Risk tier to color mapping
+# Risk tier to rich color mapping
 TIER_COLORS = {
-    "CRITICAL": TermColors.RED,
-    "HIGH": TermColors.YELLOW,
-    "MEDIUM": TermColors.ORANGE,
-    "LOW": TermColors.GREEN,
-    "MINIMAL": TermColors.GRAY,
+    "CRITICAL": "bold red",
+    "HIGH": "yellow",
+    "MEDIUM": "orange3",
+    "LOW": "green",
+    "MINIMAL": "dim",
 }
 
 
@@ -85,6 +79,7 @@ def scan_file(
             exposure=exposure,
         )
     except (OSError, ValueError) as e:
+        logger.warning(f"Failed to scan {path}: {e}")
         return ScanResult(
             path=str(path),
             score=0,
@@ -120,28 +115,24 @@ def scan_directory(
         yield scan_file(file_path, client, exposure)
 
 
-def format_scan_result(result: ScanResult, format: str = "text") -> str:
-    """Format a scan result for output."""
-    if format == "json":
-        return json.dumps(result.to_dict(), indent=2)
-
-    if format == "jsonl":
-        return json.dumps(result.to_dict())
-
-    # Text format with color
-    # Phase 5.3: Handle Optional score/tier fields
+def format_scan_result_rich(result: ScanResult) -> None:
+    """Print a scan result using rich formatting."""
+    # Handle Optional score/tier fields
     tier_str = result.tier if result.tier is not None else "N/A"
     score_str = str(result.score) if result.score is not None else "N/A"
     color = TIER_COLORS.get(result.tier, "")
 
     if result.error:
-        return f"{result.path}: ERROR - {result.error}"
+        console.print(f"{result.path}: [red]ERROR[/red] - {result.error}")
+        return
 
     entities_str = ", ".join(
         f"{k}({v})" for k, v in sorted(result.entities.items())
     ) if result.entities else "none"
 
-    return f"{result.path}: {color}{score_str:>3}{TermColors.RESET} ({tier_str:<8}) [{entities_str}]"
+    console.print(
+        f"{result.path}: [{color}]{score_str:>3}[/{color}] ({tier_str:<8}) [{entities_str}]"
+    )
 
 
 def cmd_scan(args) -> int:
@@ -150,8 +141,17 @@ def cmd_scan(args) -> int:
     path = Path(args.path)
 
     if not path.exists():
-        print(f"Error: Path not found: {path}", file=sys.stderr)
+        error(f"Path not found: {path}")
         return 1
+
+    logger.info(f"Starting scan", extra={
+        "path": str(path),
+        "recursive": args.recursive,
+        "exposure": args.exposure,
+    })
+
+    # Audit log scan start
+    audit.scan_start(path=str(path), recursive=args.recursive, exposure=args.exposure)
 
     results = []
     total_files = 0
@@ -165,24 +165,40 @@ def cmd_scan(args) -> int:
         if result.score > 0:
             files_with_risk = 1
             max_score = result.score
+
+        if args.format == "text" and not args.quiet:
+            format_scan_result_rich(result)
     else:
         extensions = args.extensions.split(",") if args.extensions else None
 
-        for result in scan_directory(
-            path, client,
-            recursive=args.recursive,
-            exposure=args.exposure,
-            extensions=extensions,
-        ):
-            results.append(result)
-            total_files += 1
-            if result.score > 0:
-                files_with_risk += 1
-                max_score = max(max_score, result.score)
+        # Count files first for progress bar
+        if args.recursive:
+            all_files = list(path.rglob("*"))
+        else:
+            all_files = list(path.glob("*"))
+        all_files = [f for f in all_files if f.is_file()]
+        if extensions:
+            exts = {e.lower().lstrip(".") for e in extensions}
+            all_files = [f for f in all_files if f.suffix.lower().lstrip(".") in exts]
 
-            # Print progress for text format
-            if args.format == "text" and not args.quiet:
-                print(format_scan_result(result, "text"))
+        with progress("Scanning files", total=len(all_files)) as p:
+            for result in scan_directory(
+                path, client,
+                recursive=args.recursive,
+                exposure=args.exposure,
+                extensions=extensions,
+            ):
+                results.append(result)
+                total_files += 1
+                if result.score > 0:
+                    files_with_risk += 1
+                    max_score = max(max_score, result.score)
+
+                # Print progress for text format
+                if args.format == "text" and not args.quiet:
+                    format_scan_result_rich(result)
+
+                p.advance()
 
     # Output results
     if args.format == "json":
@@ -200,17 +216,30 @@ def cmd_scan(args) -> int:
         for result in results:
             print(json.dumps(result.to_dict()))
 
-    elif args.format == "text" and args.quiet:
-        # Quiet mode - only print summary
-        pass
-
     # Print summary for text format
     if args.format == "text":
-        print()
-        print("=" * 60)
-        print(f"Scanned: {total_files} files")
-        print(f"At risk: {files_with_risk} files")
-        print(f"Max score: {max_score}")
+        echo("")
+        divider()
+        echo(f"Scanned: {total_files} files")
+        if files_with_risk > 0:
+            echo(f"At risk: [yellow]{files_with_risk}[/yellow] files")
+        else:
+            success(f"At risk: 0 files")
+        echo(f"Max score: {max_score}")
+
+    logger.info(f"Scan complete", extra={
+        "total_files": total_files,
+        "files_with_risk": files_with_risk,
+        "max_score": max_score,
+    })
+
+    # Audit log scan complete
+    audit.scan_complete(
+        path=str(path),
+        files_scanned=total_files,
+        files_with_risk=files_with_risk,
+        max_score=max_score,
+    )
 
     # Return exit code based on threshold
     if args.fail_above and max_score > args.fail_above:

@@ -9,18 +9,19 @@ Usage:
     openlabels tag ./data --where "has(SSN)" --force-rescan
 """
 
-import sys
-import logging
 from pathlib import Path
 
 from openlabels import Client
 from openlabels.cli import MAX_PREVIEW_RESULTS
-
-logger = logging.getLogger(__name__)
 from openlabels.cli.commands.find import find_matching
+from openlabels.cli.output import echo, error, warn, success, dim, progress, divider
+from openlabels.logging_config import get_logger, get_audit_logger
 from openlabels.output.virtual import write_virtual_label
 from openlabels.output.embed import write_embedded_label
 from openlabels.output.index import store_label
+
+logger = get_logger(__name__)
+audit = get_audit_logger()
 
 
 def cmd_tag(args) -> int:
@@ -28,8 +29,14 @@ def cmd_tag(args) -> int:
     source = Path(args.source)
 
     if not source.exists():
-        print(f"Error: Source not found: {source}", file=sys.stderr)
+        error(f"Source not found: {source}")
         return 1
+
+    logger.info(f"Starting tag operation", extra={
+        "source": str(source),
+        "filter": args.where,
+        "embed": args.embed,
+    })
 
     client = Client(default_exposure=args.exposure)
     extensions = args.extensions.split(",") if args.extensions else None
@@ -45,16 +52,19 @@ def cmd_tag(args) -> int:
     ))
 
     if not matches:
-        print("No files match the filter criteria")
+        echo("No files match the filter criteria")
+        logger.info("No files matched filter criteria")
         return 0
+
+    logger.info(f"Found {len(matches)} files matching filter")
 
     # Dry run - just show what would be tagged
     if args.dry_run:
-        print(f"Would tag {len(matches)} files:\n")
+        echo(f"Would tag [bold]{len(matches)}[/bold] files:\n")
         for result in matches[:MAX_PREVIEW_RESULTS]:
-            print(f"  {result.path} (score: {result.score})")
+            dim(f"  {result.path} (score: {result.score})")
         if len(matches) > MAX_PREVIEW_RESULTS:
-            print(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
+            dim(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
         return 0
 
     # Tag files
@@ -63,59 +73,81 @@ def cmd_tag(args) -> int:
     virtual_count = 0
     errors = []
 
-    for i, result in enumerate(matches):
-        try:
-            file_path = Path(result.path)
+    with progress("Tagging files", total=len(matches)) as p:
+        for i, result in enumerate(matches):
+            try:
+                file_path = Path(result.path)
 
-            # Get the label set from the scan result
-            label_set = result.label_set if hasattr(result, 'label_set') else None
+                # Get the label set from the scan result
+                label_set = result.label_set if hasattr(result, 'label_set') else None
 
-            if label_set is None:
-                # Re-scan to get label set
-                scan_result = client.score_file(str(file_path), exposure=args.exposure)
-                label_set = scan_result.label_set if hasattr(scan_result, 'label_set') else None
+                if label_set is None:
+                    # Re-scan to get label set
+                    scan_result = client.score_file(str(file_path), exposure=args.exposure)
+                    label_set = scan_result.label_set if hasattr(scan_result, 'label_set') else None
 
-            if label_set is None:
+                if label_set is None:
+                    if not args.quiet:
+                        dim(f"Skipped (no labels): {result.path}")
+                    p.advance()
+                    continue
+
+                # Try embedded label first (for supported formats)
+                embedded = False
+                if args.embed:
+                    try:
+                        write_embedded_label(str(file_path), label_set)
+                        embedded = True
+                        embedded_count += 1
+                    except (OSError, ValueError) as e:
+                        logger.debug(f"Could not embed label in {file_path}, falling back to virtual: {e}")
+
+                # Write virtual label if not embedded
+                if not embedded:
+                    write_virtual_label(str(file_path), label_set.label_id, label_set.content_hash)
+                    virtual_count += 1
+
+                # Store in index
+                store_label(label_set, str(file_path), result.score, result.tier)
+
+                # Audit log for each tagged file
+                audit.file_tag(
+                    path=result.path,
+                    label_id=label_set.label_id,
+                    embedded=embedded,
+                    score=result.score,
+                )
+
+                tagged_count += 1
+                logger.debug(f"Tagged {result.path} ({'embedded' if embedded else 'virtual'})")
+
                 if not args.quiet:
-                    print(f"[{i+1}/{len(matches)}] Skipped (no labels): {result.path}")
-                continue
+                    p.set_description(f"[{i+1}/{len(matches)}] {file_path.name}")
 
-            # Try embedded label first (for supported formats)
-            embedded = False
-            if args.embed:
-                try:
-                    write_embedded_label(str(file_path), label_set)
-                    embedded = True
-                    embedded_count += 1
-                except (OSError, ValueError) as e:
-                    logger.debug(f"Could not embed label in {file_path}, falling back to virtual: {e}")
+            except (OSError, ValueError) as e:
+                errors.append({"path": result.path, "error": str(e)})
+                logger.warning(f"Failed to tag {result.path}: {e}")
+                if not args.quiet:
+                    warn(f"Error: {result.path} - {e}")
 
-            # Write virtual label if not embedded
-            if not embedded:
-                write_virtual_label(str(file_path), label_set.label_id, label_set.content_hash)
-                virtual_count += 1
-
-            # Store in index
-            store_label(label_set, str(file_path), result.score, result.tier)
-
-            tagged_count += 1
-            if not args.quiet:
-                tag_type = "embedded" if embedded else "virtual"
-                print(f"[{i+1}/{len(matches)}] Tagged ({tag_type}): {result.path}")
-
-        except (OSError, ValueError) as e:
-            errors.append({"path": result.path, "error": str(e)})
-            if not args.quiet:
-                print(f"[{i+1}/{len(matches)}] Error: {result.path} - {e}", file=sys.stderr)
+            p.advance()
 
     # Summary
-    print()
-    print("=" * 60)
-    print(f"Tagged: {tagged_count} files")
-    print(f"  Embedded: {embedded_count}")
-    print(f"  Virtual: {virtual_count}")
+    echo("")
+    divider()
     if errors:
-        print(f"Errors: {len(errors)} files")
+        warn(f"Tagged: {tagged_count} files ({len(errors)} errors)")
+    else:
+        success(f"Tagged: {tagged_count} files")
+    dim(f"  Embedded: {embedded_count}")
+    dim(f"  Virtual: {virtual_count}")
+
+    logger.info(f"Tag complete", extra={
+        "files_tagged": tagged_count,
+        "embedded": embedded_count,
+        "virtual": virtual_count,
+        "errors": len(errors),
+    })
 
     return 0 if not errors else 1
 
