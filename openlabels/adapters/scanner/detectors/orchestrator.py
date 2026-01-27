@@ -94,7 +94,10 @@ _QUEUE_DEPTH = 0
 _QUEUE_LOCK = threading.Lock()
 
 # Track runaway detections (Phase 3, Issue 3.4)
-# Threads that timed out but couldn't be cancelled
+# Threads that timed out but couldn't be cancelled.
+# NOTE: This counter only increases, never decreases. We cannot detect when
+# a runaway thread eventually terminates. The counter serves as a warning
+# signal - if it grows large, the process should be restarted.
 _RUNAWAY_DETECTIONS = 0
 _RUNAWAY_LOCK = threading.Lock()
 

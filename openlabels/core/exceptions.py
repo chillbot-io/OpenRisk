@@ -85,23 +85,6 @@ class DatabaseError(TransientError):
         self.operation = operation
 
 
-class NetworkError(TransientError):
-    """
-    Network operation failed.
-
-    May be due to:
-    - Connection timeout
-    - DNS resolution failure
-    - Remote service unavailable
-
-    Usually retryable after a delay.
-    """
-
-    def __init__(self, message: str, url: Optional[str] = None, **kwargs):
-        super().__init__(message, kwargs)
-        self.url = url
-
-
 class OperationTimeoutError(TransientError):
     """
     Operation timed out. May be retryable with longer timeout.
@@ -120,23 +103,6 @@ class OperationTimeoutError(TransientError):
         super().__init__(message, kwargs)
         self.timeout_seconds = timeout_seconds
         self.operation = operation
-
-
-class ResourceBusyError(TransientError):
-    """
-    Resource is temporarily busy.
-
-    May be due to:
-    - File locked by another process
-    - Queue at capacity
-    - Rate limiting
-
-    Retryable after delay.
-    """
-
-    def __init__(self, message: str, resource: Optional[str] = None, **kwargs):
-        super().__init__(message, kwargs)
-        self.resource = resource
 
 
 # =============================================================================
@@ -256,28 +222,6 @@ class PermissionDeniedError(PermanentError):
         self.required_permission = required_permission
 
 
-class ConfigurationError(PermanentError):
-    """
-    Configuration is invalid or missing.
-
-    Examples:
-    - Required config not set
-    - Invalid config value
-    - Incompatible config combination
-
-    Requires configuration fix before retry.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        config_key: Optional[str] = None,
-        **kwargs
-    ):
-        super().__init__(message, kwargs)
-        self.config_key = config_key
-
-
 # =============================================================================
 # FILE OPERATION ERRORS
 # =============================================================================
@@ -358,29 +302,13 @@ class FileOperationError(OpenLabelsError):
                 original_error=e,
             )
 
-        # OSError with errno
+        # OSError with errno (for cases not covered by specific exception types)
         if isinstance(e, OSError) and hasattr(e, 'errno'):
             if e.errno == errno.ENOSPC:
                 return cls(
                     message=message,
                     path=path,
                     error_type=FileErrorType.DISK_FULL,
-                    retryable=False,
-                    original_error=e,
-                )
-            if e.errno in (errno.EACCES, errno.EPERM):
-                return cls(
-                    message=message,
-                    path=path,
-                    error_type=FileErrorType.PERMISSION_DENIED,
-                    retryable=False,
-                    original_error=e,
-                )
-            if e.errno in (errno.ENOENT,):
-                return cls(
-                    message=message,
-                    path=path,
-                    error_type=FileErrorType.NOT_FOUND,
                     retryable=False,
                     original_error=e,
                 )
@@ -423,16 +351,13 @@ __all__ = [
     # Transient
     "TransientError",
     "DatabaseError",
-    "NetworkError",
     "OperationTimeoutError",
-    "ResourceBusyError",
     # Permanent
     "PermanentError",
     "NotFoundError",
     "CorruptedDataError",
     "ValidationError",
     "PermissionDeniedError",
-    "ConfigurationError",
     # File operations
     "FileErrorType",
     "FileOperationError",
