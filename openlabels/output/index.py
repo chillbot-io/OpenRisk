@@ -675,25 +675,23 @@ def get_default_index(warn: bool = True) -> LabelIndex:
     """
     global _default_index, _default_index_warning_issued
 
-    # Phase 4.2: Warn about shared state (once per process)
-    if warn and not _default_index_warning_issued:
-        with _default_index_lock:
-            if not _default_index_warning_issued:
-                warnings.warn(
-                    "Using default index shares state across all callers. "
-                    "For isolated operation, create explicit LabelIndex instances. "
-                    "Suppress this warning with get_default_index(warn=False).",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                _default_index_warning_issued = True
+    with _default_index_lock:
+        # Phase 4.2: Warn about shared state (once per process)
+        # NOTE: Both warning check AND creation must be inside same lock
+        # to prevent race conditions
+        if warn and not _default_index_warning_issued:
+            warnings.warn(
+                "Using default index shares state across all callers. "
+                "For isolated operation, create explicit LabelIndex instances. "
+                "Suppress this warning with get_default_index(warn=False).",
+                UserWarning,
+                stacklevel=2,
+            )
+            _default_index_warning_issued = True
 
-    if _default_index is None:
-        with _default_index_lock:
-            # Double-check inside lock
-            if _default_index is None:
-                _default_index = LabelIndex()
-    return _default_index
+        if _default_index is None:
+            _default_index = LabelIndex()
+        return _default_index
 
 
 def reset_default_index() -> None:

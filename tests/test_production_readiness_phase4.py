@@ -504,5 +504,68 @@ class TestContextReset:
             ctx.close()
 
 
+class TestDetectorContextIntegration:
+    """Tests for Detector class context integration (Phase 4 bug fix)."""
+
+    def test_detector_accepts_context(self):
+        """Detector accepts optional context parameter."""
+        from openlabels.context import Context
+        from openlabels.adapters.scanner import Detector
+
+        ctx = Context()
+        try:
+            detector = Detector(context=ctx)
+            assert detector._context is ctx
+        finally:
+            ctx.close()
+
+    def test_detector_passes_context_to_orchestrator(self):
+        """Detector passes context to orchestrator."""
+        from openlabels.context import Context
+        from openlabels.adapters.scanner import Detector
+
+        ctx = Context()
+        try:
+            detector = Detector(context=ctx)
+            # Access orchestrator property to trigger creation
+            orchestrator = detector.orchestrator
+            assert orchestrator._context is ctx
+        finally:
+            ctx.close()
+
+    def test_detector_without_context_works(self):
+        """Detector works without context (backward compatibility)."""
+        from openlabels.adapters.scanner import Detector
+
+        detector = Detector()
+        assert detector._context is None
+        # Orchestrator should still work (uses legacy globals)
+        assert detector.orchestrator is not None
+
+
+class TestGetDefaultIndexRaceCondition:
+    """Tests for get_default_index race condition fix."""
+
+    def test_get_default_index_warning_inside_lock(self):
+        """Verify warning check happens inside lock (race condition fix)."""
+        from openlabels.output.index import get_default_index, reset_default_index
+        import openlabels.output.index as idx_module
+
+        reset_default_index()
+
+        # Verify warning is issued
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            get_default_index()
+
+            assert len(w) == 1
+
+            # Second call should not warn
+            get_default_index()
+            assert len(w) == 1
+
+        reset_default_index()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
