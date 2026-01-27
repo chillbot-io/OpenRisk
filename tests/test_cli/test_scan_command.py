@@ -114,7 +114,8 @@ class TestScanFile:
             mock_scoring.tier = Mock(value="MINIMAL")
             mock_client.score_file.return_value = mock_scoring
 
-            with patch('openlabels.cli.commands.scan.scanner_detect') as mock_detect:
+            # Patch the actual location where detect_file is imported
+            with patch('openlabels.adapters.scanner.detect_file') as mock_detect:
                 mock_detect.return_value = Mock(entity_counts={})
 
                 result = scan_file(
@@ -161,7 +162,7 @@ class TestScanCommandIntegration:
         mock_scoring.tier = Mock(value="MINIMAL")
         mock_client.score_file.return_value = mock_scoring
 
-        with patch('openlabels.cli.commands.scan.scanner_detect') as mock_detect:
+        with patch('openlabels.adapters.scanner.detect_file') as mock_detect:
             mock_detect.return_value = Mock(entity_counts={})
 
             result = scan_file(file_path, mock_client)
@@ -213,7 +214,7 @@ class TestErrorHandling:
         mock_client = Mock()
         mock_client.score_file.side_effect = PermissionError("Access denied")
 
-        with patch('openlabels.cli.commands.scan.scanner_detect') as mock_detect:
+        with patch('openlabels.adapters.scanner.detect_file') as mock_detect:
             mock_detect.side_effect = PermissionError("Access denied")
 
             result = scan_file(
@@ -228,7 +229,7 @@ class TestErrorHandling:
         """Test handling of files with encoding issues."""
         mock_client = Mock()
 
-        with patch('openlabels.cli.commands.scan.scanner_detect') as mock_detect:
+        with patch('openlabels.adapters.scanner.detect_file') as mock_detect:
             mock_detect.side_effect = ValueError("Invalid encoding")
 
             result = scan_file(

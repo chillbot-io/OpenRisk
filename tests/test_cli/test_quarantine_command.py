@@ -37,13 +37,23 @@ class TestSetupParser:
 
         quarantine_parser = add_quarantine_parser(subparsers)
 
-        # Should require source path
+        # Command requires source, --where, and --to arguments
         with tempfile.TemporaryDirectory() as temp:
-            args = quarantine_parser.parse_args([temp])
-            assert hasattr(args, 'path')
+            dest = tempfile.mkdtemp()
+            try:
+                args = quarantine_parser.parse_args([
+                    temp,
+                    "--where", "score > 80",
+                    "--to", dest,
+                ])
+                assert hasattr(args, 'source')
+                assert args.where == "score > 80"
+                assert args.to == dest
+            finally:
+                shutil.rmtree(dest)
 
     def test_parser_has_filter_arguments(self):
-        """Test parser accepts filter arguments."""
+        """Test parser accepts filter via --where."""
         import argparse
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers()
@@ -51,33 +61,23 @@ class TestSetupParser:
         quarantine_parser = add_quarantine_parser(subparsers)
 
         with tempfile.TemporaryDirectory() as temp:
-            args = quarantine_parser.parse_args([
-                temp,
-                "--min-score", "80",
-                "--tier", "CRITICAL",
-            ])
-            assert args.min_score == 80
-            assert args.tier == "CRITICAL"
+            dest = tempfile.mkdtemp()
+            try:
+                args = quarantine_parser.parse_args([
+                    temp,
+                    "--where", "tier == 'CRITICAL'",
+                    "--to", dest,
+                ])
+                assert args.where == "tier == 'CRITICAL'"
+            finally:
+                shutil.rmtree(dest)
 
 
 class TestQuarantineDestination:
     """Test quarantine destination handling."""
 
-    def test_default_quarantine_dir(self):
-        """Test default quarantine directory creation."""
-        import argparse
-        parser = argparse.ArgumentParser()
-        subparsers = parser.add_subparsers()
-
-        quarantine_parser = add_quarantine_parser(subparsers)
-
-        with tempfile.TemporaryDirectory() as temp:
-            args = quarantine_parser.parse_args([temp])
-            # Default destination should be set
-            assert hasattr(args, 'destination') or hasattr(args, 'dest')
-
-    def test_custom_quarantine_dir(self):
-        """Test custom quarantine directory."""
+    def test_destination_argument(self):
+        """Test --to specifies quarantine directory."""
         import argparse
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers()
@@ -86,19 +86,22 @@ class TestQuarantineDestination:
 
         with tempfile.TemporaryDirectory() as temp:
             custom_dest = tempfile.mkdtemp()
-            args = quarantine_parser.parse_args([
-                temp,
-                "--destination", custom_dest,
-            ])
-            assert args.destination == custom_dest
-            shutil.rmtree(custom_dest)
+            try:
+                args = quarantine_parser.parse_args([
+                    temp,
+                    "--where", "score > 50",
+                    "--to", custom_dest,
+                ])
+                assert args.to == custom_dest
+            finally:
+                shutil.rmtree(custom_dest)
 
 
 class TestQuarantineSafetyChecks:
     """Test safety checks for quarantine operation."""
 
     def test_dry_run_mode(self):
-        """Test dry-run mode doesn't move files."""
+        """Test dry-run mode flag."""
         import argparse
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers()
@@ -106,11 +109,20 @@ class TestQuarantineSafetyChecks:
         quarantine_parser = add_quarantine_parser(subparsers)
 
         with tempfile.TemporaryDirectory() as temp:
-            args = quarantine_parser.parse_args([temp, "--dry-run"])
-            assert args.dry_run is True
+            dest = tempfile.mkdtemp()
+            try:
+                args = quarantine_parser.parse_args([
+                    temp,
+                    "--where", "score > 80",
+                    "--to", dest,
+                    "--dry-run"
+                ])
+                assert args.dry_run is True
+            finally:
+                shutil.rmtree(dest)
 
-    def test_confirmation_required(self):
-        """Test confirmation is required for destructive operations."""
+    def test_force_flag(self):
+        """Test force flag to skip confirmation."""
         import argparse
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers()
@@ -118,9 +130,17 @@ class TestQuarantineSafetyChecks:
         quarantine_parser = add_quarantine_parser(subparsers)
 
         with tempfile.TemporaryDirectory() as temp:
-            args = quarantine_parser.parse_args([temp])
-            # Should have a --force or --yes flag to skip confirmation
-            assert hasattr(args, 'force') or hasattr(args, 'yes')
+            dest = tempfile.mkdtemp()
+            try:
+                args = quarantine_parser.parse_args([
+                    temp,
+                    "--where", "score > 80",
+                    "--to", dest,
+                    "--force"
+                ])
+                assert args.force is True
+            finally:
+                shutil.rmtree(dest)
 
 
 class TestQuarantineFileOperations:

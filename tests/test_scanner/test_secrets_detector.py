@@ -51,8 +51,8 @@ class TestAWSCredentials:
 
     def test_detect_aws_secret_key_with_context(self, detector):
         """Test AWS secret access key detection requires context."""
-        # Secret keys need context like 'aws_secret_access_key' nearby
-        text = 'aws_secret_access_key = "wJalrXUtnFEMIK7MDENGEXAMPLEKEYHERE"'
+        # Secret keys need context like 'aws_secret_access_key' and 40 chars
+        text = 'aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"'
         spans = detector.detect(text)
 
         # Should detect based on context pattern
@@ -69,8 +69,8 @@ class TestGitHubTokens:
 
     def test_detect_github_pat_format(self, detector):
         """Test GitHub Personal Access Token format detection."""
-        # ghp_ prefix with 36 alphanumeric chars
-        text = "GITHUB_TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcd1234"
+        # ghp_ prefix with exactly 36 alphanumeric chars
+        text = "GITHUB_TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef1234"
         spans = detector.detect(text)
 
         gh_spans = [s for s in spans if s.entity_type == "GITHUB_TOKEN"]

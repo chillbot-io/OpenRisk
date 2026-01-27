@@ -29,22 +29,20 @@ class TestSetupParser:
         assert result == parser_mock
 
     def test_parser_has_filter_arguments(self):
-        """Test parser accepts filter arguments."""
+        """Test parser accepts filter arguments via --where."""
         import argparse
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers()
 
         find_parser = add_find_parser(subparsers)
 
-        # Should accept these filter flags
+        # Filter is passed via --where
         with tempfile.TemporaryDirectory() as temp:
             args = find_parser.parse_args([
                 temp,
-                "--min-score", "50",
-                "--tier", "HIGH",
+                "--where", "score >= 50 AND tier == 'HIGH'",
             ])
-            assert args.min_score == 50
-            assert args.tier == "HIGH"
+            assert args.where == "score >= 50 AND tier == 'HIGH'"
 
 
 class TestFilterExpressions:
@@ -69,7 +67,8 @@ class TestFilterExpressions:
         """Test tier filtering."""
         from openlabels.cli.filter import parse_filter
 
-        filter_obj = parse_filter("tier == 'HIGH'")
+        # Tier filter uses single = not ==
+        filter_obj = parse_filter("tier = HIGH")
         assert filter_obj is not None
 
         result = {"tier": "HIGH"}
@@ -82,7 +81,8 @@ class TestFilterExpressions:
         """Test combined filter expressions."""
         from openlabels.cli.filter import parse_filter
 
-        filter_obj = parse_filter("score >= 50 and tier == 'HIGH'")
+        # Use AND keyword with single = for equality
+        filter_obj = parse_filter("score >= 50 AND tier = HIGH")
         assert filter_obj is not None
 
         result = {"score": 75, "tier": "HIGH"}
@@ -92,10 +92,11 @@ class TestFilterExpressions:
         assert filter_obj.evaluate(result) is False
 
     def test_entity_filter(self):
-        """Test entity type filtering."""
+        """Test entity type filtering with has() function."""
         from openlabels.cli.filter import parse_filter
 
-        filter_obj = parse_filter("'SSN' in entities")
+        # Use has() function for entity checks
+        filter_obj = parse_filter("has(SSN)")
         assert filter_obj is not None
 
 
@@ -103,7 +104,7 @@ class TestFindOutputFormats:
     """Test different output formats for find command."""
 
     def test_default_output_format(self):
-        """Test default (table) output format."""
+        """Test default (text) output format."""
         # The default format should produce human-readable output
         pass  # Format tested via integration tests
 
@@ -199,19 +200,18 @@ class TestFindErrorHandling:
         """Test handling of invalid filter expression."""
         from openlabels.cli.filter import parse_filter
 
-        # Invalid expression should return None or raise
-        filter_obj = parse_filter("invalid &&& syntax")
-        # Depending on implementation, may return None or raise
-        # Just verify it doesn't crash
+        # Invalid expression raises ValueError
+        with pytest.raises(ValueError):
+            parse_filter("invalid &&& syntax")
 
     def test_invalid_tier_value(self):
-        """Test handling of invalid tier value."""
+        """Test handling of invalid tier value in filter."""
         import argparse
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers()
         find_parser = add_find_parser(subparsers)
 
-        # Parser should accept any tier value (validation at runtime)
+        # Parser should accept any filter value (validation at runtime)
         with tempfile.TemporaryDirectory() as temp:
-            args = find_parser.parse_args([temp, "--tier", "INVALID"])
-            assert args.tier == "INVALID"
+            args = find_parser.parse_args([temp, "--where", "tier == INVALID"])
+            assert args.where == "tier == INVALID"
