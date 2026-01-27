@@ -14,6 +14,7 @@ Weights are sourced from registry.py (1-10 scale) and scaled for scoring.
 from typing import List, Dict, Set, Tuple
 from dataclasses import dataclass
 from enum import Enum
+import logging
 import math
 
 from .registry import (
@@ -253,6 +254,10 @@ def score(
 # =============================================================================
 
 if __name__ == '__main__':
+    # Configure logging for test output
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logger = logging.getLogger(__name__)
+
     # Test cases - using canonical uppercase entity types
     tests = [
         ({}, 'PRIVATE', 'Empty'),
@@ -263,14 +268,14 @@ if __name__ == '__main__':
         ({'EMAIL': 1, 'PHONE': 1}, 'PRIVATE', 'Contact info'),
     ]
 
-    print("OpenLabels Scorer Test")
-    print("=" * 60)
+    logger.info("OpenLabels Scorer Test")
+    logger.info("=" * 60)
 
     for entities, exposure, desc in tests:
         result = score(entities, exposure)
-        print(f"\n{desc}")
-        print(f"  Entities: {entities}")
-        print(f"  Exposure: {exposure}")
-        print(f"  Score: {result.score} → {result.tier.value}")
+        logger.info(f"\n{desc}")
+        logger.info(f"  Entities: {entities}")
+        logger.info(f"  Exposure: {exposure}")
+        logger.info(f"  Score: {result.score} → {result.tier.value}")
         if result.co_occurrence_rules:
-            print(f"  Rules: {result.co_occurrence_rules}")
+            logger.info(f"  Rules: {result.co_occurrence_rules}")

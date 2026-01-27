@@ -26,6 +26,7 @@ Decision Matrix:
 └─────────────────────────────────────────┴───────┴─────────────────────────────┘
 """
 
+import logging
 from enum import Enum
 from typing import List, Tuple, Optional
 
@@ -260,11 +261,15 @@ def get_scan_urgency(
 # =============================================================================
 
 if __name__ == "__main__":
+    # Configure logging for test output
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logger = logging.getLogger(__name__)
+
     # Test cases
     from ..adapters.base import Entity, NormalizedContext
 
-    print("OpenLabels Scan Triggers Test")
-    print("=" * 60)
+    logger.info("OpenLabels Scan Triggers Test")
+    logger.info("=" * 60)
 
     # Test 1: No labels
     ctx1 = NormalizedContext(
@@ -272,9 +277,9 @@ if __name__ == "__main__":
         has_classification=False,
     )
     should, triggers = should_scan([], ctx1)
-    print(f"\n1. No labels, private:")
-    print(f"   Should scan: {should}")
-    print(f"   Triggers: {[t.value for t in triggers]}")
+    logger.info(f"\n1. No labels, private:")
+    logger.info(f"   Should scan: {should}")
+    logger.info(f"   Triggers: {[t.value for t in triggers]}")
 
     # Test 2: Public access with labels
     ctx2 = NormalizedContext(
@@ -284,10 +289,10 @@ if __name__ == "__main__":
     )
     entities2 = [Entity(type="SSN", count=1, confidence=0.95, source="macie")]
     should, triggers = should_scan(entities2, ctx2)
-    print(f"\n2. Public access with SSN:")
-    print(f"   Should scan: {should}")
-    print(f"   Triggers: {[t.value for t in triggers]}")
-    print(f"   Priority: {calculate_scan_priority(ctx2, triggers)}")
+    logger.info(f"\n2. Public access with SSN:")
+    logger.info(f"   Should scan: {should}")
+    logger.info(f"   Triggers: {[t.value for t in triggers]}")
+    logger.info(f"   Priority: {calculate_scan_priority(ctx2, triggers)}")
 
     # Test 3: Private, encrypted, high confidence
     ctx3 = NormalizedContext(
@@ -298,9 +303,9 @@ if __name__ == "__main__":
     )
     entities3 = [Entity(type="EMAIL", count=5, confidence=0.92, source="dlp")]
     should, triggers = should_scan(entities3, ctx3)
-    print(f"\n3. Private, encrypted, high confidence EMAIL:")
-    print(f"   Should scan: {should}")
-    print(f"   Triggers: {[t.value for t in triggers]}")
+    logger.info(f"\n3. Private, encrypted, high confidence EMAIL:")
+    logger.info(f"   Should scan: {should}")
+    logger.info(f"   Triggers: {[t.value for t in triggers]}")
 
     # Test 4: Low confidence high-risk
     ctx4 = NormalizedContext(
@@ -311,7 +316,7 @@ if __name__ == "__main__":
     )
     entities4 = [Entity(type="SSN", count=1, confidence=0.65, source="purview")]
     should, triggers = should_scan(entities4, ctx4)
-    print(f"\n4. SSN at 0.65 confidence (internal):")
-    print(f"   Should scan: {should}")
-    print(f"   Triggers: {[t.value for t in triggers]}")
-    print(f"   Urgency: {get_scan_urgency(entities4, ctx4)}")
+    logger.info(f"\n4. SSN at 0.65 confidence (internal):")
+    logger.info(f"   Should scan: {should}")
+    logger.info(f"   Triggers: {[t.value for t in triggers]}")
+    logger.info(f"   Urgency: {get_scan_urgency(entities4, ctx4)}")

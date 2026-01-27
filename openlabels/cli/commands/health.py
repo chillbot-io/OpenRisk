@@ -48,7 +48,7 @@ def cmd_health(args) -> int:
 
     # JSON output
     if args.json:
-        print(json.dumps(report.to_dict(), indent=2))
+        echo(json.dumps(report.to_dict(), indent=2))
         return 0 if report.healthy else 1
 
     # Rich output

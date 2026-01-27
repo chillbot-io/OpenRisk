@@ -109,7 +109,7 @@ def cmd_find(args) -> int:
             extensions=extensions,
         ):
             match_count += 1
-            print(format_find_result(result, args.format))
+            echo(format_find_result(result, args.format))
 
             # Limit output
             if args.limit and match_count >= args.limit:
@@ -132,7 +132,7 @@ def cmd_find(args) -> int:
     # Exit code
     if args.count:
         # Just print count and exit
-        print(match_count)
+        echo(str(match_count))
 
     return 0
 
