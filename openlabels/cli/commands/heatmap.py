@@ -8,14 +8,17 @@ Usage:
     openlabels heatmap ./data --depth 3
 """
 
-import sys
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
 from openlabels import Client
 from openlabels.cli.commands.scan import scan_file, ScanResult
+from openlabels.cli.output import echo, error, info, progress, console
+from openlabels.logging_config import get_logger
 from openlabels.core.scorer import TIER_THRESHOLDS
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -162,32 +165,28 @@ def score_to_indicator(score: float) -> str:
         return "⚪"  # Minimal
 
 
-def score_to_ansi(score: float) -> str:
-    """Get ANSI color code for score using actual tier thresholds."""
+def score_to_rich_color(score: float) -> str:
+    """Get rich color style for score using actual tier thresholds."""
     if score >= TIER_THRESHOLDS['critical']:
-        return "\033[91m"  # Red
+        return "bold red"
     elif score >= TIER_THRESHOLDS['high']:
-        return "\033[93m"  # Yellow
+        return "yellow"
     elif score >= TIER_THRESHOLDS['medium']:
-        return "\033[33m"  # Orange
+        return "orange3"
     elif score >= TIER_THRESHOLDS['low']:
-        return "\033[92m"  # Green
+        return "green"
     else:
-        return "\033[90m"  # Gray
+        return "dim"
 
 
-def render_tree(
+def render_tree_rich(
     node: TreeNode,
     indent: int = 0,
     prefix: str = "",
     is_last: bool = True,
-    use_color: bool = True,
     show_entities: bool = False,
-) -> List[str]:
-    """Render a tree node as formatted text lines."""
-    lines = []
-    reset = "\033[0m" if use_color else ""
-
+) -> None:
+    """Render a tree node using rich formatting."""
     # Build the tree branch characters
     if indent == 0:
         branch = ""
@@ -198,7 +197,7 @@ def render_tree(
     if node.is_dir:
         avg = node.avg_score
         max_s = node.max_score
-        color = score_to_ansi(max_s) if use_color else ""
+        color = score_to_rich_color(max_s)
         indicator = score_to_indicator(max_s)
         bar = score_to_bar(avg)
         score_str = f"{bar} avg:{avg:>5.1f} max:{max_s:>3}"
@@ -206,7 +205,7 @@ def render_tree(
         name = f"{node.name}/" if node.name else str(node.path)
         files_str = f"({node.file_count} files)"
     else:
-        color = score_to_ansi(node.score) if use_color else ""
+        color = score_to_rich_color(node.score)
         indicator = score_to_indicator(node.score)
         bar = score_to_bar(node.score)
         score_str = f"{bar} {node.score:>3}"
@@ -216,16 +215,17 @@ def render_tree(
 
     # Error handling
     if node.error:
-        lines.append(f"{branch}{icon} {name} [ERROR: {node.error}]")
+        console.print(f"{branch}{icon} {name} [red]\\[ERROR: {node.error}][/red]")
     else:
-        line = f"{branch}{icon} {name:<40} {color}{score_str}{reset} {indicator} {files_str}"
-        lines.append(line.rstrip())
+        console.print(
+            f"{branch}{icon} {name:<40} [{color}]{score_str}[/{color}] {indicator} {files_str}"
+        )
 
         # Show entities if requested
         if show_entities and node.entity_counts:
             entities = ", ".join(f"{k}({v})" for k, v in sorted(node.entity_counts.items()))
             entity_prefix = prefix + ("    " if is_last else "│   ") if indent > 0 else ""
-            lines.append(f"{entity_prefix}    └─ {entities}")
+            console.print(f"{entity_prefix}    └─ [dim]{entities}[/dim]")
 
     # Render children
     if node.children:
@@ -233,16 +233,13 @@ def render_tree(
 
         for i, child in enumerate(node.children):
             child_is_last = (i == len(node.children) - 1)
-            lines.extend(render_tree(
+            render_tree_rich(
                 child,
                 indent=indent + 1,
                 prefix=child_prefix,
                 is_last=child_is_last,
-                use_color=use_color,
                 show_entities=show_entities,
-            ))
-
-    return lines
+            )
 
 
 def cmd_heatmap(args) -> int:
@@ -250,13 +247,19 @@ def cmd_heatmap(args) -> int:
     path = Path(args.path)
 
     if not path.exists():
-        print(f"Error: Path not found: {path}", file=sys.stderr)
+        error(f"Path not found: {path}")
         return 1
+
+    logger.info(f"Starting heatmap", extra={
+        "path": str(path),
+        "depth": args.depth,
+    })
 
     client = Client(default_exposure=args.exposure)
     extensions = args.extensions.split(",") if args.extensions else None
 
-    print(f"Building risk heatmap for {path}...\n", file=sys.stderr)
+    info(f"Building risk heatmap for {path}...")
+    echo("")
 
     # Build tree
     tree = build_tree(
@@ -267,35 +270,35 @@ def cmd_heatmap(args) -> int:
         extensions=extensions,
     )
 
-    # Render and print
-    use_color = not args.no_color and sys.stdout.isatty()
-    lines = render_tree(
+    # Render using rich
+    render_tree_rich(
         tree,
-        use_color=use_color,
         show_entities=args.show_entities,
     )
-
-    for line in lines:
-        print(line)
 
     # Print legend with actual tier thresholds
     crit = TIER_THRESHOLDS['critical']
     high = TIER_THRESHOLDS['high']
     med = TIER_THRESHOLDS['medium']
     low = TIER_THRESHOLDS['low']
-    print()
-    print(f"Legend: 🔴 Critical({crit}+) 🟠 High({high}-{crit-1}) 🟡 Medium({med}-{high-1}) 🟢 Low({low}-{med-1}) ⚪ Minimal(<{low})")
+    echo("")
+    echo(f"Legend: 🔴 Critical({crit}+) 🟠 High({high}-{crit-1}) 🟡 Medium({med}-{high-1}) 🟢 Low({low}-{med-1}) ⚪ Minimal(<{low})")
 
     # Print summary
-    print()
-    print(f"Total files: {tree.file_count}")
-    print(f"Max score: {tree.max_score}")
-    print(f"Avg score: {tree.avg_score:.1f}")
+    echo("")
+    echo(f"Total files: {tree.file_count}")
+    echo(f"Max score: {tree.max_score}")
+    echo(f"Avg score: {tree.avg_score:.1f}")
 
     if tree.entity_counts:
         top_entities = sorted(tree.entity_counts.items(), key=lambda x: x[1], reverse=True)[:5]
         entities_str = ", ".join(f"{k}({v})" for k, v in top_entities)
-        print(f"Top entities: {entities_str}")
+        echo(f"Top entities: {entities_str}")
+
+    logger.info(f"Heatmap complete", extra={
+        "total_files": tree.file_count,
+        "max_score": tree.max_score,
+    })
 
     return 0
 
@@ -334,7 +337,7 @@ def add_heatmap_parser(subparsers):
     parser.add_argument(
         "--no-color",
         action="store_true",
-        help="Disable colored output",
+        help="Disable colored output (ignored, use NO_COLOR env var)",
     )
     parser.set_defaults(func=cmd_heatmap)
 
