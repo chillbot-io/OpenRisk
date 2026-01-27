@@ -26,11 +26,16 @@ Examples:
     encryption = none OR exposure = public
 """
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Any, Dict
 from enum import Enum
 
+logger = logging.getLogger(__name__)
+
+# Module-level flag to only warn once about missing regex module
+_regex_import_warning_issued = False
 
 # Exposure level ordinal values for comparison
 # Maps exposure level names to comparable integers
@@ -187,9 +192,7 @@ class Condition:
         Returns:
             True if pattern matches, False otherwise (including on timeout)
         """
-        import logging
-
-        logger = logging.getLogger(__name__)
+        global _regex_import_warning_issued
 
         MAX_PATTERN_LENGTH = 500
         MAX_TEXT_LENGTH_FOR_REGEX = 1_000_000  # 1MB text limit for regex ops
@@ -210,7 +213,7 @@ class Condition:
         ]
         for dangerous in redos_patterns:
             if re.search(dangerous, pattern):
-                logger.debug(f"Regex pattern rejected: contains ReDoS-prone construct")
+                logger.debug("Regex pattern rejected: contains ReDoS-prone construct")
                 return False
 
         # Try to use the 'regex' module for actual timeout support
@@ -233,12 +236,12 @@ class Condition:
         except ImportError:
             # Fall back to standard re module without timeout
             # Log warning once per process
-            if not getattr(self, '_regex_warning_issued', False):
+            if not _regex_import_warning_issued:
                 logger.warning(
                     "ReDoS timeout protection degraded: 'regex' module not installed. "
                     "Install with: pip install regex"
                 )
-                self._regex_warning_issued = True
+                _regex_import_warning_issued = True
 
             try:
                 return bool(re.search(pattern, text, re.IGNORECASE))

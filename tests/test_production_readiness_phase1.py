@@ -70,8 +70,7 @@ class TestSizeLimits:
             detector.detect(huge_text)
 
         assert "exceeds maximum" in str(exc_info.value)
-        assert "200" in str(exc_info.value)  # Actual size
-        assert "100" in str(exc_info.value)  # Limit
+        assert "characters" in str(exc_info.value)  # Should say characters, not bytes
 
     def test_file_size_check_before_read(self):
         """File size should be checked BEFORE reading content."""

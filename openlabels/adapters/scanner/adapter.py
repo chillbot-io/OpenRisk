@@ -73,8 +73,8 @@ class Detector:
         # Check text size limit to prevent OOM from adversarial input
         if text and len(text) > self.config.max_text_size:
             raise ValueError(
-                f"Text input size ({len(text):,} bytes) exceeds maximum "
-                f"allowed size ({self.config.max_text_size:,} bytes). "
+                f"Text input size ({len(text):,} characters) exceeds maximum "
+                f"allowed size ({self.config.max_text_size:,} characters). "
                 f"Configure max_text_size to increase the limit."
             )
 
