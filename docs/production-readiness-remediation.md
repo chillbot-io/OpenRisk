@@ -1171,11 +1171,11 @@ Use this checklist to track remediation progress:
 - [x] 1.4 Add Cloud URI validation
 
 ### Phase 2: Data Integrity & Transactions
-- [ ] 2.1 Wrap SQLite operations in transactions
-- [ ] 2.2 Make file operations idempotent
-- [ ] 2.3 Add file modification detection
-- [ ] 2.4 Add schema validation for deserialization
-- [ ] 2.5 Validate extended attributes on read
+- [x] 2.1 Wrap SQLite operations in transactions
+- [x] 2.2 Make file operations idempotent
+- [x] 2.3 Add file modification detection
+- [x] 2.4 Add schema validation for deserialization
+- [x] 2.5 Validate extended attributes on read
 
 ### Phase 3: Error Handling & Observability
 - [ ] 3.1 Create structured error types for LabelIndex

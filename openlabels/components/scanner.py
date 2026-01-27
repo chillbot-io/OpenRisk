@@ -5,6 +5,7 @@ Handles file and directory scanning operations.
 """
 
 import fnmatch
+import hashlib
 import logging
 import time
 from datetime import datetime
@@ -20,6 +21,11 @@ if TYPE_CHECKING:
     from .scorer import Scorer
 
 logger = logging.getLogger(__name__)
+
+
+class FileModifiedError(Exception):
+    """Raised when a file is modified during scanning."""
+    pass
 
 
 class Scanner:
@@ -49,6 +55,35 @@ class Scanner:
     @property
     def default_exposure(self) -> str:
         return self._ctx.default_exposure
+
+    def _quick_hash(self, path: Path, block_size: int = 65536) -> str:
+        """
+        Compute a quick hash of a file using first/last blocks + size.
+
+        This is faster than a full file hash while still detecting most changes.
+        Used to detect file modifications during scanning.
+
+        Args:
+            path: Path to the file
+            block_size: Size of blocks to read from start/end
+
+        Returns:
+            Hex digest string (32 chars)
+        """
+        try:
+            size = path.stat().st_size
+            hasher = hashlib.blake2b()
+            hasher.update(str(size).encode())
+
+            with open(path, 'rb') as f:
+                hasher.update(f.read(block_size))
+                if size > block_size * 2:
+                    f.seek(-block_size, 2)
+                    hasher.update(f.read(block_size))
+
+            return hasher.hexdigest()[:32]
+        except OSError:
+            return ""
 
     def scan(
         self,
@@ -186,12 +221,21 @@ class Scanner:
             files_yielded += 1
 
     def _scan_single_file(self, path: Path) -> ScanResult:
-        """Scan a single file and return ScanResult."""
+        """
+        Scan a single file and return ScanResult.
+
+        Detects if the file is modified during scanning by comparing
+        quick hashes before and after detection.
+        """
         from ..adapters.scanner import detect_file
 
         start_time = time.time()
 
         try:
+            # Capture hash before detection to detect concurrent modification
+            pre_hash = self._quick_hash(path)
+            pre_stat = path.stat()
+
             detection_result = detect_file(path)
             entities = self._scorer._normalize_entity_counts(detection_result.entity_counts)
             confidence = self._scorer._calculate_average_confidence(detection_result.spans)
@@ -202,12 +246,27 @@ class Scanner:
                 confidence=confidence,
             )
 
+            # Verify file unchanged after detection
+            post_hash = self._quick_hash(path)
+            post_stat = path.stat()
+
+            if pre_hash != post_hash:
+                raise FileModifiedError(
+                    f"File modified during scan: {path} "
+                    f"(hash changed from {pre_hash[:8]}... to {post_hash[:8]}...)"
+                )
+
+            # Also check mtime as a secondary verification
+            if pre_stat.st_mtime != post_stat.st_mtime:
+                raise FileModifiedError(
+                    f"File modified during scan: {path} (mtime changed)"
+                )
+
             duration_ms = (time.time() - start_time) * 1000
-            stat = path.stat()
 
             return ScanResult(
                 path=str(path),
-                size_bytes=stat.st_size,
+                size_bytes=post_stat.st_size,
                 file_type=path.suffix.lower() or "unknown",
                 score=scoring_result.score,
                 tier=scoring_result.tier.value,
@@ -215,8 +274,15 @@ class Scanner:
                 entities=[],
                 scan_duration_ms=duration_ms,
                 scanned_at=datetime.utcnow().isoformat(),
+                content_hash=post_hash,  # Include hash for downstream verification
             )
 
+        except FileModifiedError as e:
+            logger.warning(str(e))
+            return ScanResult(
+                path=str(path),
+                error=str(e),
+            )
         except (OSError, ValueError) as e:
             return ScanResult(
                 path=str(path),

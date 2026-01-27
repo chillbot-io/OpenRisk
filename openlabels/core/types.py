@@ -79,6 +79,9 @@ class ScanResult:
     scanner_version: str = ""
     scanned_at: str = ""
 
+    # Content verification
+    content_hash: Optional[str] = None  # Quick hash for detecting file changes
+
     # Errors (if any)
     error: Optional[str] = None
 
@@ -106,6 +109,7 @@ class ScanResult:
             "scan_triggers": [t.value for t in self.scan_triggers],
             "scan_duration_ms": self.scan_duration_ms,
             "scanned_at": self.scanned_at,
+            "content_hash": self.content_hash,
             "error": self.error,
         }
 
