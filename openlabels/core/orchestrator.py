@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from .triggers import should_scan, ScanTrigger, calculate_scan_priority
+from .constants import CONFIDENCE_WHEN_NO_SPANS
 from .merger import merge_inputs_full, MergeResult
 from .scorer import score as compute_score, ScoringResult, RiskTier
 
@@ -264,7 +265,7 @@ class Orchestrator:
         if scanner_input.entities:
             avg_confidence = sum(e.confidence for e in scanner_input.entities) / len(scanner_input.entities)
         else:
-            avg_confidence = 0.90
+            avg_confidence = CONFIDENCE_WHEN_NO_SPANS  # Phase 5.6: Use constant
 
         scoring_result = compute_score(
             entities=entity_counts,
