@@ -9,6 +9,10 @@ import json
 import csv
 import sys
 import yaml
+# SECURITY NOTE (MED-011): Using `random` module here is intentional and acceptable.
+# This is calibration/test code for sampling test data - cryptographic randomness
+# is not required. DO NOT copy this pattern to production security-sensitive code
+# (e.g., token generation, sampling for security decisions). Use `secrets` module instead.
 import random
 from pathlib import Path
 from collections import Counter
