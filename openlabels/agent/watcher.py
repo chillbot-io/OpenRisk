@@ -256,6 +256,22 @@ class FileWatcher:
                 self.on_change(event)
             except Exception as e:
                 logger.error(f"Error in event callback: {e}")
+                # Phase 6.1: Track callback failures as dropped events
+                with self._dropped_events_lock:
+                    self._dropped_events += 1
+                    dropped_count = self._dropped_events
+
+                if dropped_count == 1 or dropped_count % 100 == 0:
+                    logger.error(
+                        f"Callback failures - dropped {dropped_count} events. "
+                        "Check callback implementation."
+                    )
+
+                if self.config.on_queue_full:
+                    try:
+                        self.config.on_queue_full(dropped_count)
+                    except Exception as callback_error:
+                        logger.error(f"Error in on_queue_full callback: {callback_error}")
 
     @property
     def is_running(self) -> bool:
