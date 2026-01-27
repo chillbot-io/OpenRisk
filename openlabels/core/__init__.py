@@ -94,6 +94,10 @@ __all__ = [
     "merge_entities",
     "get_highest_exposure",
     "merge_contexts",
+    # Orchestrator
+    "Orchestrator",
+    "ProcessingResult",
+    "create_orchestrator",
 ]
 
 # Import additional types
@@ -114,4 +118,9 @@ from .merger import (
     merge_entities,
     get_highest_exposure,
     merge_contexts,
+)
+from .orchestrator import (
+    Orchestrator,
+    ProcessingResult,
+    create_orchestrator,
 )

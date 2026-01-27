@@ -7,6 +7,7 @@ Text extraction from various file formats with OCR support.
 from .adapter import Detector, detect, detect_file
 from .config import Config
 from .types import DetectionResult, Span
+from .scanner_adapter import ScannerAdapter, create_scanner_adapter
 from .extractors import extract_text, get_extractor, ExtractionResult
 from .validators import (
     validate_file,
@@ -44,6 +45,9 @@ __all__ = [
     "Span",
     "detect",
     "detect_file",
+    # Adapter Interface
+    "ScannerAdapter",
+    "create_scanner_adapter",
     # Extraction
     "extract_text",
     "get_extractor",
