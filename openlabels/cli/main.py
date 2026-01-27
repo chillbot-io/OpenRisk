@@ -30,6 +30,7 @@ from typing import List, Optional
 from openlabels import __version__
 from openlabels.logging_config import setup_logging
 from openlabels.cli.output import set_progress_enabled
+from openlabels.shutdown import install_signal_handlers, get_shutdown_coordinator
 
 
 # =============================================================================
@@ -217,6 +218,9 @@ def cmd_version(args):
 
 def main(argv: Optional[List[str]] = None):
     """Main CLI entry point."""
+    # Install signal handlers for graceful shutdown (Ctrl+C, SIGTERM)
+    install_signal_handlers()
+
     parser = argparse.ArgumentParser(
         prog="openlabels",
         description="OpenLabels - Universal Data Risk Scoring",

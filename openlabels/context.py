@@ -72,12 +72,18 @@ import weakref
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Callable
 
 from .adapters.scanner.constants import MAX_DETECTOR_WORKERS
 from .adapters.base import normalize_exposure_level
 
 logger = logging.getLogger(__name__)
+
+
+def _get_shutdown_coordinator():
+    """Lazy import to avoid circular dependency."""
+    from .shutdown import get_shutdown_coordinator
+    return get_shutdown_coordinator()
 
 
 # =============================================================================
@@ -111,13 +117,23 @@ def _cleanup_all_contexts():
 
 
 def _register_context(ctx: "Context") -> None:
-    """Register a context for cleanup at exit."""
+    """Register a context for cleanup at exit and signal handling."""
     global _atexit_registered
 
     with _context_refs_lock:
         # Register atexit handler once (not per context)
         if not _atexit_registered:
             atexit.register(_cleanup_all_contexts)
+            # Also register with shutdown coordinator for signal handling
+            try:
+                coordinator = _get_shutdown_coordinator()
+                coordinator.register(
+                    _cleanup_all_contexts,
+                    name="context_cleanup",
+                    priority=10,  # Run early in shutdown
+                )
+            except Exception:
+                pass  # Shutdown coordinator may not be available
             _atexit_registered = True
 
         # Add weak reference to this context
