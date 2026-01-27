@@ -21,6 +21,18 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Set, Tuple
 
 from ..types import Span, Tier
+from .constants import (
+    CONFIDENCE_BOOST_HIGH,
+    CONFIDENCE_BOOST_LOW,
+    CONFIDENCE_BOOST_MEDIUM,
+    CONFIDENCE_BOOST_MINIMAL,
+    CONFIDENCE_LOW,
+    CONFIDENCE_PENALTY_HIGH,
+    CONFIDENCE_PENALTY_LOW,
+    CONFIDENCE_PENALTY_MEDIUM,
+    CONFIDENCE_PENALTY_MINIMAL,
+    LOW_CONFIDENCE_THRESHOLD,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -147,31 +159,31 @@ class HotwordRule:
 NAME_POSITIVE_HOTWORDS: List[HotwordRule] = [
     HotwordRule(
         re.compile(r'\b(mr\.?|mrs\.?|ms\.?|miss|dr\.?|prof\.?)\s*$', re.I),
-        confidence_delta=0.25,
+        confidence_delta=CONFIDENCE_BOOST_MEDIUM,
         window_before=20, window_after=0,
         description="Title before name"
     ),
     HotwordRule(
         re.compile(r'\b(dear|attn:?|attention:?|to:?|from:?)\s*$', re.I),
-        confidence_delta=0.15,
+        confidence_delta=CONFIDENCE_BOOST_MINIMAL,
         window_before=30, window_after=0,
         description="Letter salutation"
     ),
     HotwordRule(
         re.compile(r'\b(patient|employee|customer|client|user):?\s*$', re.I),
-        confidence_delta=0.20,
+        confidence_delta=CONFIDENCE_BOOST_LOW,
         window_before=30, window_after=0,
         description="Role label before name"
     ),
     HotwordRule(
         re.compile(r'\bname:?\s*$', re.I),
-        confidence_delta=0.30,
+        confidence_delta=CONFIDENCE_BOOST_HIGH,
         window_before=20, window_after=0,
         description="Explicit name label"
     ),
     HotwordRule(
         re.compile(r'\b(signed|sincerely|regards|best)\s*,?\s*$', re.I),
-        confidence_delta=0.20,
+        confidence_delta=CONFIDENCE_BOOST_LOW,
         window_before=30, window_after=0,
         description="Letter closing"
     ),
@@ -181,31 +193,31 @@ NAME_POSITIVE_HOTWORDS: List[HotwordRule] = [
 NAME_NEGATIVE_HOTWORDS: List[HotwordRule] = [
     HotwordRule(
         re.compile(r'^\s*(inc\.?|llc\.?|ltd\.?|corp\.?|co\.?|group|holdings)\b', re.I),
-        confidence_delta=-0.35,
+        confidence_delta=CONFIDENCE_PENALTY_HIGH,
         window_before=0, window_after=30,
         description="Company suffix after"
     ),
     HotwordRule(
         re.compile(r'^\s*(street|st\.?|avenue|ave\.?|road|rd\.?|drive|dr\.?|lane|ln\.?|blvd\.?)\b', re.I),
-        confidence_delta=-0.35,
+        confidence_delta=CONFIDENCE_PENALTY_HIGH,
         window_before=0, window_after=30,
         description="Street suffix after"
     ),
     HotwordRule(
         re.compile(r'\b(from|purchased|ordered|shipped|via)\s+$', re.I),
-        confidence_delta=-0.20,
+        confidence_delta=CONFIDENCE_PENALTY_LOW,
         window_before=30, window_after=0,
         description="Transaction context"
     ),
     HotwordRule(
         re.compile(r'\b(at|in|to|from|through)\s+$', re.I),
-        confidence_delta=-0.15,
+        confidence_delta=CONFIDENCE_PENALTY_MINIMAL,
         window_before=15, window_after=0,
         description="Location preposition"
     ),
     HotwordRule(
         re.compile(r'^\s*\'s\s+(site|website|page|app|service|product|store)\b', re.I),
-        confidence_delta=-0.30,
+        confidence_delta=CONFIDENCE_PENALTY_MEDIUM,
         window_before=0, window_after=40,
         description="Possessive + product"
     ),
@@ -305,7 +317,7 @@ class ContextEnhancer:
     def __init__(
         self,
         high_confidence_threshold: float = 0.85,
-        low_confidence_threshold: float = 0.35,
+        low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD,
         enable_deny_list: bool = True,
         enable_hotwords: bool = True,
         enable_patterns: bool = True,

@@ -5,6 +5,12 @@ from typing import List, Tuple
 
 from ..types import Span, Tier
 from .base import BaseDetector
+from .constants import (
+    CONFIDENCE_LOW,
+    CONFIDENCE_LUHN_INVALID,
+    CONFIDENCE_PERFECT,
+    CONFIDENCE_WEAK,
+)
 
 
 # VALIDATORS
@@ -57,19 +63,19 @@ def validate_ssn(ssn: str) -> Tuple[bool, float]:
     area, group, serial = digits[:3], digits[3:5], digits[5:]
 
     # Check for invalid patterns - still detect, but lower confidence
-    confidence = 0.99
+    confidence = CONFIDENCE_PERFECT
 
     # Invalid area numbers (000, 666, 900-999)
     if area in ('000', '666') or area.startswith('9'):
-        confidence = 0.85  # Still detect for safety
+        confidence = CONFIDENCE_LOW  # Still detect for safety
 
     # Invalid group (00) - even lower confidence
     if group == '00':
-        confidence = min(confidence, 0.80)
+        confidence = min(confidence, CONFIDENCE_WEAK)
 
     # Invalid serial (0000) - even lower confidence
     if serial == '0000':
-        confidence = min(confidence, 0.80)
+        confidence = min(confidence, CONFIDENCE_WEAK)
 
     return True, confidence
 
@@ -115,7 +121,7 @@ def validate_credit_card(cc: str) -> Tuple[bool, float]:
 
     # PHI safety: detect even with invalid Luhn (possible typo)
     if not luhn_check(digits):
-        return True, 0.87  # Lower confidence but still detect (above default 0.85 threshold)
+        return True, CONFIDENCE_LUHN_INVALID  # Lower confidence but still detect (above default 0.85 threshold)
 
     return True, 0.99
 

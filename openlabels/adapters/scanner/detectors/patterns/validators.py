@@ -1,6 +1,7 @@
 """Validation functions for pattern-detected entities."""
 
 import re
+from ..constants import (CONFIDENCE_MINIMAL)
 
 
 def validate_ip(ip: str) -> bool:

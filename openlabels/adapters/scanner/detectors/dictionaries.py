@@ -6,6 +6,7 @@ import logging
 
 from ..types import Span, Tier
 from .base import BaseDetector
+from .constants import (CONFIDENCE_WEAK)
 
 
 logger = logging.getLogger(__name__)
@@ -333,7 +334,7 @@ class DictionaryDetector(BaseDetector):
                     end=end_idx + 1,
                     text=text[start_idx:end_idx + 1],
                     entity_type=entity_type,
-                    confidence=0.80,
+                    confidence=CONFIDENCE_WEAK,
                     detector=self.name,
                     tier=self.tier,
                 ))
@@ -375,7 +376,7 @@ class DictionaryDetector(BaseDetector):
                         end=end_idx,
                         text=text[idx:end_idx],
                         entity_type=entity_type,
-                        confidence=0.80,
+                        confidence=CONFIDENCE_WEAK,
                         detector=self.name,
                         tier=self.tier,
                     ))

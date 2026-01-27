@@ -611,7 +611,7 @@ class DetectorOrchestrator:
                                 end=end,
                                 text=original_text,
                                 entity_type=entity_type,
-                                confidence=0.98,  # Very high - we KNOW this is an entity
+                                confidence=CONFIDENCE_VERY_HIGH,  # Very high - we KNOW this is an entity
                                 detector="known_entity",
                                 tier=Tier.STRUCTURED,  # High tier to bypass context enhancement
                             )

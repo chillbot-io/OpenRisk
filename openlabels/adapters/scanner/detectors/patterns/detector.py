@@ -15,6 +15,7 @@ from .validators import (
     validate_vin,
     validate_ssn_context,
 )
+from ..constants import CONFIDENCE_MEDIUM
 
 
 class PatternDetector(BaseDetector):
