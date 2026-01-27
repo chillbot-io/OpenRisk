@@ -37,12 +37,12 @@ requires_watchdog = pytest.mark.skipif(
 
 
 # =============================================================================
-# ISSUE 6.1: Queue Overflow Feedback Tests
+# ISSUE 6.1: Dropped Events Feedback Tests
 # =============================================================================
 
 @requires_watchdog
-class TestFileWatcherQueueOverflow:
-    """Test FileWatcher queue overflow handling (Issue 6.1)."""
+class TestFileWatcherDroppedEvents:
+    """Test FileWatcher dropped events tracking via callback failures (Issue 6.1)."""
 
     def test_dropped_events_starts_at_zero(self):
         """Dropped events counter should start at zero."""
@@ -50,65 +50,69 @@ class TestFileWatcherQueueOverflow:
             watcher = FileWatcher(tmpdir)
             assert watcher.dropped_events == 0
 
-    def test_enqueue_event_success(self):
-        """Events should be enqueued successfully when queue has space."""
+    def test_successful_callback_does_not_increment_counter(self):
+        """Successful callbacks should not increment dropped events."""
+        events_received = []
+
+        def good_callback(event):
+            events_received.append(event)
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            watcher = FileWatcher(tmpdir)
+            watcher = FileWatcher(tmpdir, on_change=good_callback)
             event = WatchEvent(event_type=EventType.CREATED, path="/test/file.txt")
 
-            result = watcher._enqueue_event(event)
+            watcher._dispatch_event(event)
 
-            assert result is True
+            assert len(events_received) == 1
             assert watcher.dropped_events == 0
 
-    def test_enqueue_event_overflow_increments_counter(self):
-        """Queue overflow should increment dropped events counter."""
+    def test_callback_failure_increments_counter(self):
+        """Callback failures should increment dropped events counter."""
+        def bad_callback(event):
+            raise RuntimeError("Callback failed!")
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            config = WatcherConfig(max_queue_size=1)
-            watcher = FileWatcher(tmpdir, config=config)
+            watcher = FileWatcher(tmpdir, on_change=bad_callback)
 
-            # Fill the queue
-            event1 = WatchEvent(event_type=EventType.CREATED, path="/test/file1.txt")
-            event2 = WatchEvent(event_type=EventType.CREATED, path="/test/file2.txt")
+            event = WatchEvent(event_type=EventType.CREATED, path="/test/file.txt")
+            watcher._dispatch_event(event)
 
-            assert watcher._enqueue_event(event1) is True
-            assert watcher._enqueue_event(event2) is False
             assert watcher.dropped_events == 1
 
-    def test_queue_full_callback_called_on_overflow(self):
-        """on_queue_full callback should be called when queue overflows."""
-        callback_counts = []
+    def test_on_queue_full_callback_called_on_failure(self):
+        """on_queue_full callback should be called when event callback fails."""
+        failure_counts = []
 
-        def on_queue_full(count):
-            callback_counts.append(count)
+        def bad_callback(event):
+            raise RuntimeError("Callback failed!")
+
+        def on_failure(count):
+            failure_counts.append(count)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            config = WatcherConfig(max_queue_size=1, on_queue_full=on_queue_full)
-            watcher = FileWatcher(tmpdir, config=config)
+            config = WatcherConfig(on_queue_full=on_failure)
+            watcher = FileWatcher(tmpdir, on_change=bad_callback, config=config)
 
-            # Fill queue and overflow
-            event1 = WatchEvent(event_type=EventType.CREATED, path="/test/file1.txt")
-            event2 = WatchEvent(event_type=EventType.CREATED, path="/test/file2.txt")
+            event = WatchEvent(event_type=EventType.CREATED, path="/test/file.txt")
+            watcher._dispatch_event(event)
 
-            watcher._enqueue_event(event1)
-            watcher._enqueue_event(event2)
-
-            assert len(callback_counts) == 1
-            assert callback_counts[0] == 1
+            assert len(failure_counts) == 1
+            assert failure_counts[0] == 1
 
     def test_reset_dropped_events(self):
         """reset_dropped_events should return count and reset to zero."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config = WatcherConfig(max_queue_size=1)
-            watcher = FileWatcher(tmpdir, config=config)
+        def bad_callback(event):
+            raise RuntimeError("Callback failed!")
 
-            # Cause some drops
-            for i in range(5):
-                watcher._enqueue_event(
+        with tempfile.TemporaryDirectory() as tmpdir:
+            watcher = FileWatcher(tmpdir, on_change=bad_callback)
+
+            # Cause some drops via callback failures
+            for i in range(4):
+                watcher._dispatch_event(
                     WatchEvent(event_type=EventType.CREATED, path=f"/test/file{i}.txt")
                 )
 
-            # Should have 4 drops (first one succeeded)
             assert watcher.dropped_events == 4
 
             # Reset and verify
@@ -116,21 +120,21 @@ class TestFileWatcherQueueOverflow:
             assert previous_count == 4
             assert watcher.dropped_events == 0
 
-    def test_callback_error_does_not_crash(self):
+    def test_on_queue_full_callback_error_does_not_crash(self):
         """Errors in on_queue_full callback should be caught."""
-        def bad_callback(count):
-            raise RuntimeError("Callback failed!")
+        def bad_event_callback(event):
+            raise RuntimeError("Event callback failed!")
+
+        def bad_overflow_callback(count):
+            raise RuntimeError("Overflow callback failed!")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            config = WatcherConfig(max_queue_size=1, on_queue_full=bad_callback)
-            watcher = FileWatcher(tmpdir, config=config)
+            config = WatcherConfig(on_queue_full=bad_overflow_callback)
+            watcher = FileWatcher(tmpdir, on_change=bad_event_callback, config=config)
 
-            # This should not raise
-            event1 = WatchEvent(event_type=EventType.CREATED, path="/test/file1.txt")
-            event2 = WatchEvent(event_type=EventType.CREATED, path="/test/file2.txt")
-
-            watcher._enqueue_event(event1)
-            watcher._enqueue_event(event2)  # Should trigger callback but not crash
+            # This should not raise despite both callbacks failing
+            event = WatchEvent(event_type=EventType.CREATED, path="/test/file.txt")
+            watcher._dispatch_event(event)
 
             assert watcher.dropped_events == 1
 
