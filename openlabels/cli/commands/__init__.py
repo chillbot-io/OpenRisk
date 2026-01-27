@@ -11,6 +11,7 @@ Commands:
     report      Generate risk reports (json, csv, html)
     heatmap     Display risk heatmap of directory structure
     shell       Interactive shell for exploring data risk
+    health      Run system health checks
 """
 
 from .scan import add_scan_parser, cmd_scan
@@ -22,6 +23,7 @@ from .restrict import add_restrict_parser, cmd_restrict
 from .report import add_report_parser, cmd_report
 from .heatmap import add_heatmap_parser, cmd_heatmap
 from .shell import add_shell_parser, cmd_shell
+from .health import add_health_parser, cmd_health
 
 __all__ = [
     # Parsers
@@ -34,6 +36,7 @@ __all__ = [
     "add_report_parser",
     "add_heatmap_parser",
     "add_shell_parser",
+    "add_health_parser",
     # Commands
     "cmd_scan",
     "cmd_find",
@@ -44,4 +47,5 @@ __all__ = [
     "cmd_report",
     "cmd_heatmap",
     "cmd_shell",
+    "cmd_health",
 ]

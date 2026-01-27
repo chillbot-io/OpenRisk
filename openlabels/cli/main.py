@@ -282,6 +282,7 @@ Examples:
         add_report_parser,
         add_heatmap_parser,
         add_shell_parser,
+        add_health_parser,
     )
 
     add_scan_parser(subparsers)
@@ -293,6 +294,7 @@ Examples:
     add_report_parser(subparsers)
     add_heatmap_parser(subparsers)
     add_shell_parser(subparsers)
+    add_health_parser(subparsers)
 
     # ==========================================================================
     # LEGACY DETECT COMMANDS
