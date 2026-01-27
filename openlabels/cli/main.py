@@ -28,9 +28,11 @@ from pathlib import Path
 from typing import List, Optional
 
 from openlabels import __version__
-from openlabels.logging_config import setup_logging
-from openlabels.cli.output import set_progress_enabled
+from openlabels.logging_config import setup_logging, get_logger
+from openlabels.cli.output import set_progress_enabled, echo, error, divider
 from openlabels.shutdown import install_signal_handlers, get_shutdown_coordinator
+
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -81,14 +83,11 @@ def cmd_detect(args):
         # SECURITY FIX (CVE-READY-001): Limit stdin read to prevent OOM
         text = sys.stdin.read(MAX_STDIN_SIZE + 1)
         if len(text) > MAX_STDIN_SIZE:
-            print(
-                f"Error: stdin input exceeds maximum size ({MAX_STDIN_SIZE // (1024*1024)}MB)",
-                file=sys.stderr,
-            )
+            error(f"stdin input exceeds maximum size ({MAX_STDIN_SIZE // (1024*1024)}MB)")
             sys.exit(1)
 
     result = detector.detect(text)
-    print(format_result(result, args.format))
+    echo(format_result(result, args.format))
 
     if args.fail_on_pii and result.has_pii:
         sys.exit(1)
@@ -106,18 +105,18 @@ def cmd_detect_file(args):
 
     path = Path(args.file)
     if not path.exists():
-        print(f"Error: File not found: {path}", file=sys.stderr)
+        error(f"File not found: {path}")
         sys.exit(1)
 
     result = detector.detect_file(path)
 
     if args.format == "text":
-        print(f"File: {path}")
-        print(format_result(result, args.format))
+        echo(f"File: {path}")
+        echo(format_result(result, args.format))
     else:
         output = result.to_dict()
         output["file"] = str(path)
-        print(json.dumps(output, indent=2 if args.format == "json" else None))
+        echo(json.dumps(output, indent=2 if args.format == "json" else None))
 
     if args.fail_on_pii and result.has_pii:
         sys.exit(1)
@@ -135,11 +134,11 @@ def cmd_detect_dir(args):
 
     base_path = Path(args.directory)
     if not base_path.exists():
-        print(f"Error: Directory not found: {base_path}", file=sys.stderr)
+        error(f"Directory not found: {base_path}")
         sys.exit(1)
 
     if not base_path.is_dir():
-        print(f"Error: Not a directory: {base_path}", file=sys.stderr)
+        error(f"Not a directory: {base_path}")
         sys.exit(1)
 
     # Collect files
@@ -169,29 +168,31 @@ def cmd_detect_dir(args):
                 if args.format == "json":
                     output = result.to_dict()
                     output["file"] = str(file_path)
-                    print(json.dumps(output))
+                    echo(json.dumps(output))
                 elif args.format == "summary":
-                    print(f"{file_path}: {result.entity_counts}")
+                    echo(f"{file_path}: {result.entity_counts}")
                 else:
-                    print(f"\n{'='*60}")
-                    print(f"File: {file_path}")
-                    print(format_result(result, "text"))
+                    echo("")
+                    divider("=")
+                    echo(f"File: {file_path}")
+                    echo(format_result(result, "text"))
 
             elif args.verbose:
-                print(f"{file_path}: clean")
+                echo(f"{file_path}: clean")
 
         except (OSError, ValueError) as e:
             errors += 1
             if args.verbose:
-                print(f"Error processing {file_path}: {e}", file=sys.stderr)
+                logger.warning(f"Error processing {file_path}: {e}")
 
     if args.format != "json":
-        print(f"\n{'='*60}")
-        print(f"Scanned {len(files)} files")
-        print(f"Files with PII/PHI: {files_with_pii}")
-        print(f"Total entities found: {total_entities}")
+        echo("")
+        divider("=")
+        echo(f"Scanned {len(files)} files")
+        echo(f"Files with PII/PHI: {files_with_pii}")
+        echo(f"Total entities found: {total_entities}")
         if errors > 0:
-            print(f"Errors: {errors} file(s) failed to process")
+            echo(f"Errors: {errors} file(s) failed to process")
 
     if args.fail_on_pii and files_with_pii > 0:
         sys.exit(1)
@@ -199,17 +200,17 @@ def cmd_detect_dir(args):
 
 def cmd_version(args):
     """Show version information."""
-    print(f"openlabels {__version__}")
-    print("Universal Data Risk Scoring")
-    print()
-    print("Commands:")
-    print("  scan        Scan files and compute risk scores")
-    print("  find        Find files matching filter criteria")
-    print("  quarantine  Move matching files to quarantine")
-    print("  report      Generate risk reports")
-    print("  heatmap     Display risk heatmap")
-    print()
-    print("Run 'openlabels <command> --help' for details.")
+    echo(f"openlabels {__version__}")
+    echo("Universal Data Risk Scoring")
+    echo("")
+    echo("Commands:")
+    echo("  scan        Scan files and compute risk scores")
+    echo("  find        Find files matching filter criteria")
+    echo("  quarantine  Move matching files to quarantine")
+    echo("  report      Generate risk reports")
+    echo("  heatmap     Display risk heatmap")
+    echo("")
+    echo("Run 'openlabels <command> --help' for details.")
 
 
 # =============================================================================

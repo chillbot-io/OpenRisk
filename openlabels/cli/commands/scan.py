@@ -210,11 +210,11 @@ def cmd_scan(args) -> int:
             },
             "results": [r.to_dict() for r in results],
         }
-        print(json.dumps(output, indent=2))
+        echo(json.dumps(output, indent=2))
 
     elif args.format == "jsonl":
         for result in results:
-            print(json.dumps(result.to_dict()))
+            echo(json.dumps(result.to_dict()))
 
     # Print summary for text format
     if args.format == "text":

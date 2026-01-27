@@ -344,7 +344,7 @@ def cmd_report(args) -> int:
         echo(f"Report written to {args.output}")
         logger.info(f"Report written to {args.output}")
     else:
-        print(content)
+        echo(content)
 
     logger.info(f"Report generation complete", extra={
         "total_files": summary["total_files"],
