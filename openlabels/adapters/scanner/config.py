@@ -121,6 +121,10 @@ class Config:
     # Parallel detection
     max_workers: int = 4  # Max threads for parallel detection
 
+    # Size limits (prevent OOM from adversarial input)
+    max_text_size: int = 10 * 1024 * 1024  # 10 MB max text input
+    max_file_size: int = 100 * 1024 * 1024  # 100 MB max file size
+
     def __post_init__(self):
         """Validate configuration values."""
         if not validate_data_path(self.data_dir):
@@ -151,6 +155,12 @@ class Config:
 
         if self.max_workers < 1:
             raise ValueError("max_workers must be at least 1")
+
+        if self.max_text_size < 1:
+            raise ValueError("max_text_size must be at least 1")
+
+        if self.max_file_size < 1:
+            raise ValueError("max_file_size must be at least 1")
 
     def ensure_directories(self) -> None:
         """Create data directories with secure permissions (0700)."""

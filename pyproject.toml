@@ -39,8 +39,9 @@ ocr = [
     "rapidocr-onnxruntime>=1.3.0",
 ]
 performance = ["pyahocorasick>=2.0.0"]
+security = ["regex>=2023.0.0"]  # Enables ReDoS timeout protection
 all = [
-    "openlabels[pdf,office,images,ocr,performance]",
+    "openlabels[pdf,office,images,ocr,performance,security]",
 ]
 dev = [
     "pytest>=7.0.0",

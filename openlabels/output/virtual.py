@@ -17,9 +17,11 @@ Platform support:
 import os
 import logging
 import platform
+import re
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
 from ..core.labels import LabelSet, VirtualLabelPointer
 from ..utils.validation import (
@@ -38,6 +40,168 @@ XATTR_WINDOWS_ADS = "openlabels"  # Stored as file.txt:openlabels
 # Keep private aliases for backward compatibility within this module
 _validate_path_for_subprocess = validate_path_for_subprocess
 _validate_xattr_value = validate_xattr_value
+
+
+# =============================================================================
+# CLOUD URI VALIDATION
+# =============================================================================
+
+# S3 bucket naming rules:
+# - 3-63 characters
+# - Lowercase letters, numbers, hyphens, periods
+# - Must start and end with letter or number
+# - Cannot be formatted as IP address
+_S3_BUCKET_PATTERN = re.compile(
+    r'^(?!.*\.\.)(?!.*-\.)(?!.*\.-)'  # No consecutive dots or dot-hyphen
+    r'[a-z0-9]'                        # Start with lowercase letter or digit
+    r'[a-z0-9.-]{1,61}'               # Middle: letters, digits, dots, hyphens
+    r'[a-z0-9]$'                       # End with lowercase letter or digit
+)
+
+# GCS bucket naming rules (similar to S3 with some differences)
+_GCS_BUCKET_PATTERN = re.compile(
+    r'^(?!goog)(?!.*google.*)'        # Cannot contain "google" or start with "goog"
+    r'[a-z0-9]'                        # Start with lowercase letter or digit
+    r'[a-z0-9_.-]{1,61}'              # Middle: letters, digits, underscores, dots, hyphens
+    r'[a-z0-9]$'                       # End with lowercase letter or digit
+)
+
+# Azure container naming rules:
+# - 3-63 characters
+# - Lowercase letters, numbers, hyphens
+# - Must start with letter or number
+# - No consecutive hyphens
+_AZURE_CONTAINER_PATTERN = re.compile(
+    r'^(?!.*--)'
+    r'[a-z0-9]'
+    r'[a-z0-9-]{1,61}'
+    r'[a-z0-9]$'
+)
+
+# Path traversal detection pattern
+_PATH_TRAVERSAL_PATTERN = re.compile(
+    r'(^|[/\\])\.\.[/\\]|'  # ../ or ..\ at start or after separator
+    r'[/\\]\.\.$|'           # /.. or \.. at end
+    r'^\.\.$'                # Just ".."
+)
+
+
+@dataclass
+class CloudURI:
+    """Parsed and validated cloud storage URI."""
+    provider: str  # 's3', 'gcs', or 'azure'
+    bucket: str    # bucket name (or container for Azure)
+    key: str       # object key/blob name
+
+
+class CloudURIValidationError(ValueError):
+    """Raised when a cloud URI fails validation."""
+    pass
+
+
+def parse_cloud_uri(uri: str) -> CloudURI:
+    """
+    Parse and validate a cloud storage URI.
+
+    Supports:
+    - s3://bucket/key
+    - gs://bucket/blob
+    - azure://container/blob
+
+    Args:
+        uri: Cloud storage URI
+
+    Returns:
+        CloudURI with validated components
+
+    Raises:
+        CloudURIValidationError: If URI is malformed or contains invalid characters
+
+    Examples:
+        >>> parse_cloud_uri("s3://my-bucket/path/to/file.txt")
+        CloudURI(provider='s3', bucket='my-bucket', key='path/to/file.txt')
+
+        >>> parse_cloud_uri("s3://bucket/../../../etc/passwd")
+        CloudURIValidationError: Path traversal detected in key
+    """
+    if not uri:
+        raise CloudURIValidationError("Empty URI")
+
+    # Determine provider and extract bucket/key
+    if uri.startswith('s3://'):
+        provider = 's3'
+        remainder = uri[5:]
+        bucket_pattern = _S3_BUCKET_PATTERN
+        provider_name = "S3"
+    elif uri.startswith('gs://'):
+        provider = 'gcs'
+        remainder = uri[5:]
+        bucket_pattern = _GCS_BUCKET_PATTERN
+        provider_name = "GCS"
+    elif uri.startswith('azure://'):
+        provider = 'azure'
+        remainder = uri[8:]
+        bucket_pattern = _AZURE_CONTAINER_PATTERN
+        provider_name = "Azure"
+    else:
+        raise CloudURIValidationError(
+            f"Unknown URI scheme. Supported: s3://, gs://, azure://. Got: {uri[:20]}"
+        )
+
+    # Split into bucket and key
+    parts = remainder.split('/', 1)
+    bucket = parts[0]
+    key = parts[1] if len(parts) > 1 else ''
+
+    # Validate bucket name
+    if not bucket:
+        raise CloudURIValidationError(f"{provider_name} bucket name cannot be empty")
+
+    if len(bucket) < 3:
+        raise CloudURIValidationError(
+            f"{provider_name} bucket name must be at least 3 characters: {bucket}"
+        )
+
+    if len(bucket) > 63:
+        raise CloudURIValidationError(
+            f"{provider_name} bucket name must be at most 63 characters: {bucket[:20]}..."
+        )
+
+    if not bucket_pattern.match(bucket):
+        raise CloudURIValidationError(
+            f"Invalid {provider_name} bucket name: {bucket}. "
+            f"Must contain only lowercase letters, numbers, and hyphens, "
+            f"and start/end with a letter or number."
+        )
+
+    # Check for IP address format (not allowed for S3/GCS)
+    if provider in ('s3', 'gcs'):
+        ip_pattern = re.compile(r'^\d+\.\d+\.\d+\.\d+$')
+        if ip_pattern.match(bucket):
+            raise CloudURIValidationError(
+                f"{provider_name} bucket name cannot be an IP address: {bucket}"
+            )
+
+    # Validate key (path traversal check)
+    if key:
+        if _PATH_TRAVERSAL_PATTERN.search(key):
+            raise CloudURIValidationError(
+                f"Path traversal detected in {provider_name} key: {key[:50]}"
+            )
+
+        # Check for null bytes (could be used for injection)
+        if '\x00' in key:
+            raise CloudURIValidationError(
+                f"Null byte not allowed in {provider_name} key"
+            )
+
+        # S3 key length limit is 1024 bytes
+        if len(key.encode('utf-8')) > 1024:
+            raise CloudURIValidationError(
+                f"{provider_name} key exceeds maximum length of 1024 bytes"
+            )
+
+    return CloudURI(provider=provider, bucket=bucket, key=key)
 
 
 def _get_platform() -> str:
@@ -591,33 +755,34 @@ def write_cloud_label(
 
     Returns:
         True if successful, False otherwise
+
+    Raises:
+        CloudURIValidationError: If URI is malformed or contains path traversal
     """
+    # Validate URI before processing
+    parsed = parse_cloud_uri(uri)
+
     pointer = VirtualLabelPointer(
         label_id=label_set.label_id,
         content_hash=label_set.content_hash,
     )
     value = pointer.to_string()
 
-    if uri.startswith('s3://'):
-        parts = uri[5:].split('/', 1)
-        bucket, key = parts[0], parts[1] if len(parts) > 1 else ''
-        return _get_s3_handler().write(bucket, key, value, kwargs.get('s3_client'))
-
-    elif uri.startswith('gs://'):
-        parts = uri[5:].split('/', 1)
-        bucket, blob_name = parts[0], parts[1] if len(parts) > 1 else ''
-        return _get_gcs_handler().write(bucket, blob_name, value, kwargs.get('gcs_client'))
-
-    elif uri.startswith('azure://'):
-        parts = uri[8:].split('/', 1)
-        container, blob_name = parts[0], parts[1] if len(parts) > 1 else ''
-        return _get_azure_handler().write(
-            container, blob_name, value,
-            kwargs.get('connection_string'),
+    if parsed.provider == 's3':
+        return _get_s3_handler().write(
+            parsed.bucket, parsed.key, value, kwargs.get('s3_client')
         )
-
+    elif parsed.provider == 'gcs':
+        return _get_gcs_handler().write(
+            parsed.bucket, parsed.key, value, kwargs.get('gcs_client')
+        )
+    elif parsed.provider == 'azure':
+        return _get_azure_handler().write(
+            parsed.bucket, parsed.key, value, kwargs.get('connection_string')
+        )
     else:
-        logger.error(f"Unknown cloud URI scheme: {uri}")
+        # This shouldn't happen since parse_cloud_uri validates the scheme
+        logger.error(f"Unknown cloud provider: {parsed.provider}")
         return False
 
 
@@ -631,25 +796,26 @@ def read_cloud_label(uri: str, **kwargs) -> Optional[VirtualLabelPointer]:
 
     Returns:
         VirtualLabelPointer if found, None otherwise
+
+    Raises:
+        CloudURIValidationError: If URI is malformed or contains path traversal
     """
+    # Validate URI before processing
+    parsed = parse_cloud_uri(uri)
+
     value = None
 
-    if uri.startswith('s3://'):
-        parts = uri[5:].split('/', 1)
-        bucket, key = parts[0], parts[1] if len(parts) > 1 else ''
-        value = _get_s3_handler().read(bucket, key, kwargs.get('s3_client'))
-
-    elif uri.startswith('gs://'):
-        parts = uri[5:].split('/', 1)
-        bucket, blob_name = parts[0], parts[1] if len(parts) > 1 else ''
-        value = _get_gcs_handler().read(bucket, blob_name, kwargs.get('gcs_client'))
-
-    elif uri.startswith('azure://'):
-        parts = uri[8:].split('/', 1)
-        container, blob_name = parts[0], parts[1] if len(parts) > 1 else ''
+    if parsed.provider == 's3':
+        value = _get_s3_handler().read(
+            parsed.bucket, parsed.key, kwargs.get('s3_client')
+        )
+    elif parsed.provider == 'gcs':
+        value = _get_gcs_handler().read(
+            parsed.bucket, parsed.key, kwargs.get('gcs_client')
+        )
+    elif parsed.provider == 'azure':
         value = _get_azure_handler().read(
-            container, blob_name,
-            kwargs.get('connection_string'),
+            parsed.bucket, parsed.key, kwargs.get('connection_string')
         )
 
     if value:

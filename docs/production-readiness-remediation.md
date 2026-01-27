@@ -1165,10 +1165,10 @@ These are architectural changes for future consideration:
 Use this checklist to track remediation progress:
 
 ### Phase 1: Input Validation & Safety
-- [ ] 1.1 Add text input size limits
-- [ ] 1.2 Enforce file size limit before read
-- [ ] 1.3 Implement ReDoS timeout enforcement
-- [ ] 1.4 Add Cloud URI validation
+- [x] 1.1 Add text input size limits
+- [x] 1.2 Enforce file size limit before read
+- [x] 1.3 Implement ReDoS timeout enforcement
+- [x] 1.4 Add Cloud URI validation
 
 ### Phase 2: Data Integrity & Transactions
 - [ ] 2.1 Wrap SQLite operations in transactions
