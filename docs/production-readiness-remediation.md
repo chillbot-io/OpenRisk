@@ -1178,11 +1178,11 @@ Use this checklist to track remediation progress:
 - [x] 2.5 Validate extended attributes on read
 
 ### Phase 3: Error Handling & Observability
-- [ ] 3.1 Create structured error types for LabelIndex
-- [ ] 3.2 Track degraded detection state
-- [ ] 3.3 Track failed detectors in results
-- [ ] 3.4 Monitor runaway detection threads
-- [ ] 3.5 Classify file operation errors
+- [x] 3.1 Create structured error types for LabelIndex
+- [x] 3.2 Track degraded detection state
+- [x] 3.3 Track failed detectors in results
+- [x] 3.4 Monitor runaway detection threads
+- [x] 3.5 Classify file operation errors
 
 ### Phase 4: State Isolation & Context
 - [ ] 4.1 Move orchestrator globals to Context

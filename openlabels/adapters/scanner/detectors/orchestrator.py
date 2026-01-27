@@ -31,6 +31,12 @@ MAX_CONCURRENT_DETECTIONS = 10
 # Maximum queue depth before rejecting requests (prevents unbounded memory growth)
 # Set to 0 to disable queue depth limit (block indefinitely)
 MAX_QUEUE_DEPTH = 50
+
+# Maximum runaway detections before logging critical warning (Phase 3, Issue 3.4)
+# Runaway detections are threads that timed out but couldn't be cancelled
+MAX_RUNAWAY_DETECTIONS = 5
+
+from dataclasses import dataclass, field as dataclass_field
 from .base import BaseDetector
 from .checksum import ChecksumDetector
 from .patterns import PatternDetector  # patterns/ module
@@ -87,11 +93,120 @@ _DETECTION_SEMAPHORE = threading.BoundedSemaphore(MAX_CONCURRENT_DETECTIONS)
 _QUEUE_DEPTH = 0
 _QUEUE_LOCK = threading.Lock()
 
+# Track runaway detections (Phase 3, Issue 3.4)
+# Threads that timed out but couldn't be cancelled.
+# NOTE: This counter only increases, never decreases. We cannot detect when
+# a runaway thread eventually terminates. The counter serves as a warning
+# signal - if it grows large, the process should be restarted.
+_RUNAWAY_DETECTIONS = 0
+_RUNAWAY_LOCK = threading.Lock()
+
+
+@dataclass
+class DetectionMetadata:
+    """
+    Metadata about the detection process (Phase 3: Error Observability).
+
+    Tracks:
+    - Which detectors succeeded
+    - Which detectors failed and why
+    - Whether results are degraded
+    - Warnings generated during detection
+
+    This enables callers to understand if results may be incomplete.
+    """
+    detectors_run: List[str] = dataclass_field(default_factory=list)
+    detectors_failed: List[str] = dataclass_field(default_factory=list)
+    detectors_timed_out: List[str] = dataclass_field(default_factory=list)
+    warnings: List[str] = dataclass_field(default_factory=list)
+    degraded: bool = False
+    all_detectors_failed: bool = False
+    structured_extractor_failed: bool = False
+    runaway_threads: int = 0
+
+    def add_failure(self, detector_name: str, error: str):
+        """Record a detector failure."""
+        self.detectors_failed.append(detector_name)
+        self.warnings.append(f"Detector {detector_name} failed: {error}")
+
+    def add_timeout(self, detector_name: str, timeout_seconds: float, cancelled: bool):
+        """Record a detector timeout."""
+        self.detectors_timed_out.append(detector_name)
+        status = "cancelled" if cancelled else "still running"
+        self.warnings.append(
+            f"Detector {detector_name} timed out after {timeout_seconds:.1f}s ({status})"
+        )
+
+    def add_success(self, detector_name: str):
+        """Record a successful detector run."""
+        self.detectors_run.append(detector_name)
+
+    def finalize(self):
+        """
+        Finalize metadata after all detectors have run.
+
+        Sets all_detectors_failed if no detectors succeeded.
+        """
+        total_attempted = len(self.detectors_run) + len(self.detectors_failed) + len(self.detectors_timed_out)
+        if total_attempted > 0 and len(self.detectors_run) == 0:
+            self.all_detectors_failed = True
+            self.warnings.append(
+                f"All {total_attempted} detectors failed - results unreliable"
+            )
+
 
 def get_detection_queue_depth() -> int:
     """Get current number of pending detection requests."""
     with _QUEUE_LOCK:
         return _QUEUE_DEPTH
+
+
+def get_runaway_detection_count() -> int:
+    """
+    Get count of runaway detections (Phase 3, Issue 3.4).
+
+    Runaway detections are threads that timed out but could not be
+    cancelled. They continue running in the background, consuming
+    resources.
+    """
+    with _RUNAWAY_LOCK:
+        return _RUNAWAY_DETECTIONS
+
+
+def _track_runaway_detection(detector_name: str) -> int:
+    """
+    Track a runaway detection thread (Phase 3, Issue 3.4).
+
+    Called when a detector times out and cannot be cancelled.
+
+    Returns:
+        Current runaway detection count
+    """
+    global _RUNAWAY_DETECTIONS
+
+    with _RUNAWAY_LOCK:
+        _RUNAWAY_DETECTIONS += 1
+        count = _RUNAWAY_DETECTIONS
+
+    if count == 1:
+        logger.warning(
+            f"Detector {detector_name} timed out and could not be cancelled. "
+            "Thread still running in background."
+        )
+    elif count % 5 == 0 or count >= MAX_RUNAWAY_DETECTIONS:
+        logger.warning(
+            f"Runaway detection count: {count}. "
+            f"Detector {detector_name} is the latest."
+        )
+
+    if count >= MAX_RUNAWAY_DETECTIONS:
+        logger.critical(
+            f"CRITICAL: {count} runaway detections (max: {MAX_RUNAWAY_DETECTIONS}). "
+            "System may be under adversarial input attack or has a detector bug. "
+            "Consider restarting the process to reclaim resources."
+        )
+
+    return count
 
 
 from contextlib import contextmanager
@@ -360,6 +475,44 @@ class DetectorOrchestrator:
             logger.info(f"Detection starting on text ({len(text)} chars), queue depth: {queue_depth}")
             return self._detect_impl(text, timeout, known_entities)
 
+    def detect_with_metadata(
+        self,
+        text: str,
+        timeout: float = DETECTOR_TIMEOUT,
+        known_entities: Optional[Dict[str, tuple]] = None,
+    ) -> Tuple[List[Span], DetectionMetadata]:
+        """
+        Run all detectors on text and return metadata about the detection process.
+
+        This method provides visibility into detector failures and degraded state
+        (Phase 3: Error Handling & Observability).
+
+        Args:
+            text: Normalized input text
+            timeout: Max seconds per detector
+            known_entities: Optional dict of known entities from TokenStore
+
+        Returns:
+            Tuple of (spans, metadata) where metadata contains:
+            - detectors_run: List of detectors that succeeded
+            - detectors_failed: List of detectors that failed
+            - warnings: Warning messages
+            - degraded: True if structured extractor failed
+            - all_detectors_failed: True if no detectors succeeded
+
+        Raises:
+            DetectionQueueFullError: If queue depth exceeds MAX_QUEUE_DEPTH
+        """
+        if not text:
+            return [], DetectionMetadata()
+
+        with _detection_slot() as queue_depth:
+            logger.info(f"Detection starting on text ({len(text)} chars), queue depth: {queue_depth}")
+            metadata = DetectionMetadata()
+            spans = self._detect_impl_with_metadata(text, timeout, known_entities, metadata)
+            metadata.finalize()
+            return spans, metadata
+
     def _detect_impl(
         self,
         text: str,
@@ -367,7 +520,22 @@ class DetectorOrchestrator:
         known_entities: Optional[Dict[str, tuple]],
     ) -> List[Span]:
         """Internal detection implementation (called with semaphore held)."""
+        # Delegate to the metadata-tracking version but discard metadata
+        metadata = DetectionMetadata()
+        return self._detect_impl_with_metadata(text, timeout, known_entities, metadata)
 
+    def _detect_impl_with_metadata(
+        self,
+        text: str,
+        timeout: float,
+        known_entities: Optional[Dict[str, tuple]],
+        metadata: DetectionMetadata,
+    ) -> List[Span]:
+        """
+        Internal detection implementation with metadata tracking (Phase 3).
+
+        This is the core detection logic that tracks all failures and degraded state.
+        """
         all_spans: List[Span] = []
         processed_text = text
         char_map: List[int] = []  # For mapping processed positions back to original
@@ -386,17 +554,21 @@ class DetectorOrchestrator:
             try:
                 # Get the char_map for position mapping
                 processed_text, char_map = post_process_ocr(text)
-                
+
                 structured_result = extract_structured_phi(text)
                 all_spans.extend(structured_result.spans)
-                
+
                 if structured_result.spans:
                     logger.debug(
                         f"Structured extractor: {structured_result.fields_extracted} fields, "
                         f"{len(structured_result.spans)} spans"
                     )
             except (ValueError, RuntimeError) as e:
+                # Track structured extractor failure (Phase 3, Issue 3.2)
                 logger.error(f"Structured extractor failed: {e}")
+                metadata.structured_extractor_failed = True
+                metadata.degraded = True
+                metadata.warnings.append(f"Structured extraction failed: {type(e).__name__}: {e}")
                 # Continue with original text
                 processed_text = text
                 char_map = []
@@ -407,12 +579,13 @@ class DetectorOrchestrator:
 
         if not available:
             logger.warning("No traditional detectors available, using only structured extraction")
+            metadata.warnings.append("No traditional detectors available")
             return all_spans
 
         if self.parallel and len(available) > 1:
-            other_spans = self._detect_parallel(processed_text, available, timeout)
+            other_spans = self._detect_parallel(processed_text, available, timeout, metadata)
         else:
-            other_spans = self._detect_sequential(processed_text, available, timeout)
+            other_spans = self._detect_sequential(processed_text, available, timeout, metadata)
         
         # Step 3: Map pattern/ML spans back to original text coordinates
         if char_map and processed_text != text:
@@ -583,9 +756,18 @@ class DetectorOrchestrator:
         self,
         text: str,
         detectors: List[BaseDetector],
-        timeout: float
+        timeout: float,
+        metadata: Optional[DetectionMetadata] = None,
     ) -> List[Span]:
-        """Run detectors sequentially with per-detector timeout."""
+        """
+        Run detectors sequentially with per-detector timeout.
+
+        Args:
+            text: Text to analyze
+            detectors: List of detectors to run
+            timeout: Total timeout budget
+            metadata: Optional metadata object to track failures (Phase 3)
+        """
         all_spans = []
         executor = _get_executor()
 
@@ -598,17 +780,34 @@ class DetectorOrchestrator:
                 future = executor.submit(detector.detect, text)
                 spans = future.result(timeout=per_detector_timeout)
                 all_spans.extend(spans)
+
+                # Track success (Phase 3, Issue 3.3)
+                if metadata:
+                    metadata.add_success(detector.name)
+
                 if spans:
                     # SECURITY: Log only metadata, not actual PHI values
                     span_summary = [(s.entity_type, f"{s.confidence:.2f}") for s in spans]
                     logger.info(f"  {detector.name}: {len(spans)} spans: {span_summary}")
                 else:
                     logger.info(f"  {detector.name}: 0 spans")
+
             except TimeoutError:
+                # Track timeout (Phase 3, Issue 3.3 & 3.4)
+                cancelled = future.cancel()
+                if metadata:
+                    metadata.add_timeout(detector.name, per_detector_timeout, cancelled)
+                    if not cancelled:
+                        metadata.runaway_threads = _track_runaway_detection(detector.name)
                 logger.warning(
-                    f"Detector {detector.name} timed out after {per_detector_timeout:.1f}s (sequential mode)"
+                    f"Detector {detector.name} timed out after {per_detector_timeout:.1f}s "
+                    f"(sequential mode, cancelled={cancelled})"
                 )
+
             except Exception as e:
+                # Track failure (Phase 3, Issue 3.3)
+                if metadata:
+                    metadata.add_failure(detector.name, str(e))
                 logger.error(f"Detector {detector.name} failed: {e}")
 
         return all_spans
@@ -617,9 +816,18 @@ class DetectorOrchestrator:
         self,
         text: str,
         detectors: List[BaseDetector],
-        timeout: float
+        timeout: float,
+        metadata: Optional[DetectionMetadata] = None,
     ) -> List[Span]:
-        """Run detectors in parallel with timeout."""
+        """
+        Run detectors in parallel with timeout.
+
+        Args:
+            text: Text to analyze
+            detectors: List of detectors to run
+            timeout: Timeout per detector
+            metadata: Optional metadata object to track failures (Phase 3)
+        """
         all_spans = []
         executor = _get_executor()
 
@@ -637,24 +845,41 @@ class DetectorOrchestrator:
             try:
                 spans = future.result(timeout=timeout)
                 all_spans.extend(spans)
+
+                # Track success (Phase 3, Issue 3.3)
+                if metadata:
+                    metadata.add_success(detector.name)
+
                 if spans:
                     # SECURITY: Log only metadata, not actual PHI values
                     span_summary = [(s.entity_type, f"{s.confidence:.2f}") for s in spans]
                     logger.info(f"  {detector.name}: {len(spans)} spans: {span_summary}")
                 else:
                     logger.info(f"  {detector.name}: 0 spans")
+
             except TimeoutError:
                 # Cancel the future (best effort - thread may still run)
                 # Python threads can't be forcibly killed, but we can:
                 # 1. Cancel if not yet started
                 # 2. Log the timeout for monitoring
-                # 3. The thread will eventually complete and its result discarded
+                # 3. Track runaway if couldn't cancel (Phase 3, Issue 3.4)
                 cancelled = future.cancel()
+
+                # Track timeout (Phase 3, Issue 3.3 & 3.4)
+                if metadata:
+                    metadata.add_timeout(detector.name, timeout, cancelled)
+                    if not cancelled:
+                        metadata.runaway_threads = _track_runaway_detection(detector.name)
+
                 logger.warning(
                     f"Detector {detector.name} timed out after {timeout}s "
                     f"(cancelled={cancelled})"
                 )
+
             except Exception as e:
+                # Track failure (Phase 3, Issue 3.3)
+                if metadata:
+                    metadata.add_failure(detector.name, str(e))
                 logger.error(f"Detector {detector.name} failed: {e}")
 
         return all_spans

@@ -89,8 +89,8 @@ class Detector:
         # Step 1: Normalize text (handle encoding, whitespace, etc.)
         normalized_text = normalize_text(text)
 
-        # Step 2: Run all detectors in parallel
-        raw_spans = self.orchestrator.detect(normalized_text)
+        # Step 2: Run all detectors and get metadata about failures/degradation
+        raw_spans, metadata = self.orchestrator.detect_with_metadata(normalized_text)
 
         # Step 3: Merge overlapping spans (keep highest confidence/tier)
         merged_spans = merge_spans(raw_spans, text=normalized_text)
@@ -113,7 +113,11 @@ class Detector:
             text=normalized_text,
             spans=final_spans,
             processing_time_ms=elapsed_ms,
-            detectors_used=self.orchestrator.active_detector_names,
+            detectors_used=metadata.detectors_run,
+            detectors_failed=metadata.detectors_failed + metadata.detectors_timed_out,
+            warnings=metadata.warnings,
+            degraded=metadata.degraded,
+            all_detectors_failed=metadata.all_detectors_failed,
         )
 
     def detect_file(
