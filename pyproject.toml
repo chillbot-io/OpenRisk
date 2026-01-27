@@ -31,6 +31,7 @@ classifiers = [
 # Without it, user-controlled regex patterns can hang the process indefinitely
 dependencies = [
     "regex>=2023.0.0,<2025.0.0",  # REQUIRED: ReDoS timeout protection (CVE-READY-003)
+    "rich>=13.0.0,<14.0.0",  # CLI output formatting and progress bars
 ]
 
 [project.optional-dependencies]

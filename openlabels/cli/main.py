@@ -28,21 +28,8 @@ from pathlib import Path
 from typing import List, Optional
 
 from openlabels import __version__
-
-
-def setup_logging(verbose: bool = False, quiet: bool = False):
-    """Configure logging based on verbosity flags."""
-    if quiet:
-        level = logging.ERROR
-    elif verbose:
-        level = logging.DEBUG
-    else:
-        level = logging.WARNING
-
-    logging.basicConfig(
-        level=level,
-        format="%(levelname)s: %(message)s",
-    )
+from openlabels.logging_config import setup_logging
+from openlabels.cli.output import set_progress_enabled
 
 
 # =============================================================================
@@ -258,6 +245,26 @@ Examples:
         action="store_true",
         help="Quiet mode (errors only)",
     )
+    parser.add_argument(
+        "--log-file",
+        metavar="PATH",
+        help="Write logs to file (JSON format)",
+    )
+    parser.add_argument(
+        "--audit-log",
+        metavar="PATH",
+        help="Write audit logs to file (default: ~/.openlabels/audit.log)",
+    )
+    parser.add_argument(
+        "--no-audit",
+        action="store_true",
+        help="Disable audit logging",
+    )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress bars",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -395,10 +402,18 @@ Examples:
         cmd_version(args)
         return
 
+    # Configure logging
     setup_logging(
         verbose=getattr(args, "verbose", False),
         quiet=getattr(args, "quiet", False),
+        log_file=getattr(args, "log_file", None),
+        audit_log=getattr(args, "audit_log", None),
+        no_audit=getattr(args, "no_audit", False),
     )
+
+    # Configure progress bars
+    if getattr(args, "no_progress", False):
+        set_progress_enabled(False)
 
     if args.command is None:
         parser.print_help()

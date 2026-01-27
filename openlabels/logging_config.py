@@ -1,30 +1,85 @@
 """
 OpenLabels logging configuration.
 
-Provides structured logging with JSON output for production and
-human-readable console output for development.
+Provides structured JSON logging with correlation IDs and separate audit trail.
 
 Usage:
-    from openlabels.logging_config import setup_logging, get_audit_logger
+    from openlabels.logging_config import setup_logging, get_audit_logger, correlation_id
 
     # In CLI main:
     setup_logging(verbose=True, log_file="/var/log/openlabels.log")
 
+    # Set correlation ID for request tracing:
+    with correlation_id("scan-12345"):
+        # All logs within this context include the correlation ID
+        logger.info("Starting scan")
+
     # For audit events:
     audit = get_audit_logger()
-    audit.info("file_quarantine", path="/data/file.txt", destination="/quarantine")
+    audit.file_quarantine(source="/data/file.txt", destination="/quarantine", score=85)
 """
 
 import logging
 import json
 import sys
+import uuid
+from contextvars import ContextVar
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Generator
 
 
 # =============================================================================
-# FORMATTERS
+# CORRELATION ID SUPPORT
+# =============================================================================
+
+# Thread-safe correlation ID storage
+_correlation_id: ContextVar[Optional[str]] = ContextVar("correlation_id", default=None)
+
+
+def get_correlation_id() -> Optional[str]:
+    """Get the current correlation ID, if set."""
+    return _correlation_id.get()
+
+
+def set_correlation_id(cid: str) -> None:
+    """Set the correlation ID for the current context."""
+    _correlation_id.set(cid)
+
+
+def generate_correlation_id() -> str:
+    """Generate a new correlation ID."""
+    return str(uuid.uuid4())[:12]
+
+
+@contextmanager
+def correlation_id(cid: Optional[str] = None) -> Generator[str, None, None]:
+    """
+    Context manager for setting correlation ID.
+
+    Args:
+        cid: Correlation ID to use. If None, generates a new one.
+
+    Yields:
+        The correlation ID being used.
+
+    Example:
+        with correlation_id() as cid:
+            logger.info("Processing")  # Logs include correlation_id field
+            print(f"Request ID: {cid}")
+    """
+    if cid is None:
+        cid = generate_correlation_id()
+    token = _correlation_id.set(cid)
+    try:
+        yield cid
+    finally:
+        _correlation_id.reset(token)
+
+
+# =============================================================================
+# JSON FORMATTER
 # =============================================================================
 
 class JSONFormatter(logging.Formatter):
@@ -33,7 +88,18 @@ class JSONFormatter(logging.Formatter):
 
     Outputs one JSON object per line for easy parsing by log aggregators
     like Elasticsearch, Splunk, or CloudWatch.
+
+    Includes correlation ID when available.
     """
+
+    # Standard LogRecord attributes to exclude from extra fields
+    STANDARD_ATTRS = frozenset([
+        "name", "msg", "args", "created", "filename", "funcName",
+        "levelname", "levelno", "lineno", "module", "msecs",
+        "pathname", "process", "processName", "relativeCreated",
+        "stack_info", "exc_info", "exc_text", "thread", "threadName",
+        "message", "taskName"
+    ])
 
     def format(self, record: logging.LogRecord) -> str:
         log_data = {
@@ -43,7 +109,12 @@ class JSONFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
 
-        # Add source location for debug/error
+        # Add correlation ID if present
+        cid = get_correlation_id()
+        if cid:
+            log_data["correlation_id"] = cid
+
+        # Add source location for debug/warning/error
         if record.levelno >= logging.WARNING or record.levelno == logging.DEBUG:
             log_data["source"] = {
                 "file": record.filename,
@@ -57,69 +128,31 @@ class JSONFormatter(logging.Formatter):
 
         # Add any extra fields passed via the `extra` parameter
         for key, value in record.__dict__.items():
-            if key not in (
-                "name", "msg", "args", "created", "filename", "funcName",
-                "levelname", "levelno", "lineno", "module", "msecs",
-                "pathname", "process", "processName", "relativeCreated",
-                "stack_info", "exc_info", "exc_text", "thread", "threadName",
-                "message", "taskName"
-            ):
+            if key not in self.STANDARD_ATTRS:
                 log_data[key] = value
 
         return json.dumps(log_data, default=str)
-
-
-class ConsoleFormatter(logging.Formatter):
-    """
-    Human-readable console formatter with optional colors.
-
-    Format: LEVEL: message [logger] (for non-INFO)
-    """
-
-    COLORS = {
-        "DEBUG": "\033[36m",     # Cyan
-        "INFO": "\033[32m",      # Green
-        "WARNING": "\033[33m",   # Yellow
-        "ERROR": "\033[31m",     # Red
-        "CRITICAL": "\033[35m",  # Magenta
-    }
-    RESET = "\033[0m"
-
-    def __init__(self, use_colors: bool = True):
-        super().__init__()
-        self.use_colors = use_colors and sys.stderr.isatty()
-
-    def format(self, record: logging.LogRecord) -> str:
-        level = record.levelname
-        message = record.getMessage()
-
-        # For INFO, just show the message (clean output)
-        if level == "INFO":
-            return message
-
-        # For other levels, show level prefix
-        if self.use_colors:
-            color = self.COLORS.get(level, "")
-            return f"{color}{level}{self.RESET}: {message}"
-        else:
-            return f"{level}: {message}"
 
 
 # =============================================================================
 # AUDIT LOGGER
 # =============================================================================
 
+# Default audit log location
+DEFAULT_AUDIT_LOG = Path.home() / ".openlabels" / "audit.log"
+
+
 class AuditLogger:
     """
     Structured audit logger for security-relevant operations.
 
-    Audit events are always logged at INFO level with structured data,
-    and use a dedicated 'audit.*' logger namespace.
+    Audit events are always logged at INFO level with structured data.
+    All audit events automatically include correlation ID and timestamp.
 
     Usage:
         audit = get_audit_logger()
-        audit.log("file_quarantine", path="/data/file.txt", score=85)
-        audit.log("scan_complete", files_scanned=100, pii_found=5)
+        audit.file_quarantine(source="/data/file.txt", destination="/quarantine", score=85)
+        audit.scan_complete(path="/data", files_scanned=100, pii_found=5)
     """
 
     def __init__(self, logger: logging.Logger):
@@ -138,26 +171,33 @@ class AuditLogger:
             "audit_data": kwargs,
             "audit_timestamp": datetime.now(timezone.utc).isoformat(),
         }
+        # Correlation ID is added automatically by JSONFormatter
         self._logger.info(f"AUDIT: {event}", extra=extra)
 
     # Convenience methods for common events
     def scan_start(self, path: str, **kwargs) -> None:
+        """Log start of a scan operation."""
         self.log("scan_start", path=path, **kwargs)
 
     def scan_complete(self, path: str, files_scanned: int, **kwargs) -> None:
+        """Log completion of a scan operation."""
         self.log("scan_complete", path=path, files_scanned=files_scanned, **kwargs)
 
     def file_quarantine(self, source: str, destination: str, score: int, **kwargs) -> None:
+        """Log a file quarantine action."""
         self.log("file_quarantine", source=source, destination=destination, score=score, **kwargs)
 
-    def file_delete(self, path: str, score: int, **kwargs) -> None:
-        self.log("file_delete", path=path, score=score, **kwargs)
+    def file_encrypt(self, path: str, tool: str, **kwargs) -> None:
+        """Log a file encryption action."""
+        self.log("file_encrypt", path=path, tool=tool, **kwargs)
 
-    def file_encrypt(self, path: str, **kwargs) -> None:
-        self.log("file_encrypt", path=path, **kwargs)
+    def access_restrict(self, path: str, mode: str, **kwargs) -> None:
+        """Log an access restriction action."""
+        self.log("access_restrict", path=path, mode=mode, **kwargs)
 
-    def access_restrict(self, path: str, **kwargs) -> None:
-        self.log("access_restrict", path=path, **kwargs)
+    def file_tag(self, path: str, label_id: str, **kwargs) -> None:
+        """Log a file tagging action."""
+        self.log("file_tag", path=path, label_id=label_id, **kwargs)
 
 
 # Module-level audit logger instance
@@ -181,29 +221,39 @@ def setup_logging(
     verbose: bool = False,
     quiet: bool = False,
     log_file: Optional[str] = None,
-    json_format: bool = False,
-    no_color: bool = False,
-) -> None:
+    audit_log: Optional[str] = None,
+    no_audit: bool = False,
+) -> str:
     """
     Configure logging for the application.
 
     Args:
         verbose: Enable DEBUG level logging
         quiet: Only show ERROR and above
-        log_file: Path to log file (uses JSON format automatically)
-        json_format: Use JSON format for console output
-        no_color: Disable colors in console output
+        log_file: Path to application log file
+        audit_log: Path to audit log file (default: ~/.openlabels/audit.log)
+        no_audit: Disable audit logging entirely
+
+    Returns:
+        The correlation ID generated for this session.
 
     Examples:
-        # Development - human readable
+        # Standard usage - JSON to console, audit to default location
+        setup_logging()
+
+        # Verbose mode for debugging
         setup_logging(verbose=True)
 
-        # Production - JSON to file
-        setup_logging(log_file="/var/log/openlabels.log")
-
-        # CI/CD - JSON to console
-        setup_logging(json_format=True)
+        # Production with custom log files
+        setup_logging(
+            log_file="/var/log/openlabels/app.log",
+            audit_log="/var/log/openlabels/audit.log"
+        )
     """
+    # Generate session correlation ID
+    session_id = generate_correlation_id()
+    set_correlation_id(session_id)
+
     # Determine log level
     if quiet:
         level = logging.ERROR
@@ -214,23 +264,16 @@ def setup_logging(
 
     # Get root logger for openlabels
     root_logger = logging.getLogger("openlabels")
-    root_logger.setLevel(level)
-
-    # Clear any existing handlers
+    root_logger.setLevel(logging.DEBUG)  # Capture all, filter at handler level
     root_logger.handlers.clear()
 
-    # Console handler
+    # Console handler (JSON format)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(level)
-
-    if json_format:
-        console_handler.setFormatter(JSONFormatter())
-    else:
-        console_handler.setFormatter(ConsoleFormatter(use_colors=not no_color))
-
+    console_handler.setFormatter(JSONFormatter())
     root_logger.addHandler(console_handler)
 
-    # File handler (always JSON for machine parsing)
+    # Application log file handler
     if log_file:
         file_path = Path(log_file)
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -240,17 +283,35 @@ def setup_logging(
         file_handler.setFormatter(JSONFormatter())
         root_logger.addHandler(file_handler)
 
-    # Setup audit logger (always enabled, uses same handlers)
+    # Setup audit logger
     audit_logger = logging.getLogger("audit.openlabels")
-    audit_logger.setLevel(logging.INFO)  # Audit is always at least INFO
+    audit_logger.setLevel(logging.INFO)
+    audit_logger.handlers.clear()
+    audit_logger.propagate = False  # Don't propagate to root logger
 
-    # Audit gets the same handlers, but we could add a separate file handler here
-    # if audit trail needs to be separate
+    if not no_audit:
+        # Determine audit log path
+        audit_path = Path(audit_log) if audit_log else DEFAULT_AUDIT_LOG
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+
+        audit_handler = logging.FileHandler(audit_path)
+        audit_handler.setLevel(logging.INFO)
+        audit_handler.setFormatter(JSONFormatter())
+        audit_logger.addHandler(audit_handler)
+
+        # Also log audit to console if verbose
+        if verbose:
+            audit_console = logging.StreamHandler(sys.stderr)
+            audit_console.setLevel(logging.INFO)
+            audit_console.setFormatter(JSONFormatter())
+            audit_logger.addHandler(audit_console)
 
     # Suppress noisy third-party loggers
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("botocore").setLevel(logging.WARNING)
     logging.getLogger("boto3").setLevel(logging.WARNING)
+
+    return session_id
 
 
 def get_logger(name: str) -> logging.Logger:
