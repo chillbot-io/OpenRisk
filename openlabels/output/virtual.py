@@ -85,6 +85,42 @@ _PATH_TRAVERSAL_PATTERN = re.compile(
     r'^\.\.$'                # Just ".."
 )
 
+# Label pointer validation pattern
+# Expected format: labelID:content_hash
+# labelID: alphanumeric with underscores, typically like "ol_7f3a9b2c4d5e"
+# content_hash: hexadecimal string, typically 32-64 chars
+_LABEL_POINTER_PATTERN = re.compile(
+    r'^[a-zA-Z0-9_-]{1,128}:[a-fA-F0-9]{8,128}$'
+)
+
+
+def _validate_label_pointer(value: str) -> bool:
+    """
+    Validate a virtual label pointer value from xattr.
+
+    Expected format: labelID:content_hash
+    - labelID: alphanumeric with underscores/hyphens, max 128 chars
+    - content_hash: hex string, 8-128 chars
+
+    Args:
+        value: The xattr value to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    if not value or not isinstance(value, str):
+        return False
+
+    # Check for suspicious characters (potential injection)
+    if '\x00' in value or '\n' in value or '\r' in value:
+        return False
+
+    # Length sanity check
+    if len(value) > 256:
+        return False
+
+    return bool(_LABEL_POINTER_PATTERN.match(value))
+
 
 @dataclass
 class CloudURI:
@@ -489,20 +525,31 @@ def read_virtual_label(path: Union[str, Path]) -> Optional[VirtualLabelPointer]:
     """
     Read a virtual label pointer from a file's extended attributes.
 
+    Validates the xattr value format before parsing to prevent injection
+    of malicious data through manually crafted xattr values.
+
     Args:
         path: Path to the file
 
     Returns:
-        VirtualLabelPointer if found, None otherwise
+        VirtualLabelPointer if found and valid, None otherwise
 
     Example:
         >>> pointer = read_virtual_label("data.csv")
         >>> if pointer:
         ...     label_set = index.get(pointer.label_id, pointer.content_hash)
     """
-    path = str(path)
-    value = get_handler().read(path)
+    path_str = str(path)
+    value = get_handler().read(path_str)
     if value:
+        # Validate format before parsing to prevent injection attacks
+        if not _validate_label_pointer(value):
+            logger.warning(
+                f"Invalid xattr format on {path_str}: "
+                f"{value[:50] if len(value) > 50 else value!r}"
+            )
+            return None
+
         try:
             return VirtualLabelPointer.from_string(value)
         except ValueError as e:
@@ -819,9 +866,17 @@ def read_cloud_label(uri: str, **kwargs) -> Optional[VirtualLabelPointer]:
         )
 
     if value:
+        # Validate format before parsing
+        if not _validate_label_pointer(value):
+            logger.warning(
+                f"Invalid cloud label format for {uri}: "
+                f"{value[:50] if len(value) > 50 else value!r}"
+            )
+            return None
+
         try:
             return VirtualLabelPointer.from_string(value)
-        except ValueError:
-            pass
+        except ValueError as e:
+            logger.warning(f"Invalid cloud label format: {e}")
 
     return None

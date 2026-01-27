@@ -25,6 +25,70 @@ from ..core.labels import LabelSet, VirtualLabelPointer
 
 logger = logging.getLogger(__name__)
 
+
+class DatabaseError(Exception):
+    """Database operation failed - may be retryable."""
+    pass
+
+
+class CorruptedDataError(Exception):
+    """Data in database is corrupted or invalid."""
+    pass
+
+
+def _validate_label_json(json_str: str) -> dict:
+    """
+    Validate and parse label JSON data.
+
+    Args:
+        json_str: JSON string from database
+
+    Returns:
+        Parsed and validated dict
+
+    Raises:
+        CorruptedDataError: If JSON is malformed or fails schema validation
+    """
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise CorruptedDataError(f"Malformed JSON in database: {e}")
+
+    # Basic schema validation (without external dependency)
+    if not isinstance(data, dict):
+        raise CorruptedDataError("Label data must be an object")
+
+    required_fields = ["labelID", "content_hash", "labels", "source"]
+    for field in required_fields:
+        if field not in data:
+            raise CorruptedDataError(f"Missing required field: {field}")
+
+    if not isinstance(data.get("labelID"), str) or not data["labelID"]:
+        raise CorruptedDataError("labelID must be a non-empty string")
+
+    if not isinstance(data.get("content_hash"), str) or not data["content_hash"]:
+        raise CorruptedDataError("content_hash must be a non-empty string")
+
+    if not isinstance(data.get("labels"), list):
+        raise CorruptedDataError("labels must be an array")
+
+    # Validate each label entry
+    for i, label in enumerate(data["labels"]):
+        if not isinstance(label, dict):
+            raise CorruptedDataError(f"labels[{i}] must be an object")
+        if "type" not in label or not isinstance(label.get("type"), str):
+            raise CorruptedDataError(f"labels[{i}].type must be a string")
+        if "count" in label and not isinstance(label.get("count"), int):
+            raise CorruptedDataError(f"labels[{i}].count must be an integer")
+        if "confidence" in label:
+            conf = label.get("confidence")
+            if not isinstance(conf, (int, float)) or conf < 0 or conf > 1:
+                raise CorruptedDataError(
+                    f"labels[{i}].confidence must be a number between 0 and 1"
+                )
+
+    return data
+
 # Default index location
 DEFAULT_INDEX_PATH = Path.home() / ".openlabels" / "index.db"
 
@@ -137,6 +201,41 @@ class LabelIndex:
         finally:
             conn.close()
 
+    @contextmanager
+    def _transaction(self, conn):
+        """
+        Execute operations within an explicit transaction.
+
+        Uses BEGIN IMMEDIATE to acquire write lock upfront, preventing
+        deadlocks in multi-writer scenarios. Automatically rolls back
+        on exception and commits on success.
+
+        Args:
+            conn: SQLite connection
+
+        Yields:
+            The connection for executing statements
+
+        Raises:
+            DatabaseError: If transaction fails
+        """
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            yield conn
+            conn.commit()
+        except sqlite3.Error as e:
+            try:
+                conn.rollback()
+            except sqlite3.Error:
+                pass  # Rollback failed, but we'll raise the original error
+            raise DatabaseError(f"Transaction failed: {e}") from e
+        except Exception:
+            try:
+                conn.rollback()
+            except sqlite3.Error:
+                pass
+            raise
+
     def store(
         self,
         label_set: LabelSet,
@@ -163,64 +262,67 @@ class LabelIndex:
 
         try:
             with self._get_connection() as conn:
-                # Upsert label object
-                conn.execute("""
-                    INSERT INTO label_objects (label_id, tenant_id, created_at, file_path, file_name)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(label_id) DO UPDATE SET
-                        file_path = COALESCE(excluded.file_path, file_path),
-                        file_name = COALESCE(excluded.file_name, file_name)
-                """, (
-                    label_set.label_id,
-                    self.tenant_id,
-                    now,
-                    file_path,
-                    Path(file_path).name if file_path else None,
-                ))
-
-                # Insert version (or update if same content_hash)
-                conn.execute("""
-                    INSERT INTO label_versions
-                        (label_id, content_hash, scanned_at, labels_json, source,
-                         risk_score, risk_tier, entity_types)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(label_id, content_hash) DO UPDATE SET
-                        scanned_at = excluded.scanned_at,
-                        labels_json = excluded.labels_json,
-                        source = excluded.source,
-                        risk_score = COALESCE(excluded.risk_score, risk_score),
-                        risk_tier = COALESCE(excluded.risk_tier, risk_tier),
-                        entity_types = excluded.entity_types
-                """, (
-                    label_set.label_id,
-                    label_set.content_hash,
-                    now,
-                    label_set.to_json(compact=True),
-                    label_set.source,
-                    risk_score,
-                    risk_tier,
-                    entity_types,
-                ))
-
-                # Update file mapping if path provided
-                if file_path:
+                with self._transaction(conn):
+                    # Upsert label object
                     conn.execute("""
-                        INSERT INTO file_mappings (file_path, label_id, content_hash, updated_at)
-                        VALUES (?, ?, ?, ?)
-                        ON CONFLICT(file_path) DO UPDATE SET
-                            label_id = excluded.label_id,
-                            content_hash = excluded.content_hash,
-                            updated_at = excluded.updated_at
+                        INSERT INTO label_objects (label_id, tenant_id, created_at, file_path, file_name)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(label_id) DO UPDATE SET
+                            file_path = COALESCE(excluded.file_path, file_path),
+                            file_name = COALESCE(excluded.file_name, file_name)
                     """, (
+                        label_set.label_id,
+                        self.tenant_id,
+                        now,
                         file_path,
+                        Path(file_path).name if file_path else None,
+                    ))
+
+                    # Insert version (or update if same content_hash)
+                    conn.execute("""
+                        INSERT INTO label_versions
+                            (label_id, content_hash, scanned_at, labels_json, source,
+                             risk_score, risk_tier, entity_types)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(label_id, content_hash) DO UPDATE SET
+                            scanned_at = excluded.scanned_at,
+                            labels_json = excluded.labels_json,
+                            source = excluded.source,
+                            risk_score = COALESCE(excluded.risk_score, risk_score),
+                            risk_tier = COALESCE(excluded.risk_tier, risk_tier),
+                            entity_types = excluded.entity_types
+                    """, (
                         label_set.label_id,
                         label_set.content_hash,
                         now,
+                        label_set.to_json(compact=True),
+                        label_set.source,
+                        risk_score,
+                        risk_tier,
+                        entity_types,
                     ))
 
-                conn.commit()
+                    # Update file mapping if path provided
+                    if file_path:
+                        conn.execute("""
+                            INSERT INTO file_mappings (file_path, label_id, content_hash, updated_at)
+                            VALUES (?, ?, ?, ?)
+                            ON CONFLICT(file_path) DO UPDATE SET
+                                label_id = excluded.label_id,
+                                content_hash = excluded.content_hash,
+                                updated_at = excluded.updated_at
+                        """, (
+                            file_path,
+                            label_set.label_id,
+                            label_set.content_hash,
+                            now,
+                        ))
+
                 return True
 
+        except DatabaseError as e:
+            logger.error(f"Failed to store label: {e}")
+            return False
         except sqlite3.Error as e:
             logger.error(f"Failed to store label: {e}")
             return False
@@ -258,9 +360,14 @@ class LabelIndex:
                     """, (label_id,)).fetchone()
 
                 if row:
-                    return LabelSet.from_json(row['labels_json'])
+                    # Validate JSON before deserializing
+                    validated_data = _validate_label_json(row['labels_json'])
+                    return LabelSet.from_dict(validated_data)
                 return None
 
+        except CorruptedDataError as e:
+            logger.error(f"Corrupted label data for {label_id}: {e}")
+            return None
         except sqlite3.Error as e:
             logger.error(f"Failed to get label: {e}")
             return None
@@ -286,9 +393,14 @@ class LabelIndex:
                 """, (file_path,)).fetchone()
 
                 if row:
-                    return LabelSet.from_json(row['labels_json'])
+                    # Validate JSON before deserializing
+                    validated_data = _validate_label_json(row['labels_json'])
+                    return LabelSet.from_dict(validated_data)
                 return None
 
+        except CorruptedDataError as e:
+            logger.error(f"Corrupted label data for path {file_path}: {e}")
+            return None
         except sqlite3.Error as e:
             logger.error(f"Failed to get label by path: {e}")
             return None
@@ -414,21 +526,24 @@ class LabelIndex:
         """
         try:
             with self._get_connection() as conn:
-                conn.execute(
-                    "DELETE FROM file_mappings WHERE label_id = ?",
-                    (label_id,),
-                )
-                conn.execute(
-                    "DELETE FROM label_versions WHERE label_id = ?",
-                    (label_id,),
-                )
-                conn.execute(
-                    "DELETE FROM label_objects WHERE label_id = ?",
-                    (label_id,),
-                )
-                conn.commit()
+                with self._transaction(conn):
+                    conn.execute(
+                        "DELETE FROM file_mappings WHERE label_id = ?",
+                        (label_id,),
+                    )
+                    conn.execute(
+                        "DELETE FROM label_versions WHERE label_id = ?",
+                        (label_id,),
+                    )
+                    conn.execute(
+                        "DELETE FROM label_objects WHERE label_id = ?",
+                        (label_id,),
+                    )
                 return True
 
+        except DatabaseError as e:
+            logger.error(f"Delete failed: {e}")
+            return False
         except sqlite3.Error as e:
             logger.error(f"Delete failed: {e}")
             return False

@@ -14,12 +14,18 @@ from typing import Callable, Iterator, Optional, Union, TYPE_CHECKING
 from ..core.scorer import score as score_entities
 from ..core.types import ScanResult, FilterCriteria, TreeNode
 from ..cli.filter import Filter, parse_filter
+from ..utils.hashing import quick_hash
 
 if TYPE_CHECKING:
     from ..context import Context
     from .scorer import Scorer
 
 logger = logging.getLogger(__name__)
+
+
+class FileModifiedError(Exception):
+    """Raised when a file is modified during scanning."""
+    pass
 
 
 class Scanner:
@@ -186,12 +192,21 @@ class Scanner:
             files_yielded += 1
 
     def _scan_single_file(self, path: Path) -> ScanResult:
-        """Scan a single file and return ScanResult."""
+        """
+        Scan a single file and return ScanResult.
+
+        Detects if the file is modified during scanning by comparing
+        quick hashes before and after detection.
+        """
         from ..adapters.scanner import detect_file
 
         start_time = time.time()
 
         try:
+            # Capture hash before detection to detect concurrent modification
+            pre_hash = quick_hash(path)
+            pre_stat = path.stat()
+
             detection_result = detect_file(path)
             entities = self._scorer._normalize_entity_counts(detection_result.entity_counts)
             confidence = self._scorer._calculate_average_confidence(detection_result.spans)
@@ -202,12 +217,28 @@ class Scanner:
                 confidence=confidence,
             )
 
+            # Verify file unchanged after detection
+            post_hash = quick_hash(path)
+            post_stat = path.stat()
+
+            # If either hash failed, skip modification check (file may be locked)
+            if pre_hash is not None and post_hash is not None and pre_hash != post_hash:
+                raise FileModifiedError(
+                    f"File modified during scan: {path} "
+                    f"(hash changed from {pre_hash[:8]}... to {post_hash[:8]}...)"
+                )
+
+            # Also check mtime as a secondary verification
+            if pre_stat.st_mtime != post_stat.st_mtime:
+                raise FileModifiedError(
+                    f"File modified during scan: {path} (mtime changed)"
+                )
+
             duration_ms = (time.time() - start_time) * 1000
-            stat = path.stat()
 
             return ScanResult(
                 path=str(path),
-                size_bytes=stat.st_size,
+                size_bytes=post_stat.st_size,
                 file_type=path.suffix.lower() or "unknown",
                 score=scoring_result.score,
                 tier=scoring_result.tier.value,
@@ -215,8 +246,15 @@ class Scanner:
                 entities=[],
                 scan_duration_ms=duration_ms,
                 scanned_at=datetime.utcnow().isoformat(),
+                content_hash=post_hash,  # Include hash for downstream verification
             )
 
+        except FileModifiedError as e:
+            logger.warning(str(e))
+            return ScanResult(
+                path=str(path),
+                error=str(e),
+            )
         except (OSError, ValueError) as e:
             return ScanResult(
                 path=str(path),

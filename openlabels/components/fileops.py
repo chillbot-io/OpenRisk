@@ -4,19 +4,27 @@ OpenLabels FileOps Component.
 Handles file operations: quarantine, move, delete.
 """
 
+import json
 import logging
+import os
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 
 from ..core.types import FilterCriteria, OperationResult
+from ..utils.hashing import quick_hash
 
 if TYPE_CHECKING:
     from ..context import Context
     from .scanner import Scanner
 
 logger = logging.getLogger(__name__)
+
+
+# Manifest file for tracking idempotent operations
+QUARANTINE_MANIFEST = ".quarantine_manifest.json"
 
 
 @dataclass
@@ -61,6 +69,110 @@ class FileOps:
     def __init__(self, context: "Context", scanner: "Scanner"):
         self._ctx = context
         self._scanner = scanner
+
+    def _load_manifest(self, manifest_path: Path) -> Dict[str, Any]:
+        """Load quarantine manifest file."""
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, 'r') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+        return {"processed": {}}
+
+    def _save_manifest(self, manifest_path: Path, manifest: Dict[str, Any]) -> None:
+        """Save quarantine manifest file atomically."""
+        try:
+            # Write to temp file then rename for atomic update
+            fd, tmp_path = tempfile.mkstemp(
+                dir=manifest_path.parent,
+                prefix='.manifest_',
+                suffix='.tmp'
+            )
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(manifest, f)
+                os.replace(tmp_path, manifest_path)
+            except Exception:
+                # Clean up temp file on error
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+        except OSError as e:
+            logger.warning(f"Failed to save quarantine manifest: {e}")
+
+    def _idempotent_move(
+        self,
+        source: Path,
+        dest: Path,
+        manifest_path: Path,
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Perform idempotent file move operation.
+
+        Handles retry scenarios where:
+        - Source is gone but dest exists (already moved)
+        - Source is gone and in manifest (already processed)
+        - Dest exists with same content (skip)
+        - Dest exists with different content (error)
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        source_exists = source.exists()
+        dest_exists = dest.exists()
+
+        # Case 1: Both exist - verify content
+        if source_exists and dest_exists:
+            source_hash = quick_hash(source)
+            dest_hash = quick_hash(dest)
+            # If we can't hash either file, we can't compare - treat as error
+            if source_hash is None or dest_hash is None:
+                return False, f"Cannot verify content: unable to hash files"
+            if source_hash == dest_hash:
+                # Same file, skip (idempotent success)
+                logger.debug(f"Skipping {source}: already at destination with same content")
+                return True, None
+            else:
+                return False, f"Different file already exists at {dest}"
+
+        # Case 2: Only dest exists - check manifest
+        if not source_exists and dest_exists:
+            manifest = self._load_manifest(manifest_path)
+            if str(source) in manifest.get("processed", {}):
+                # Already processed in previous run
+                logger.debug(f"Skipping {source}: found in manifest as processed")
+                return True, None
+            # Source missing unexpectedly
+            return False, f"Source missing and not in manifest: {source}"
+
+        # Case 3: Source missing, dest missing - check manifest
+        if not source_exists and not dest_exists:
+            manifest = self._load_manifest(manifest_path)
+            if str(source) in manifest.get("processed", {}):
+                # Dest may have been moved/deleted since
+                return False, f"Previously processed but destination missing: {dest}"
+            return False, f"Source not found: {source}"
+
+        # Case 4: Normal case - source exists, dest doesn't
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            source_hash = quick_hash(source)
+            shutil.move(str(source), str(dest))
+
+            # Record in manifest (hash may be None if file was unreadable)
+            manifest = self._load_manifest(manifest_path)
+            manifest.setdefault("processed", {})[str(source)] = {
+                "dest": str(dest),
+                "hash": source_hash,
+            }
+            self._save_manifest(manifest_path, manifest)
+
+            return True, None
+        except OSError as e:
+            return False, str(e)
 
     def quarantine(
         self,
@@ -123,17 +235,19 @@ class FileOps:
                     "dry_run": True,
                 })
             else:
-                try:
-                    dest_path.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.move(result.path, dest_path)
+                manifest_path = destination / QUARANTINE_MANIFEST
+                success, error = self._idempotent_move(
+                    Path(result.path), dest_path, manifest_path
+                )
+                if success:
                     moved_files.append({
                         "source": result.path,
                         "destination": str(dest_path),
                         "score": result.score,
                         "tier": result.tier,
                     })
-                except OSError as e:
-                    errors.append({"path": result.path, "error": str(e)})
+                else:
+                    errors.append({"path": result.path, "error": error or "Unknown error"})
 
         return QuarantineResult(
             moved_count=len(moved_files),
