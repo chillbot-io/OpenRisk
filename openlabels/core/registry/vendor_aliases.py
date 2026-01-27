@@ -1,12 +1,13 @@
-"""
-Vendor type aliases for OpenLabels.
+"""Vendor-specific entity type mappings.
 
-Maps vendor-specific entity type names (from AWS Macie, GCP DLP, Azure Purview)
-to canonical OpenLabels types.
+Maps vendor-specific entity types from AWS Macie, GCP DLP, Azure Purview,
+and other systems to canonical OpenLabels types.
+
+This ensures consistent entity typing regardless of detection source,
+enabling unified risk scoring and reporting.
 """
 
 from typing import Dict
-
 
 # =============================================================================
 # VENDOR TYPE MAPPINGS
