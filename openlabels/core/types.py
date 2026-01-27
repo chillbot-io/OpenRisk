@@ -55,15 +55,20 @@ class ScanResult:
     Complete result from scanning a file or object.
 
     Combines the scoring result with the source label set and metadata.
+
+    Phase 5.3: Clarified optional vs required fields:
+    - score: Optional[int] - None means not scanned, 0 means minimal risk
+    - Use was_scanned property to check if file was successfully scanned
+    - Use has_error property to check if an error occurred
     """
-    # File/object info
+    # File/object info (path is REQUIRED)
     path: str
     size_bytes: int = 0
     file_type: str = ""
 
-    # Scoring
-    score: int = 0
-    tier: str = "MINIMAL"
+    # Scoring (Phase 5.3: score is Optional - None means not scanned)
+    score: Optional[int] = None
+    tier: Optional[str] = None
     scoring_result: Optional[ScoringResult] = None
 
     # Labels
@@ -84,6 +89,25 @@ class ScanResult:
 
     # Errors (if any)
     error: Optional[str] = None
+
+    @property
+    def was_scanned(self) -> bool:
+        """
+        Check if file was successfully scanned (Phase 5.3).
+
+        Returns True only if:
+        - A score was computed (score is not None)
+        - No error occurred
+
+        Use this to distinguish between "minimal risk" (score=0) and
+        "not scanned" (score=None).
+        """
+        return self.score is not None and self.error is None
+
+    @property
+    def has_error(self) -> bool:
+        """Check if an error occurred during scanning (Phase 5.3)."""
+        return self.error is not None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
