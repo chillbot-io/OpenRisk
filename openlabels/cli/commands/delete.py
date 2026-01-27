@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from openlabels import Client
+from openlabels.cli import MAX_PREVIEW_RESULTS
 from openlabels.cli.commands.find import find_matching
 
 
@@ -48,10 +49,10 @@ def cmd_delete(args) -> int:
     if args.dry_run:
         total_size = sum(Path(r.path).stat().st_size for r in matches if Path(r.path).exists())
         print(f"Would delete {len(matches)} files ({total_size / 1024 / 1024:.2f} MB):\n")
-        for result in matches[:20]:
+        for result in matches[:MAX_PREVIEW_RESULTS]:
             print(f"  {result.path} (score: {result.score})")
-        if len(matches) > 20:
-            print(f"  ... and {len(matches) - 20} more")
+        if len(matches) > MAX_PREVIEW_RESULTS:
+            print(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
         return 0
 
     # Require explicit confirmation

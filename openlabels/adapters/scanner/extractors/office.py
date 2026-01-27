@@ -96,7 +96,7 @@ class DOCXExtractor(BaseExtractor):
                 pages=1,
                 warnings=["Legacy .doc format - extraction may be incomplete"],
             )
-        except Exception as e:
+        except (ValueError, UnicodeDecodeError) as e:
             return ExtractionResult(
                 text="",
                 pages=1,
@@ -304,7 +304,7 @@ class RTFExtractor(BaseExtractor):
                 text=text,
                 pages=1,
             )
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             return ExtractionResult(
                 text="",
                 pages=1,

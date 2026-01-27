@@ -35,6 +35,126 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Blocks within this vertical pixel distance are considered on the same line
+LINE_GROUP_THRESHOLD = 20
+
+
+def _get_bbox_y_top(bbox: List[List[float]]) -> float:
+    """Extract top Y coordinate from quadrilateral bounding box."""
+    return min(p[1] for p in bbox)
+
+
+def _get_bbox_x_left(bbox: List[List[float]]) -> float:
+    """Extract left X coordinate from quadrilateral bounding box."""
+    return min(p[0] for p in bbox)
+
+
+def _get_line_group(bbox: List[List[float]]) -> int:
+    """Get line group number for a bounding box based on vertical position."""
+    return int(_get_bbox_y_top(bbox) / LINE_GROUP_THRESHOLD)
+
+
+def _ocr_sort_key(item: Tuple) -> Tuple[int, float]:
+    """Sort key for raw OCR results in reading order (top-to-bottom, left-to-right)."""
+    bbox = item[0]
+    return (_get_line_group(bbox), _get_bbox_x_left(bbox))
+
+
+def _group_items_into_lines(
+    items: List,
+    get_bbox: callable,
+    get_text: callable,
+) -> List[List[str]]:
+    """
+    Group items into lines based on vertical position.
+
+    Args:
+        items: List of items (raw OCR tuples or OCRBlock objects)
+        get_bbox: Function to extract bbox from an item
+        get_text: Function to extract text from an item
+
+    Returns:
+        List of lines, where each line is a list of text strings
+    """
+    if not items:
+        return []
+
+    lines: List[List[str]] = []
+    current_line_parts: List[str] = []
+    current_line_group: Optional[int] = None
+
+    for item in items:
+        bbox = get_bbox(item)
+        text = get_text(item)
+        line_group = _get_line_group(bbox)
+
+        if current_line_group is None:
+            current_line_group = line_group
+            current_line_parts.append(text)
+        elif line_group == current_line_group:
+            current_line_parts.append(text)
+        else:
+            lines.append(current_line_parts)
+            current_line_parts = [text]
+            current_line_group = line_group
+
+    if current_line_parts:
+        lines.append(current_line_parts)
+
+    return lines
+
+
+def _build_text_from_lines(lines: List[List[str]]) -> str:
+    """Join lines with newlines, parts within each line with spaces."""
+    return '\n'.join(' '.join(parts) for parts in lines)
+
+
+def _build_text_with_offset_map(
+    blocks: List["OCRBlock"],
+) -> Tuple[str, List[Tuple[int, int, int]]]:
+    """
+    Build full text from OCR blocks with offset mapping.
+
+    Groups blocks into lines based on vertical position, joins with proper
+    spacing, and builds an offset map for mapping character spans back to
+    block indices.
+
+    Args:
+        blocks: List of OCRBlock objects, already sorted in reading order
+
+    Returns:
+        Tuple of (full_text, offset_map) where offset_map is a list of
+        (start_char, end_char, block_index) tuples
+    """
+    if not blocks:
+        return "", []
+
+    # Group blocks into lines
+    lines = _group_items_into_lines(
+        blocks,
+        get_bbox=lambda b: b.bbox,
+        get_text=lambda b: b.text,
+    )
+
+    # Build full text (DON'T apply _clean_ocr_text - would break offset alignment)
+    full_text = _build_text_from_lines(lines)
+
+    # Build offset map by tracking position through blocks
+    offset_map: List[Tuple[int, int, int]] = []
+    current_offset = 0
+
+    for i, block in enumerate(blocks):
+        # Add separator offset (1 char for either newline or space)
+        if i > 0:
+            current_offset += 1
+
+        start = current_offset
+        end = current_offset + len(block.text)
+        offset_map.append((start, end, i))
+        current_offset = end
+
+    return full_text, offset_map
+
 
 def _clean_ocr_text(text: str) -> str:
     """
@@ -306,7 +426,7 @@ class OCREngine:
             self._ensure_initialized()
             # Also warm up to reduce first-call latency
             self.warm_up()
-        except Exception as e:
+        except (ImportError, OSError, RuntimeError, ValueError) as e:
             self._load_error = e
             logger.error(f"Background OCR loading failed: {e}")
         finally:
@@ -373,7 +493,7 @@ class OCREngine:
                 "rapidocr-onnxruntime not installed. "
                 "Run: pip install rapidocr-onnxruntime"
             )
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Failed to initialize RapidOCR: {e}")
             raise
     
@@ -396,8 +516,8 @@ class OCREngine:
             
             logger.info("RapidOCR warm-up complete")
             return True
-            
-        except Exception as e:
+
+        except (ImportError, OSError, RuntimeError, ValueError) as e:
             logger.warning(f"RapidOCR warm-up failed: {e}")
             return False
     

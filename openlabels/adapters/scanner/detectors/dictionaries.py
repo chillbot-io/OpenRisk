@@ -234,7 +234,7 @@ class DictionaryDetector(BaseDetector):
                         terms.add(term)
             if denied_count > 0:
                 logger.debug(f"Filtered {denied_count} denied terms from {path.name}")
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             logger.error(f"Failed to load {path}: {e}")
         return terms
 

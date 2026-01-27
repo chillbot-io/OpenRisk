@@ -89,7 +89,7 @@ class PDFLabelWriter(EmbeddedLabelWriter):
                 pdf.save(path)
             return True
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             logger.error(f"Failed to write PDF labels: {e}")
             return False
 
@@ -111,7 +111,7 @@ class PDFLabelWriter(EmbeddedLabelWriter):
                         return LabelSet.from_json(json_str)
             return None
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             logger.debug(f"No labels found in PDF: {e}")
             return None
 
@@ -141,7 +141,7 @@ class OfficeLabelWriter(EmbeddedLabelWriter):
             elif suffix == '.pptx':
                 return self._write_pptx(path, label_set)
             return False
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.error(f"Failed to write Office labels: {e}")
             return False
 
@@ -157,7 +157,7 @@ class OfficeLabelWriter(EmbeddedLabelWriter):
             elif suffix == '.pptx':
                 return self._read_pptx(path)
             return None
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.debug(f"No labels found in Office doc: {e}")
             return None
 
@@ -272,7 +272,7 @@ class ImageLabelWriter(EmbeddedLabelWriter):
             # For other formats, try PIL with custom metadata
             return self._write_pil_metadata(path, label_set)
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             logger.error(f"Failed to write image labels: {e}")
             return False
 
@@ -286,7 +286,7 @@ class ImageLabelWriter(EmbeddedLabelWriter):
 
             return self._read_pil_metadata(path)
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             logger.debug(f"No labels found in image: {e}")
             return None
 
@@ -300,7 +300,7 @@ class ImageLabelWriter(EmbeddedLabelWriter):
 
         try:
             exif_dict = piexif.load(str(path))
-        except Exception as e:
+        except (OSError, ValueError) as e:
             logger.debug(f"Could not load existing EXIF from {path}, creating new: {e}")
             exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}}
 
@@ -330,7 +330,7 @@ class ImageLabelWriter(EmbeddedLabelWriter):
                     json_str = user_comment[8:].decode('utf-8')
                     if json_str.startswith('{"v":'):
                         return LabelSet.from_json(json_str)
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.debug(f"Could not read EXIF label from {path}: {e}")
         return None
 
@@ -377,7 +377,7 @@ class ImageLabelWriter(EmbeddedLabelWriter):
                 json_str = img.info['openlabels']
                 if json_str.startswith('{"v":'):
                     return LabelSet.from_json(json_str)
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.debug(f"Could not read PIL label from {path}: {e}")
         return None
 

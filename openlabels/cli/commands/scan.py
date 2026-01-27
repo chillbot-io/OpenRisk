@@ -84,7 +84,7 @@ def scan_file(
             entities=entities,
             exposure=exposure,
         )
-    except Exception as e:
+    except (OSError, ValueError) as e:
         return ScanResult(
             path=str(path),
             score=0,

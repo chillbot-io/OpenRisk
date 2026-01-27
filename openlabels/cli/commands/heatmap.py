@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 from openlabels import Client
 from openlabels.cli.commands.scan import scan_file, ScanResult
+from openlabels.core.scorer import TIER_THRESHOLDS
 
 
 @dataclass
@@ -148,28 +149,28 @@ def score_to_bar(score: float, width: int = 20) -> str:
 
 
 def score_to_indicator(score: float) -> str:
-    """Get color indicator for score."""
-    if score >= 90:
+    """Get color indicator for score using actual tier thresholds."""
+    if score >= TIER_THRESHOLDS['critical']:
         return "🔴"  # Critical
-    elif score >= 70:
+    elif score >= TIER_THRESHOLDS['high']:
         return "🟠"  # High
-    elif score >= 50:
+    elif score >= TIER_THRESHOLDS['medium']:
         return "🟡"  # Medium
-    elif score >= 25:
+    elif score >= TIER_THRESHOLDS['low']:
         return "🟢"  # Low
     else:
         return "⚪"  # Minimal
 
 
 def score_to_ansi(score: float) -> str:
-    """Get ANSI color code for score."""
-    if score >= 90:
+    """Get ANSI color code for score using actual tier thresholds."""
+    if score >= TIER_THRESHOLDS['critical']:
         return "\033[91m"  # Red
-    elif score >= 70:
+    elif score >= TIER_THRESHOLDS['high']:
         return "\033[93m"  # Yellow
-    elif score >= 50:
+    elif score >= TIER_THRESHOLDS['medium']:
         return "\033[33m"  # Orange
-    elif score >= 25:
+    elif score >= TIER_THRESHOLDS['low']:
         return "\033[92m"  # Green
     else:
         return "\033[90m"  # Gray
@@ -277,9 +278,13 @@ def cmd_heatmap(args) -> int:
     for line in lines:
         print(line)
 
-    # Print legend
+    # Print legend with actual tier thresholds
+    crit = TIER_THRESHOLDS['critical']
+    high = TIER_THRESHOLDS['high']
+    med = TIER_THRESHOLDS['medium']
+    low = TIER_THRESHOLDS['low']
     print()
-    print("Legend: 🔴 Critical(90+) 🟠 High(70-89) 🟡 Medium(50-69) 🟢 Low(25-49) ⚪ Minimal(<25)")
+    print(f"Legend: 🔴 Critical({crit}+) 🟠 High({high}-{crit-1}) 🟡 Medium({med}-{high-1}) 🟢 Low({low}-{med-1}) ⚪ Minimal(<{low})")
 
     # Print summary
     print()

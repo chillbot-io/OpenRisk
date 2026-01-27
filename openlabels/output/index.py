@@ -221,7 +221,7 @@ class LabelIndex:
                 conn.commit()
                 return True
 
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Failed to store label: {e}")
             return False
 
@@ -261,7 +261,7 @@ class LabelIndex:
                     return LabelSet.from_json(row['labels_json'])
                 return None
 
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Failed to get label: {e}")
             return None
 
@@ -289,7 +289,7 @@ class LabelIndex:
                     return LabelSet.from_json(row['labels_json'])
                 return None
 
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Failed to get label by path: {e}")
             return None
 
@@ -326,7 +326,7 @@ class LabelIndex:
 
                 return [dict(row) for row in rows]
 
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Failed to get versions: {e}")
             return []
 
@@ -398,7 +398,7 @@ class LabelIndex:
                 rows = conn.execute(base_query, params).fetchall()
                 return [dict(row) for row in rows]
 
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Query failed: {e}")
             return []
 
@@ -429,7 +429,7 @@ class LabelIndex:
                 conn.commit()
                 return True
 
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Delete failed: {e}")
             return False
 
@@ -451,7 +451,7 @@ class LabelIndex:
 
                 return {"labels": labels, "versions": versions}
 
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Count failed: {e}")
             return {"labels": 0, "versions": 0}
 
@@ -484,7 +484,7 @@ class LabelIndex:
 
                 return True
 
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             logger.error(f"Export failed: {e}")
             return False
 

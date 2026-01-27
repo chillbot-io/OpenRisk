@@ -182,7 +182,7 @@ def cmd_detect_dir(args):
             elif args.verbose:
                 print(f"{file_path}: clean")
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             errors += 1
             if args.verbose:
                 print(f"Error processing {file_path}: {e}", file=sys.stderr)
