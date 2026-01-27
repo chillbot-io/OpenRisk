@@ -755,36 +755,89 @@ class AzureBlobMetadataHandler:
             return None
 
 
-# Cloud handler singletons (lazy-loaded)
+# =============================================================================
+# CLOUD HANDLER SINGLETONS (DEPRECATED - Phase 4.4)
+# =============================================================================
+# These module-level singletons are kept for backward compatibility but are
+# deprecated. For isolated operation, use Context.get_cloud_handler() instead.
+
+import warnings
+
 _s3_handler = None
 _gcs_handler = None
 _azure_handler = None
+_cloud_handler_warning_issued = False
+
+
+def _warn_deprecated_cloud_handlers():
+    """Emit warning about using deprecated module-level cloud handlers."""
+    global _cloud_handler_warning_issued
+    if not _cloud_handler_warning_issued:
+        _cloud_handler_warning_issued = True
+        warnings.warn(
+            "Using deprecated module-level cloud handlers. "
+            "For isolated operation, use Context.get_cloud_handler() instead. "
+            "This will become an error in a future version.",
+            DeprecationWarning,
+            stacklevel=4,
+        )
 
 
 def _get_s3_handler():
+    """DEPRECATED: Use Context.get_cloud_handler('s3') instead."""
     global _s3_handler
+    _warn_deprecated_cloud_handlers()
     if _s3_handler is None:
         _s3_handler = S3MetadataHandler()
     return _s3_handler
 
 
 def _get_gcs_handler():
+    """DEPRECATED: Use Context.get_cloud_handler('gcs') instead."""
     global _gcs_handler
+    _warn_deprecated_cloud_handlers()
     if _gcs_handler is None:
         _gcs_handler = GCSMetadataHandler()
     return _gcs_handler
 
 
 def _get_azure_handler():
+    """DEPRECATED: Use Context.get_cloud_handler('azure') instead."""
     global _azure_handler
+    _warn_deprecated_cloud_handlers()
     if _azure_handler is None:
         _azure_handler = AzureBlobMetadataHandler()
     return _azure_handler
 
 
+def _get_cloud_handler_for_provider(provider: str, context=None):
+    """
+    Get cloud handler, using Context if provided (Phase 4.4).
+
+    Args:
+        provider: Cloud provider ('s3', 'gcs', 'azure')
+        context: Optional Context instance for isolation
+
+    Returns:
+        Cloud metadata handler instance
+    """
+    if context is not None:
+        return context.get_cloud_handler(provider)
+
+    # Fall back to deprecated module-level singletons
+    if provider == 's3':
+        return _get_s3_handler()
+    elif provider == 'gcs':
+        return _get_gcs_handler()
+    elif provider == 'azure':
+        return _get_azure_handler()
+    return None
+
+
 def write_cloud_label(
     uri: str,
     label_set: LabelSet,
+    context=None,
     **kwargs,
 ) -> bool:
     """
@@ -798,6 +851,7 @@ def write_cloud_label(
     Args:
         uri: Cloud storage URI
         label_set: The LabelSet to write
+        context: Optional Context for handler isolation (Phase 4.4)
         **kwargs: Additional arguments for the cloud client
 
     Returns:
@@ -815,30 +869,36 @@ def write_cloud_label(
     )
     value = pointer.to_string()
 
+    # Phase 4.4: Use context-aware handler if context provided
+    handler = _get_cloud_handler_for_provider(parsed.provider, context)
+    if handler is None:
+        logger.error(f"Unknown cloud provider: {parsed.provider}")
+        return False
+
     if parsed.provider == 's3':
-        return _get_s3_handler().write(
+        return handler.write(
             parsed.bucket, parsed.key, value, kwargs.get('s3_client')
         )
     elif parsed.provider == 'gcs':
-        return _get_gcs_handler().write(
+        return handler.write(
             parsed.bucket, parsed.key, value, kwargs.get('gcs_client')
         )
     elif parsed.provider == 'azure':
-        return _get_azure_handler().write(
+        return handler.write(
             parsed.bucket, parsed.key, value, kwargs.get('connection_string')
         )
     else:
-        # This shouldn't happen since parse_cloud_uri validates the scheme
         logger.error(f"Unknown cloud provider: {parsed.provider}")
         return False
 
 
-def read_cloud_label(uri: str, **kwargs) -> Optional[VirtualLabelPointer]:
+def read_cloud_label(uri: str, context=None, **kwargs) -> Optional[VirtualLabelPointer]:
     """
     Read a virtual label from a cloud storage object.
 
     Args:
         uri: Cloud storage URI
+        context: Optional Context for handler isolation (Phase 4.4)
         **kwargs: Additional arguments for the cloud client
 
     Returns:
@@ -850,18 +910,23 @@ def read_cloud_label(uri: str, **kwargs) -> Optional[VirtualLabelPointer]:
     # Validate URI before processing
     parsed = parse_cloud_uri(uri)
 
+    # Phase 4.4: Use context-aware handler if context provided
+    handler = _get_cloud_handler_for_provider(parsed.provider, context)
+    if handler is None:
+        return None
+
     value = None
 
     if parsed.provider == 's3':
-        value = _get_s3_handler().read(
+        value = handler.read(
             parsed.bucket, parsed.key, kwargs.get('s3_client')
         )
     elif parsed.provider == 'gcs':
-        value = _get_gcs_handler().read(
+        value = handler.read(
             parsed.bucket, parsed.key, kwargs.get('gcs_client')
         )
     elif parsed.provider == 'azure':
-        value = _get_azure_handler().read(
+        value = handler.read(
             parsed.bucket, parsed.key, kwargs.get('connection_string')
         )
 

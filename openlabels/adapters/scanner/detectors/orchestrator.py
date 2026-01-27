@@ -12,28 +12,41 @@ Detectors are organized by domain:
 Concurrency Model:
     Uses ThreadPoolExecutor for parallel pattern matching across domains.
     Pattern matching is I/O-bound (regex on text) so GIL isn't a bottleneck.
+
+Phase 4 Changes:
+    - Issue 4.1: Orchestrator now accepts optional Context for resource isolation
+    - When Context is provided, uses context.detection_slot() instead of module globals
+    - Module-level globals are kept for backward compatibility but deprecated
+    - Issue 4.5: Uses context.detection_slot() for safe semaphore handling
 """
 
 import atexit
 import threading
+import warnings
 from concurrent.futures import ThreadPoolExecutor, TimeoutError, Future
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, TYPE_CHECKING
 import logging
 
 from ..types import Span, Tier, CLINICAL_CONTEXT_TYPES
 from ..config import Config
 from ..constants import DETECTOR_TIMEOUT, MAX_DETECTOR_WORKERS
 
+if TYPE_CHECKING:
+    from ....context import Context
+
 # Maximum concurrent detection requests (backpressure)
 # If exceeded, new requests will block until a slot is available
+# DEPRECATED: Use Context.max_concurrent_detections instead
 MAX_CONCURRENT_DETECTIONS = 10
 
 # Maximum queue depth before rejecting requests (prevents unbounded memory growth)
 # Set to 0 to disable queue depth limit (block indefinitely)
+# DEPRECATED: Use Context.max_queue_depth instead
 MAX_QUEUE_DEPTH = 50
 
 # Maximum runaway detections before logging critical warning (Phase 3, Issue 3.4)
 # Runaway detections are threads that timed out but couldn't be cancelled
+# DEPRECATED: Use Context.max_runaway_detections instead
 MAX_RUNAWAY_DETECTIONS = 5
 
 from dataclasses import dataclass, field as dataclass_field
@@ -81,15 +94,25 @@ class DetectionQueueFullError(Exception):
         )
 
 
+# =============================================================================
+# MODULE-LEVEL GLOBALS (DEPRECATED - Phase 4.1)
+# =============================================================================
+# These globals are kept for backward compatibility but are deprecated.
+# For isolated operation, pass a Context to DetectorOrchestrator.
+# When a Context is provided, these globals are NOT used.
+
 # Module-level thread pool for reuse
 # Created lazily on first use, shared across all DetectorOrchestrator instances
+# DEPRECATED: Use Context.get_executor() instead
 _SHARED_EXECUTOR: Optional[ThreadPoolExecutor] = None
 
 # Backpressure semaphore - limits concurrent detect() calls
 # Prevents unbounded queue growth under high load
+# DEPRECATED: Use Context.detection_slot() instead
 _DETECTION_SEMAPHORE = threading.BoundedSemaphore(MAX_CONCURRENT_DETECTIONS)
 
 # Track queue depth for monitoring
+# DEPRECATED: Use Context.detection_slot() instead
 _QUEUE_DEPTH = 0
 _QUEUE_LOCK = threading.Lock()
 
@@ -98,8 +121,12 @@ _QUEUE_LOCK = threading.Lock()
 # NOTE: This counter only increases, never decreases. We cannot detect when
 # a runaway thread eventually terminates. The counter serves as a warning
 # signal - if it grows large, the process should be restarted.
+# DEPRECATED: Use Context.track_runaway_detection() instead
 _RUNAWAY_DETECTIONS = 0
 _RUNAWAY_LOCK = threading.Lock()
+
+# Flag to track if we've warned about using deprecated globals
+_DEPRECATED_GLOBALS_WARNING_ISSUED = False
 
 
 @dataclass
@@ -212,15 +239,33 @@ def _track_runaway_detection(detector_name: str) -> int:
 from contextlib import contextmanager
 
 
+def _warn_deprecated_globals():
+    """Emit warning about using deprecated module-level globals."""
+    global _DEPRECATED_GLOBALS_WARNING_ISSUED
+    if not _DEPRECATED_GLOBALS_WARNING_ISSUED:
+        _DEPRECATED_GLOBALS_WARNING_ISSUED = True
+        warnings.warn(
+            "DetectorOrchestrator is using deprecated module-level globals for "
+            "resource management. For isolated operation, pass a Context instance "
+            "to the orchestrator. This will become an error in a future version.",
+            DeprecationWarning,
+            stacklevel=4,
+        )
+
+
 @contextmanager
-def _detection_slot():
+def _detection_slot_legacy():
     """
-    Context manager for detection backpressure.
+    DEPRECATED: Legacy context manager using module-level globals.
+
+    Use Context.detection_slot() instead for proper isolation.
 
     Handles queue depth tracking and semaphore acquisition/release.
     Raises DetectionQueueFullError if queue is at capacity.
     """
     global _QUEUE_DEPTH
+
+    _warn_deprecated_globals()
 
     # Check queue depth and increment
     with _QUEUE_LOCK:
@@ -229,20 +274,33 @@ def _detection_slot():
         _QUEUE_DEPTH += 1
         current_depth = _QUEUE_DEPTH
 
+    # Phase 4.5: Safer ordering - track acquired state
+    acquired = False
     try:
         _DETECTION_SEMAPHORE.acquire()
-        try:
-            yield current_depth
-        finally:
-            _DETECTION_SEMAPHORE.release()
+        acquired = True
+        yield current_depth
     finally:
+        if acquired:
+            _DETECTION_SEMAPHORE.release()
         with _QUEUE_LOCK:
             _QUEUE_DEPTH = max(0, _QUEUE_DEPTH - 1)
 
 
-def _get_executor() -> ThreadPoolExecutor:
-    """Get or create the shared thread pool."""
+# Backward compatibility alias
+_detection_slot = _detection_slot_legacy
+
+
+def _get_executor_legacy() -> ThreadPoolExecutor:
+    """
+    DEPRECATED: Get or create the shared thread pool using module-level globals.
+
+    Use Context.get_executor() instead for proper isolation.
+    """
     global _SHARED_EXECUTOR
+
+    _warn_deprecated_globals()
+
     if _SHARED_EXECUTOR is None:
         _SHARED_EXECUTOR = ThreadPoolExecutor(
             max_workers=MAX_DETECTOR_WORKERS,
@@ -251,6 +309,10 @@ def _get_executor() -> ThreadPoolExecutor:
         # Ensure cleanup on process exit
         atexit.register(_shutdown_executor)
     return _SHARED_EXECUTOR
+
+
+# Backward compatibility alias
+_get_executor = _get_executor_legacy
 
 
 def _shutdown_executor():
@@ -282,6 +344,11 @@ class DetectorOrchestrator:
     - Timeout per detector (graceful degradation)
     - Failures don't affect other detectors
     - Selective detector enablement via config
+
+    Phase 4 additions:
+    - Optional Context parameter for resource isolation (Issue 4.1)
+    - When Context is provided, uses context resources instead of module globals
+    - Safe detection slot with guaranteed cleanup (Issue 4.5)
     """
 
     def __init__(
@@ -292,6 +359,7 @@ class DetectorOrchestrator:
         enable_secrets: bool = True,
         enable_financial: bool = True,
         enable_government: bool = True,
+        context: Optional["Context"] = None,
     ):
         """
         Initialize the detector orchestrator.
@@ -303,10 +371,16 @@ class DetectorOrchestrator:
             enable_secrets: Enable secrets detection (API keys, tokens)
             enable_financial: Enable financial identifier detection (CUSIP, crypto)
             enable_government: Enable government/classification detection
+            context: Optional Context for resource isolation (Phase 4.1).
+                    When provided, uses context.detection_slot() and
+                    context.get_executor() instead of module-level globals.
         """
         self.config = config or Config()
         self.parallel = parallel
         self.enable_structured = enable_structured
+
+        # Phase 4.1: Store context for resource isolation
+        self._context = context
 
         # Get disabled detectors from config
         disabled = self.config.disabled_detectors if self.config else set()
@@ -374,6 +448,53 @@ class DetectorOrchestrator:
     def active_detector_names(self) -> List[str]:
         """Get names of available detectors."""
         return [d.name for d in self._available_detectors]
+
+    # =========================================================================
+    # PHASE 4.1: CONTEXT-AWARE RESOURCE ACCESS
+    # =========================================================================
+
+    def _get_executor(self) -> ThreadPoolExecutor:
+        """
+        Get the thread pool executor.
+
+        Uses Context.get_executor() if context is available,
+        otherwise falls back to deprecated module-level globals.
+        """
+        if self._context is not None:
+            return self._context.get_executor()
+        return _get_executor_legacy()
+
+    @contextmanager
+    def _get_detection_slot(self):
+        """
+        Get a detection slot with backpressure control.
+
+        Uses Context.detection_slot() if context is available,
+        otherwise falls back to deprecated module-level globals.
+
+        Yields:
+            Current queue depth
+        """
+        if self._context is not None:
+            with self._context.detection_slot() as depth:
+                yield depth
+        else:
+            with _detection_slot_legacy() as depth:
+                yield depth
+
+    def _track_runaway(self, detector_name: str) -> int:
+        """
+        Track a runaway detection thread.
+
+        Uses Context.track_runaway_detection() if context is available,
+        otherwise falls back to deprecated module-level globals.
+
+        Returns:
+            Current runaway detection count
+        """
+        if self._context is not None:
+            return self._context.track_runaway_detection(detector_name)
+        return _track_runaway_detection(detector_name)
 
     def _detect_known_entities(
         self,
@@ -471,7 +592,8 @@ class DetectorOrchestrator:
         if not text:
             return []
 
-        with _detection_slot() as queue_depth:
+        # Phase 4.1: Use context-aware detection slot
+        with self._get_detection_slot() as queue_depth:
             logger.info(f"Detection starting on text ({len(text)} chars), queue depth: {queue_depth}")
             return self._detect_impl(text, timeout, known_entities)
 
@@ -506,7 +628,8 @@ class DetectorOrchestrator:
         if not text:
             return [], DetectionMetadata()
 
-        with _detection_slot() as queue_depth:
+        # Phase 4.1: Use context-aware detection slot
+        with self._get_detection_slot() as queue_depth:
             logger.info(f"Detection starting on text ({len(text)} chars), queue depth: {queue_depth}")
             metadata = DetectionMetadata()
             spans = self._detect_impl_with_metadata(text, timeout, known_entities, metadata)
@@ -769,7 +892,8 @@ class DetectorOrchestrator:
             metadata: Optional metadata object to track failures (Phase 3)
         """
         all_spans = []
-        executor = _get_executor()
+        # Phase 4.1: Use context-aware executor
+        executor = self._get_executor()
 
         # Per-detector timeout (divide total timeout among detectors)
         per_detector_timeout = timeout / max(len(detectors), 1)
@@ -798,7 +922,8 @@ class DetectorOrchestrator:
                 if metadata:
                     metadata.add_timeout(detector.name, per_detector_timeout, cancelled)
                     if not cancelled:
-                        metadata.runaway_threads = _track_runaway_detection(detector.name)
+                        # Phase 4.1: Use context-aware runaway tracking
+                        metadata.runaway_threads = self._track_runaway(detector.name)
                 logger.warning(
                     f"Detector {detector.name} timed out after {per_detector_timeout:.1f}s "
                     f"(sequential mode, cancelled={cancelled})"
@@ -829,7 +954,8 @@ class DetectorOrchestrator:
             metadata: Optional metadata object to track failures (Phase 3)
         """
         all_spans = []
-        executor = _get_executor()
+        # Phase 4.1: Use context-aware executor
+        executor = self._get_executor()
 
         logger.info(f"Running {len(detectors)} detectors in parallel...")
 
@@ -869,7 +995,8 @@ class DetectorOrchestrator:
                 if metadata:
                     metadata.add_timeout(detector.name, timeout, cancelled)
                     if not cancelled:
-                        metadata.runaway_threads = _track_runaway_detection(detector.name)
+                        # Phase 4.1: Use context-aware runaway tracking
+                        metadata.runaway_threads = self._track_runaway(detector.name)
 
                 logger.warning(
                     f"Detector {detector.name} timed out after {timeout}s "

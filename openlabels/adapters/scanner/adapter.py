@@ -3,14 +3,19 @@ OpenLabels Scanner - the core detection engine.
 
 This is the main entry point for detecting PII/PHI in text and files.
 Part of OpenLabels - where labels are the primitive, risk is derived.
+
+Phase 4 fix: Detector now accepts optional Context for resource isolation.
 """
 
 import time
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Union, TYPE_CHECKING
 
 from .types import DetectionResult
 from .config import Config
+
+if TYPE_CHECKING:
+    from ...context import Context
 
 
 class Detector:
@@ -28,17 +33,30 @@ class Detector:
         ...     print(f"{span.entity_type}: {span.text}")
         NAME: John Smith
         SSN: 123-45-6789
+
+    For isolated operation (Phase 4):
+        >>> from openlabels import Context
+        >>> ctx = Context()
+        >>> detector = Detector(context=ctx)
     """
 
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(
+        self,
+        config: Optional[Config] = None,
+        context: Optional["Context"] = None,
+    ):
         """
         Initialize the detector.
 
         Args:
             config: Optional configuration. If not provided, uses defaults
                    or loads from environment variables.
+            context: Optional Context for resource isolation (Phase 4).
+                    When provided, orchestrator uses context resources
+                    instead of module-level globals.
         """
         self.config = config or Config.from_env()
+        self._context = context
         self._orchestrator = None
 
     @property
@@ -48,6 +66,7 @@ class Detector:
             from .detectors.orchestrator import DetectorOrchestrator
             self._orchestrator = DetectorOrchestrator(
                 config=self.config,
+                context=self._context,  # Phase 4: Pass context for resource isolation
             )
         return self._orchestrator
 
