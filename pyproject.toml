@@ -27,7 +27,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
 ]
-dependencies = []
+# SECURITY FIX (MED-001): regex is REQUIRED for ReDoS timeout protection
+# Without it, user-controlled regex patterns can hang the process indefinitely
+dependencies = [
+    "regex>=2023.0.0,<2025.0.0",  # REQUIRED: ReDoS timeout protection (CVE-READY-003)
+]
 
 [project.optional-dependencies]
 pdf = ["pymupdf>=1.23.0,<1.25.0"]  # SECURITY: Pin upper bound to avoid breaking changes
@@ -45,9 +49,8 @@ ocr = [
     "intervaltree>=3.1.0,<4.0.0",  # SECURITY FIX (HIGH-014): Declare OCR dependency
 ]
 performance = ["pyahocorasick>=2.0.0,<3.0.0"]
-security = ["regex>=2023.0.0,<2025.0.0"]  # REQUIRED for ReDoS timeout protection
 all = [
-    "openlabels[pdf,office,images,ocr,performance,security]",
+    "openlabels[pdf,office,images,ocr,performance]",
 ]
 dev = [
     "pytest>=7.0.0",

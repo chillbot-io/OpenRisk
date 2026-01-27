@@ -32,7 +32,20 @@ def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, bas
 
     Returns:
         New file path
+
+    Raises:
+        ValueError: If source is a symlink (security: prevents symlink attacks)
+        FileNotFoundError: If source doesn't exist
     """
+    # SECURITY FIX (CVE-READY-002): Check for symlinks before move to prevent
+    # TOCTOU race conditions where an attacker replaces the file with a symlink
+    # between existence check and move operation
+    if source.is_symlink():
+        raise ValueError(f"Refusing to move symlink (security): {source}")
+
+    if not source.exists():
+        raise FileNotFoundError(f"Source file not found: {source}")
+
     if preserve_structure and base_path:
         # Compute relative path from base
         try:
@@ -47,8 +60,16 @@ def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, bas
     # Create parent directories
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Move file
-    shutil.move(str(source), str(dest_path))
+    # SECURITY FIX (CVE-READY-002): Use os.rename for atomic same-filesystem moves
+    # when possible, falling back to shutil.move for cross-filesystem moves
+    import os
+    try:
+        os.rename(str(source), str(dest_path))
+    except OSError:
+        # Cross-filesystem move, use shutil but re-verify source isn't symlink
+        if source.is_symlink():
+            raise ValueError(f"Refusing to move symlink (security): {source}")
+        shutil.move(str(source), str(dest_path))
 
     return dest_path
 

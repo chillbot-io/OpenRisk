@@ -316,10 +316,16 @@ class DictionaryDetector(BaseDetector):
     def _detect_with_automaton(self, text: str, text_lower: str) -> List[Span]:
         """Fast O(n) detection using Aho-Corasick automaton."""
         spans = []
-        
+
         for end_idx, (term, entity_type) in self._automaton.iter(text_lower):
             start_idx = end_idx - len(term) + 1
-            
+
+            # SECURITY FIX (MED-008): Validate start_idx is non-negative
+            # This handles edge cases where the calculation could produce invalid indices
+            if start_idx < 0:
+                logger.debug(f"Skipping match with negative start_idx: {start_idx}")
+                continue
+
             # Only accept matches at word boundaries
             if self._is_word_boundary(text, start_idx, end_idx + 1):
                 spans.append(Span(
@@ -331,7 +337,7 @@ class DictionaryDetector(BaseDetector):
                     detector=self.name,
                     tier=self.tier,
                 ))
-        
+
         return spans
 
     # SECURITY FIX (HIGH-008): Maximum matches per term to prevent memory exhaustion

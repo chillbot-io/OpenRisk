@@ -123,6 +123,22 @@ def get_posix_permissions(path: str) -> PosixPermissions:
     Raises:
         FileNotFoundError: If file doesn't exist
         PermissionError: If can't read file metadata
+
+    Security Note (HIGH-013):
+        This function returns a point-in-time snapshot of permissions.
+        The returned data may become stale between when it's retrieved and
+        when the file is actually accessed (TOCTOU - Time-of-Check to Time-of-Use).
+
+        DO NOT use this for security decisions where the check and use are
+        separated in time. For security-critical operations:
+        - Use file descriptors and fstat() instead of stat()
+        - Open the file first, then check permissions on the open fd
+        - Consider using mandatory access control (MAC) systems
+
+        This function is suitable for:
+        - Informational/reporting purposes
+        - Risk scoring where approximate data is acceptable
+        - User interface display
     """
     path = Path(path)
     if not path.exists():

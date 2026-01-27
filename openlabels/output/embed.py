@@ -343,26 +343,30 @@ class ImageLabelWriter(EmbeddedLabelWriter):
             logger.warning("PIL not installed, cannot write image labels")
             return False
 
+        # SECURITY FIX (MED-006): Use try/finally to ensure PIL image is closed
         img = Image.open(path)
-        suffix = path.suffix.lower()
+        try:
+            suffix = path.suffix.lower()
 
-        if suffix == '.png':
-            # PNG supports text metadata natively
-            metadata = PngInfo()
-            metadata.add_text("openlabels", label_set.to_json(compact=True))
+            if suffix == '.png':
+                # PNG supports text metadata natively
+                metadata = PngInfo()
+                metadata.add_text("openlabels", label_set.to_json(compact=True))
 
-            # Preserve existing metadata
-            if hasattr(img, 'info'):
-                for key, value in img.info.items():
-                    if key != 'openlabels' and isinstance(value, str):
-                        metadata.add_text(key, value)
+                # Preserve existing metadata
+                if hasattr(img, 'info'):
+                    for key, value in img.info.items():
+                        if key != 'openlabels' and isinstance(value, str):
+                            metadata.add_text(key, value)
 
-            img.save(path, pnginfo=metadata)
-            return True
+                img.save(path, pnginfo=metadata)
+                return True
 
-        # For other formats, PIL doesn't have great metadata support
-        logger.warning(f"Limited metadata support for {suffix}, label may not persist")
-        return False
+            # For other formats, PIL doesn't have great metadata support
+            logger.warning(f"Limited metadata support for {suffix}, label may not persist")
+            return False
+        finally:
+            img.close()
 
     def _read_pil_metadata(self, path: Path) -> Optional[LabelSet]:
         """Read using PIL text chunks."""
@@ -372,11 +376,15 @@ class ImageLabelWriter(EmbeddedLabelWriter):
             return None
 
         try:
+            # SECURITY FIX (MED-006): Use try/finally to ensure PIL image is closed
             img = Image.open(path)
-            if hasattr(img, 'info') and 'openlabels' in img.info:
-                json_str = img.info['openlabels']
-                if json_str.startswith('{"v":'):
-                    return LabelSet.from_json(json_str)
+            try:
+                if hasattr(img, 'info') and 'openlabels' in img.info:
+                    json_str = img.info['openlabels']
+                    if json_str.startswith('{"v":'):
+                        return LabelSet.from_json(json_str)
+            finally:
+                img.close()
         except (OSError, ValueError, KeyError) as e:
             logger.debug(f"Could not read PIL label from {path}: {e}")
         return None
