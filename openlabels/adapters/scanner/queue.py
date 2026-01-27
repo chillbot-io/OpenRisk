@@ -334,8 +334,12 @@ class OCRPriorityQueue:
 
     @property
     def status(self) -> QueueStatus:
-        """Current queue status."""
-        return self._status
+        """Current queue status.
+
+        SECURITY FIX (MED-009): Access status under lock for thread safety.
+        """
+        with self._lock:
+            return self._status
 
     @property
     def stats(self) -> dict:

@@ -197,14 +197,36 @@ class Label:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> 'Label':
-        """Deserialize from compact JSON format."""
+        """Deserialize from compact JSON format.
+
+        Security Note (MED-004): Validates types before use to prevent
+        type confusion attacks via malformed JSON input.
+        """
+        # SECURITY FIX (MED-004): Validate types before use
+        if not isinstance(d.get('t'), str):
+            raise ValueError(f"Label type must be string, got {type(d.get('t'))}")
+        if not isinstance(d.get('c'), (int, float)):
+            raise ValueError(f"Label confidence must be numeric, got {type(d.get('c'))}")
+        if not isinstance(d.get('d'), str):
+            raise ValueError(f"Label detector must be string, got {type(d.get('d'))}")
+        if not isinstance(d.get('h'), str):
+            raise ValueError(f"Label value_hash must be string, got {type(d.get('h'))}")
+
+        count = d.get('n', 1)
+        if not isinstance(count, int):
+            raise ValueError(f"Label count must be integer, got {type(count)}")
+
+        extensions = d.get('x')
+        if extensions is not None and not isinstance(extensions, dict):
+            raise ValueError(f"Label extensions must be dict or None, got {type(extensions)}")
+
         return cls(
             type=d['t'],
-            confidence=d['c'],
+            confidence=float(d['c']),  # Normalize to float
             detector=d['d'],
             value_hash=d['h'],
-            count=d.get('n', 1),
-            extensions=d.get('x'),
+            count=count,
+            extensions=extensions,
         )
 
 
@@ -256,7 +278,29 @@ class LabelSet:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> 'LabelSet':
-        """Deserialize from JSON dict."""
+        """Deserialize from JSON dict.
+
+        Security Note (MED-004): Validates types before use to prevent
+        type confusion attacks via malformed JSON input.
+        """
+        # SECURITY FIX (MED-004): Validate types before use
+        if not isinstance(d.get('v'), int):
+            raise ValueError(f"LabelSet version must be integer, got {type(d.get('v'))}")
+        if not isinstance(d.get('id'), str):
+            raise ValueError(f"LabelSet label_id must be string, got {type(d.get('id'))}")
+        if not isinstance(d.get('hash'), str):
+            raise ValueError(f"LabelSet content_hash must be string, got {type(d.get('hash'))}")
+        if not isinstance(d.get('labels'), list):
+            raise ValueError(f"LabelSet labels must be list, got {type(d.get('labels'))}")
+        if not isinstance(d.get('src'), str):
+            raise ValueError(f"LabelSet source must be string, got {type(d.get('src'))}")
+        if not isinstance(d.get('ts'), int):
+            raise ValueError(f"LabelSet timestamp must be integer, got {type(d.get('ts'))}")
+
+        extensions = d.get('x')
+        if extensions is not None and not isinstance(extensions, dict):
+            raise ValueError(f"LabelSet extensions must be dict or None, got {type(extensions)}")
+
         return cls(
             version=d['v'],
             label_id=d['id'],
@@ -264,7 +308,7 @@ class LabelSet:
             labels=[Label.from_dict(l) for l in d['labels']],
             source=d['src'],
             timestamp=d['ts'],
-            extensions=d.get('x'),
+            extensions=extensions,
         )
 
     @classmethod

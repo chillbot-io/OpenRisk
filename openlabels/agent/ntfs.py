@@ -139,6 +139,22 @@ def get_ntfs_permissions(path: str) -> NtfsPermissions:
 
     Note:
         On non-Windows systems, returns a stub with PRIVATE exposure.
+
+    Security Note (HIGH-013):
+        This function returns a point-in-time snapshot of permissions.
+        The returned data may become stale between when it's retrieved and
+        when the file is actually accessed (TOCTOU - Time-of-Check to Time-of-Use).
+
+        DO NOT use this for security decisions where the check and use are
+        separated in time. For security-critical operations:
+        - Use file handles and GetSecurityInfo() on the handle
+        - Open the file first, then check permissions on the open handle
+        - Consider using Windows integrity levels or mandatory labels
+
+        This function is suitable for:
+        - Informational/reporting purposes
+        - Risk scoring where approximate data is acceptable
+        - User interface display
     """
     if not _IS_WINDOWS:
         return _get_stub_permissions(path)

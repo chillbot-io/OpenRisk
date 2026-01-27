@@ -187,13 +187,23 @@ CLINICAL_CONTEXT_TYPES = frozenset([
 
 
 def validate_entity_type(entity_type: str) -> bool:
-    """Check if an entity type is known."""
-    return entity_type in KNOWN_ENTITY_TYPES
+    """
+    Check if an entity type is known.
+
+    SECURITY FIX (LOW-003): Normalizes to uppercase before checking
+    to ensure consistent matching regardless of input case.
+    """
+    return entity_type.strip().upper() in KNOWN_ENTITY_TYPES
 
 
 def is_clinical_context_type(entity_type: str) -> bool:
-    """Check if an entity type is clinical context (not PHI)."""
-    return entity_type in CLINICAL_CONTEXT_TYPES
+    """
+    Check if an entity type is clinical context (not PHI).
+
+    SECURITY FIX (LOW-003): Normalizes to uppercase before checking
+    to ensure consistent matching regardless of input case.
+    """
+    return entity_type.strip().upper() in CLINICAL_CONTEXT_TYPES
 
 
 @dataclass
@@ -227,6 +237,9 @@ class Span:
             )
         if isinstance(self.tier, int) and not isinstance(self.tier, Tier):
             self.tier = Tier.from_value(self.tier)
+        # SECURITY FIX (LOW-003): Normalize entity_type to uppercase for consistency
+        # This ensures all entity types are stored in canonical form
+        self.entity_type = self.entity_type.strip().upper()
         if not validate_entity_type(self.entity_type):
             import logging
             logging.getLogger(__name__).warning(

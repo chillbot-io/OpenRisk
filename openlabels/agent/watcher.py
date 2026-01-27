@@ -562,6 +562,9 @@ class PollingWatcher:
 
         # SECURITY FIX (HIGH-001): Use threading.Event for thread-safe state
         self._running_event = threading.Event()
+        # SECURITY FIX (LOW-007): Separate stop event for interruptible sleep
+        # _stop_event is SET when we want to stop, allowing wait() to return early
+        self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._known_files: dict = {}  # path -> (mtime, size, content_hash)
 
@@ -589,6 +592,8 @@ class PollingWatcher:
 
         # Initial scan
         self._known_files = self._scan_directory()
+        # SECURITY FIX (LOW-007): Clear stop event on start
+        self._stop_event.clear()
         self._running = True
 
         self._thread = threading.Thread(target=self._poll_loop, daemon=True)
@@ -599,6 +604,8 @@ class PollingWatcher:
     def stop(self) -> None:
         """Stop polling."""
         self._running = False
+        # SECURITY FIX (LOW-007): Set stop event to wake up sleeping thread immediately
+        self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=self.interval + 1)
             self._thread = None
@@ -609,13 +616,17 @@ class PollingWatcher:
 
         Phase 6.2: Uses content hashing for small files to detect changes
         that occur within the same second (same mtime/size).
+
+        SECURITY FIX (LOW-007): Uses _stop_event.wait() for interruptible sleep.
+        When stop() is called, it sets the stop event, causing wait() to return
+        immediately instead of waiting for the full interval.
         """
         while self._running:
             try:
-                # SECURITY FIX (HIGH-010/011): Use Event.wait() for interruptible sleep
-                # This allows immediate response when stopped instead of waiting for timeout
-                self._running_event.wait(self.interval)
-                if not self._running:
+                # SECURITY FIX (LOW-007): Use stop event for interruptible sleep
+                # wait() returns True if event is set (stop requested), False on timeout
+                if self._stop_event.wait(self.interval):
+                    # Stop event was set, exit loop immediately
                     break
 
                 current_files = self._scan_directory()

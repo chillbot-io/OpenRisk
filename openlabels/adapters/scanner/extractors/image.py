@@ -90,68 +90,72 @@ class ImageExtractor(BaseExtractor):
             if ext in (".tiff", ".tif"):
                 return self._extract_multipage_tiff(content, filename, save_pages)
 
+            # SECURITY FIX (MED-006): Use try/finally to ensure PIL image is closed
             img = Image.open(io.BytesIO(content))
-            if img.mode not in ("RGB", "L"):
-                img = img.convert("RGB")
+            try:
+                if img.mode not in ("RGB", "L"):
+                    img = img.convert("RGB")
 
-            img_array = np.array(img)
-            temp_path = self._save_page_image(img, 0) if save_pages else None
-            ocr_result = self.ocr_engine.extract_with_coordinates(img)
+                img_array = np.array(img)
+                temp_path = self._save_page_image(img, 0) if save_pages else None
+                ocr_result = self.ocr_engine.extract_with_coordinates(img)
 
-            document_type = None
-            is_id_document = False
-            phi_fields = None
-            enhanced_text = None
-            enhancements = []
+                document_type = None
+                is_id_document = False
+                phi_fields = None
+                enhanced_text = None
+                enhancements = []
 
-            if self.enable_enhanced_processing and self.enhanced_processor and ocr_result.blocks:
-                try:
-                    enhanced_result = self.enhanced_processor.process(
-                        image=img_array,
-                        ocr_result=ocr_result,
-                        apply_document_cleaning=True,
-                    )
+                if self.enable_enhanced_processing and self.enhanced_processor and ocr_result.blocks:
+                    try:
+                        enhanced_result = self.enhanced_processor.process(
+                            image=img_array,
+                            ocr_result=ocr_result,
+                            apply_document_cleaning=True,
+                        )
 
-                    document_type = enhanced_result.document_type.name
-                    is_id_document = enhanced_result.is_id_card
-                    phi_fields = enhanced_result.phi_fields
-                    enhanced_text = enhanced_result.enhanced_text
-                    enhancements = enhanced_result.enhancements_applied
+                        document_type = enhanced_result.document_type.name
+                        is_id_document = enhanced_result.is_id_card
+                        phi_fields = enhanced_result.phi_fields
+                        enhanced_text = enhanced_result.enhanced_text
+                        enhancements = enhanced_result.enhancements_applied
 
-                    logger.info(
-                        f"Document intelligence: type={document_type}, "
-                        f"is_id={is_id_document}, "
-                        f"phi_fields={len(phi_fields) if phi_fields else 0}, "
-                        f"enhancements={enhancements}"
-                    )
+                        logger.info(
+                            f"Document intelligence: type={document_type}, "
+                            f"is_id={is_id_document}, "
+                            f"phi_fields={len(phi_fields) if phi_fields else 0}, "
+                            f"enhancements={enhancements}"
+                        )
 
-                except (ValueError, RuntimeError) as e:
-                    logger.warning(f"Enhanced OCR processing failed, using raw OCR: {e}")
-                    enhancements.append(f"enhanced_failed:{str(e)[:50]}")
+                    except (ValueError, RuntimeError) as e:
+                        logger.warning(f"Enhanced OCR processing failed, using raw OCR: {e}")
+                        enhancements.append(f"enhanced_failed:{str(e)[:50]}")
 
-            page_info = PageInfo(
-                page_num=0,
-                text=enhanced_text or ocr_result.full_text,
-                is_scanned=True,
-                ocr_result=ocr_result,
-                temp_image_path=temp_path,
-            )
+                page_info = PageInfo(
+                    page_num=0,
+                    text=enhanced_text or ocr_result.full_text,
+                    is_scanned=True,
+                    ocr_result=ocr_result,
+                    temp_image_path=temp_path,
+                )
 
-            return ExtractionResult(
-                text=ocr_result.full_text,
-                pages=1,
-                needs_ocr=True,
-                ocr_pages=[0],
-                confidence=ocr_result.confidence,
-                ocr_results=[ocr_result],
-                page_infos=[page_info],
-                temp_dir_path=str(self.temp_dir.path) if self.temp_dir and self.temp_dir.path else None,
-                document_type=document_type,
-                is_id_document=is_id_document,
-                phi_fields=phi_fields,
-                enhanced_text=enhanced_text,
-                enhancements_applied=enhancements,
-            )
+                return ExtractionResult(
+                    text=ocr_result.full_text,
+                    pages=1,
+                    needs_ocr=True,
+                    ocr_pages=[0],
+                    confidence=ocr_result.confidence,
+                    ocr_results=[ocr_result],
+                    page_infos=[page_info],
+                    temp_dir_path=str(self.temp_dir.path) if self.temp_dir and self.temp_dir.path else None,
+                    document_type=document_type,
+                    is_id_document=is_id_document,
+                    phi_fields=phi_fields,
+                    enhanced_text=enhanced_text,
+                    enhancements_applied=enhancements,
+                )
+            finally:
+                img.close()
 
         except (OSError, ValueError) as e:
             logger.error(f"Image extraction failed: {e}")
@@ -170,84 +174,87 @@ class ImageExtractor(BaseExtractor):
         from PIL import Image
         import numpy as np
 
+        # SECURITY FIX (MED-006): Use try/finally to ensure PIL image is closed
         img = Image.open(io.BytesIO(content))
-
-        pages_text = []
-        page_infos = []
-        ocr_results = []
-        confidences = []
-
-        document_type = None
-        is_id_document = False
-        phi_fields = None
-        enhanced_texts = []
-        enhancements = []
-
         try:
-            page_num = 0
-            while True:
-                if page_num >= MAX_DOCUMENT_PAGES:
-                    logger.warning(f"TIFF exceeds {MAX_DOCUMENT_PAGES} page limit, truncating")
-                    break
+            pages_text = []
+            page_infos = []
+            ocr_results = []
+            confidences = []
 
-                img.seek(page_num)
-                frame = img.convert("RGB")
-                frame_array = np.array(frame)
-                temp_path = self._save_page_image(frame, page_num) if save_pages else None
-                ocr_result = self.ocr_engine.extract_with_coordinates(frame)
-                enhanced_text = ocr_result.full_text
+            document_type = None
+            is_id_document = False
+            phi_fields = None
+            enhanced_texts = []
+            enhancements = []
 
-                if self.enable_enhanced_processing and self.enhanced_processor and ocr_result.blocks:
-                    try:
-                        enhanced_result = self.enhanced_processor.process(
-                            image=frame_array,
-                            ocr_result=ocr_result,
-                            apply_document_cleaning=True,
-                        )
+            try:
+                page_num = 0
+                while True:
+                    if page_num >= MAX_DOCUMENT_PAGES:
+                        logger.warning(f"TIFF exceeds {MAX_DOCUMENT_PAGES} page limit, truncating")
+                        break
 
-                        enhanced_text = enhanced_result.enhanced_text
+                    img.seek(page_num)
+                    frame = img.convert("RGB")
+                    frame_array = np.array(frame)
+                    temp_path = self._save_page_image(frame, page_num) if save_pages else None
+                    ocr_result = self.ocr_engine.extract_with_coordinates(frame)
+                    enhanced_text = ocr_result.full_text
 
-                        if page_num == 0:
-                            document_type = enhanced_result.document_type.name
-                            is_id_document = enhanced_result.is_id_card
-                            phi_fields = enhanced_result.phi_fields
-                            enhancements = enhanced_result.enhancements_applied
+                    if self.enable_enhanced_processing and self.enhanced_processor and ocr_result.blocks:
+                        try:
+                            enhanced_result = self.enhanced_processor.process(
+                                image=frame_array,
+                                ocr_result=ocr_result,
+                                apply_document_cleaning=True,
+                            )
 
-                    except (ValueError, RuntimeError) as e:
-                        logger.warning(f"Enhanced processing failed for page {page_num}: {e}")
+                            enhanced_text = enhanced_result.enhanced_text
 
-                pages_text.append(ocr_result.full_text)
-                enhanced_texts.append(enhanced_text)
-                ocr_results.append(ocr_result)
-                confidences.append(ocr_result.confidence)
+                            if page_num == 0:
+                                document_type = enhanced_result.document_type.name
+                                is_id_document = enhanced_result.is_id_card
+                                phi_fields = enhanced_result.phi_fields
+                                enhancements = enhanced_result.enhancements_applied
 
-                page_infos.append(PageInfo(
-                    page_num=page_num,
-                    text=enhanced_text,
-                    is_scanned=True,
-                    ocr_result=ocr_result,
-                    temp_image_path=temp_path,
-                ))
+                        except (ValueError, RuntimeError) as e:
+                            logger.warning(f"Enhanced processing failed for page {page_num}: {e}")
 
-                page_num += 1
+                    pages_text.append(ocr_result.full_text)
+                    enhanced_texts.append(enhanced_text)
+                    ocr_results.append(ocr_result)
+                    confidences.append(ocr_result.confidence)
 
-        except EOFError:
-            pass
+                    page_infos.append(PageInfo(
+                        page_num=page_num,
+                        text=enhanced_text,
+                        is_scanned=True,
+                        ocr_result=ocr_result,
+                        temp_image_path=temp_path,
+                    ))
 
-        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+                    page_num += 1
 
-        return ExtractionResult(
-            text="\n\n".join(pages_text),
-            pages=len(pages_text),
-            needs_ocr=True,
-            ocr_pages=list(range(len(pages_text))),
-            confidence=avg_confidence,
-            ocr_results=ocr_results,
-            page_infos=page_infos,
-            temp_dir_path=str(self.temp_dir.path) if self.temp_dir and self.temp_dir.path else None,
-            document_type=document_type,
-            is_id_document=is_id_document,
-            phi_fields=phi_fields,
-            enhanced_text="\n\n".join(enhanced_texts) if enhanced_texts else None,
-            enhancements_applied=enhancements,
-        )
+            except EOFError:
+                pass
+
+            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+
+            return ExtractionResult(
+                text="\n\n".join(pages_text),
+                pages=len(pages_text),
+                needs_ocr=True,
+                ocr_pages=list(range(len(pages_text))),
+                confidence=avg_confidence,
+                ocr_results=ocr_results,
+                page_infos=page_infos,
+                temp_dir_path=str(self.temp_dir.path) if self.temp_dir and self.temp_dir.path else None,
+                document_type=document_type,
+                is_id_document=is_id_document,
+                phi_fields=phi_fields,
+                enhanced_text="\n\n".join(enhanced_texts) if enhanced_texts else None,
+                enhancements_applied=enhancements,
+            )
+        finally:
+            img.close()

@@ -11,13 +11,40 @@ Phase 4 additions:
 - Issue 4.4: Cloud handlers moved from virtual.py globals
 - Issue 4.5: Safe detection slot with guaranteed cleanup
 
+SECURITY NOTE (LOW-008): Default Context Singleton Leakage
+
+    The default context (accessed via get_default_context() or implicitly via
+    Client()) is a PROCESS-WIDE SINGLETON. This can cause:
+
+    1. STATE LEAKAGE BETWEEN TESTS: Test A modifies context state, Test B sees
+       those changes. Use reset_default_context() in test teardown or create
+       explicit Context instances per test.
+
+    2. MULTI-TENANT ISOLATION ISSUES: In a multi-tenant application, different
+       tenants may see each other's cached data if using the default context.
+       Create explicit Context instances per tenant/request.
+
+    3. THREAD POOL SHARING: Detection thread pools are shared across all users
+       of the default context. One slow caller can impact others.
+
+    When to use DEFAULT context:
+    - Simple scripts and CLI tools
+    - Single-tenant applications
+    - Quick prototyping
+
+    When to use EXPLICIT contexts:
+    - Unit tests (one Context per test, or reset_default_context() in teardown)
+    - Multi-tenant applications (one Context per tenant/request)
+    - Long-running services (to control resource lifecycle)
+    - When isolation between components is required
+
 Usage:
     >>> from openlabels import Context, Client
     >>>
-    >>> # Default context (created automatically)
+    >>> # Default context (created automatically) - SHARES STATE!
     >>> client = Client()
     >>>
-    >>> # Explicit context (for testing or isolation)
+    >>> # Explicit context (for testing or isolation) - ISOLATED
     >>> ctx = Context()
     >>> client = Client(context=ctx)
     >>>
@@ -26,6 +53,15 @@ Usage:
     >>> ctx2 = Context()
     >>> client1 = Client(context=ctx1)
     >>> client2 = Client(context=ctx2)
+    >>>
+    >>> # Test isolation pattern
+    >>> def test_something():
+    ...     ctx = Context()  # Fresh context per test
+    ...     try:
+    ...         client = Client(context=ctx)
+    ...         # ... test code ...
+    ...     finally:
+    ...         ctx.close()
 """
 
 import atexit

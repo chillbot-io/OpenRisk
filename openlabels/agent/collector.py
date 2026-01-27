@@ -366,8 +366,46 @@ class FileCollector:
                 h.update(chunk)
         return h.hexdigest()
 
+    # SECURITY FIX (LOW-006): Maximum xattr name length to prevent abuse
+    MAX_XATTR_NAME_LENGTH = 256  # Linux limit is 255, macOS is similar
+    MAX_XATTR_VALUE_LENGTH = 65536  # 64KB - reasonable limit for metadata
+    MAX_XATTR_COUNT = 100  # Prevent collecting excessive attributes
+
+    def _validate_xattr_name(self, attr_name: str) -> bool:
+        """
+        Validate xattr attribute name (LOW-006).
+
+        Args:
+            attr_name: The attribute name to validate
+
+        Returns:
+            True if valid, False otherwise
+        """
+        if not attr_name or not isinstance(attr_name, str):
+            return False
+        # Check length
+        if len(attr_name) > self.MAX_XATTR_NAME_LENGTH:
+            return False
+        # Check for null bytes and control characters
+        if '\x00' in attr_name or any(ord(c) < 32 for c in attr_name):
+            return False
+        # Must start with valid namespace prefix on Linux/macOS
+        # user., security., system., trusted. (Linux)
+        # com. (macOS)
+        valid_prefixes = ('user.', 'security.', 'system.', 'trusted.', 'com.')
+        if not any(attr_name.startswith(p) for p in valid_prefixes):
+            # Allow unqualified names for compatibility but log
+            if '.' not in attr_name:
+                logger.debug(f"Xattr name without namespace prefix: {attr_name}")
+        return True
+
     def _collect_xattrs(self, path: Path) -> Dict[str, str]:
-        """Collect extended attributes."""
+        """
+        Collect extended attributes.
+
+        SECURITY FIX (LOW-006): Validates attribute names before reading
+        to prevent processing of potentially malicious xattr values.
+        """
         xattrs = {}
 
         if self._platform == "Windows":
@@ -376,13 +414,34 @@ class FileCollector:
 
         try:
             import xattr as xattr_module
+            attr_count = 0
             for attr_name in xattr_module.listxattr(str(path)):
+                # SECURITY FIX (LOW-006): Validate attribute name before reading
+                if not self._validate_xattr_name(attr_name):
+                    logger.warning(f"Skipping invalid xattr name on {path}: {attr_name!r}")
+                    continue
+
+                # SECURITY FIX (LOW-006): Limit number of attributes collected
+                if attr_count >= self.MAX_XATTR_COUNT:
+                    logger.warning(f"Reached max xattr count ({self.MAX_XATTR_COUNT}) for {path}")
+                    break
+
                 try:
                     value = xattr_module.getxattr(str(path), attr_name)
+
+                    # SECURITY FIX (LOW-006): Validate value length
+                    if len(value) > self.MAX_XATTR_VALUE_LENGTH:
+                        logger.warning(
+                            f"Skipping oversized xattr '{attr_name}' on {path}: "
+                            f"{len(value)} bytes (max {self.MAX_XATTR_VALUE_LENGTH})"
+                        )
+                        continue
+
                     try:
                         xattrs[attr_name] = value.decode('utf-8')
                     except UnicodeDecodeError:
                         xattrs[attr_name] = value.hex()
+                    attr_count += 1
                 except OSError as e:
                     logger.debug(f"Could not read xattr '{attr_name}' from {path}: {e}")
         except ImportError:
@@ -400,10 +459,26 @@ class FileCollector:
                     timeout=5,
                 )
                 if result.returncode == 0:
+                    attr_count = 0
                     for line in result.stdout.splitlines():
                         if '=' in line and not line.startswith('#'):
                             key, _, value = line.partition('=')
-                            xattrs[key.strip()] = value.strip().strip('"')
+                            key = key.strip()
+                            value = value.strip().strip('"')
+
+                            # SECURITY FIX (LOW-006): Validate from getfattr output too
+                            if not self._validate_xattr_name(key):
+                                logger.warning(f"Skipping invalid xattr name: {key!r}")
+                                continue
+                            if len(value) > self.MAX_XATTR_VALUE_LENGTH:
+                                logger.warning(f"Skipping oversized xattr value for {key}")
+                                continue
+                            if attr_count >= self.MAX_XATTR_COUNT:
+                                logger.warning(f"Reached max xattr count for {path}")
+                                break
+
+                            xattrs[key] = value
+                            attr_count += 1
             except (subprocess.TimeoutExpired, FileNotFoundError) as e:
                 logger.debug(f"getfattr fallback failed for {path}: {e}")
         except OSError as e:
