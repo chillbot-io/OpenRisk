@@ -173,10 +173,34 @@ class Condition:
         """
         Safely execute regex match with protection against ReDoS.
 
-        Limits pattern length and uses a simple approach to avoid catastrophic backtracking.
+        Uses multiple layers of protection:
+        1. Pattern length limit
+        2. Pattern complexity checks (nested quantifiers)
+        3. Text length limit for regex operations
+        4. Actual timeout enforcement (requires 'regex' module)
+
+        Args:
+            pattern: The regex pattern to match
+            text: The text to search in
+            timeout_ms: Timeout in milliseconds (enforced if regex module available)
+
+        Returns:
+            True if pattern matches, False otherwise (including on timeout)
         """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         MAX_PATTERN_LENGTH = 500
+        MAX_TEXT_LENGTH_FOR_REGEX = 1_000_000  # 1MB text limit for regex ops
+
         if len(pattern) > MAX_PATTERN_LENGTH:
+            logger.debug(f"Regex pattern rejected: exceeds {MAX_PATTERN_LENGTH} chars")
+            return False
+
+        # Limit text length to prevent slow regex on huge inputs
+        if len(text) > MAX_TEXT_LENGTH_FOR_REGEX:
+            logger.debug(f"Regex match skipped: text exceeds {MAX_TEXT_LENGTH_FOR_REGEX} chars")
             return False
 
         # Reject patterns with known ReDoS-prone constructs: nested quantifiers
@@ -186,12 +210,40 @@ class Condition:
         ]
         for dangerous in redos_patterns:
             if re.search(dangerous, pattern):
+                logger.debug(f"Regex pattern rejected: contains ReDoS-prone construct")
                 return False
 
+        # Try to use the 'regex' module for actual timeout support
         try:
-            return bool(re.search(pattern, text, re.IGNORECASE))
-        except re.error:
-            return False
+            import regex
+            try:
+                # regex module supports timeout parameter (in seconds)
+                result = regex.search(
+                    pattern, text,
+                    flags=regex.IGNORECASE,
+                    timeout=timeout_ms / 1000.0
+                )
+                return bool(result)
+            except regex.error as e:
+                logger.debug(f"Regex pattern error: {e}")
+                return False
+            except TimeoutError:
+                logger.warning(f"Regex match timed out after {timeout_ms}ms")
+                return False
+        except ImportError:
+            # Fall back to standard re module without timeout
+            # Log warning once per process
+            if not getattr(self, '_regex_warning_issued', False):
+                logger.warning(
+                    "ReDoS timeout protection degraded: 'regex' module not installed. "
+                    "Install with: pip install regex"
+                )
+                self._regex_warning_issued = True
+
+            try:
+                return bool(re.search(pattern, text, re.IGNORECASE))
+            except re.error:
+                return False
 
 
 @dataclass

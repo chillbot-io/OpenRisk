@@ -60,12 +60,23 @@ class Detector:
 
         Returns:
             DetectionResult containing all detected spans with metadata.
+
+        Raises:
+            ValueError: If text exceeds max_text_size limit.
         """
         from .pipeline.normalizer import normalize_text
         from .pipeline.merger import merge_spans
         from .pipeline.allowlist import apply_allowlist
 
         start_time = time.perf_counter()
+
+        # Check text size limit to prevent OOM from adversarial input
+        if text and len(text) > self.config.max_text_size:
+            raise ValueError(
+                f"Text input size ({len(text):,} bytes) exceeds maximum "
+                f"allowed size ({self.config.max_text_size:,} bytes). "
+                f"Configure max_text_size to increase the limit."
+            )
 
         if not text or not text.strip():
             return DetectionResult(
@@ -127,6 +138,10 @@ class Detector:
 
         Returns:
             DetectionResult containing detected spans and extracted text.
+
+        Raises:
+            FileNotFoundError: If file does not exist.
+            ValueError: If file size exceeds max_file_size limit.
         """
         from .extractors import extract_text
 
@@ -135,6 +150,15 @@ class Detector:
 
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
+
+        # Check file size BEFORE reading to prevent OOM
+        file_size = path.stat().st_size
+        if file_size > self.config.max_file_size:
+            raise ValueError(
+                f"File size ({file_size:,} bytes) exceeds maximum "
+                f"allowed size ({self.config.max_file_size:,} bytes): {path}. "
+                f"Configure max_file_size to increase the limit."
+            )
 
         # Read file and extract text
         content = path.read_bytes()
