@@ -28,10 +28,11 @@ import logging
 import threading
 import queue
 import time
+import hashlib
 from enum import Enum
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Callable, List
+from typing import Optional, Callable, List, Tuple
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,22 @@ class WatcherConfig:
     watch_deleted: bool = True
     watch_moved: bool = True
 
+    # Phase 6.1: Queue overflow callback
+    on_queue_full: Optional[Callable[[int], None]] = None
+    """
+    Callback when event queue overflows (Phase 6.1).
+
+    Called with the total number of dropped events. Use this for monitoring
+    and alerting when the watcher is falling behind.
+
+    Example:
+        def alert_on_overflow(dropped_count: int):
+            if dropped_count % 100 == 0:
+                send_alert(f"Watcher dropped {dropped_count} events")
+
+        config = WatcherConfig(on_queue_full=alert_on_overflow)
+    """
+
 
 class FileWatcher:
     """
@@ -141,6 +158,10 @@ class FileWatcher:
         self._event_queue: queue.Queue = queue.Queue(maxsize=self.config.max_queue_size)
         self._pending_events: dict = {}  # path -> (event, timestamp)
         self._lock = threading.Lock()
+
+        # Phase 6.1: Queue overflow tracking
+        self._dropped_events: int = 0
+        self._dropped_events_lock = threading.Lock()
 
         # Watchdog components
         self._observer: Optional[Observer] = None
@@ -235,11 +256,86 @@ class FileWatcher:
                 self.on_change(event)
             except Exception as e:
                 logger.error(f"Error in event callback: {e}")
+                # Phase 6.1: Track callback failures as dropped events
+                with self._dropped_events_lock:
+                    self._dropped_events += 1
+                    dropped_count = self._dropped_events
+
+                if dropped_count == 1 or dropped_count % 100 == 0:
+                    logger.error(
+                        f"Callback failures - dropped {dropped_count} events. "
+                        "Check callback implementation."
+                    )
+
+                if self.config.on_queue_full:
+                    try:
+                        self.config.on_queue_full(dropped_count)
+                    except Exception as callback_error:
+                        logger.error(f"Error in on_queue_full callback: {callback_error}")
 
     @property
     def is_running(self) -> bool:
         """Check if watcher is running."""
         return self._running
+
+    @property
+    def dropped_events(self) -> int:
+        """
+        Number of events dropped due to queue overflow (Phase 6.1).
+
+        Use this for monitoring. If this number is growing, the watcher
+        is falling behind and events are being lost.
+        """
+        with self._dropped_events_lock:
+            return self._dropped_events
+
+    def _enqueue_event(self, event: WatchEvent) -> bool:
+        """
+        Enqueue an event with overflow handling (Phase 6.1).
+
+        Args:
+            event: The event to enqueue
+
+        Returns:
+            True if event was queued, False if dropped due to overflow
+        """
+        try:
+            self._event_queue.put_nowait(event)
+            return True
+        except queue.Full:
+            with self._dropped_events_lock:
+                self._dropped_events += 1
+                dropped_count = self._dropped_events
+
+            # Log at first drop and every 100 drops
+            if dropped_count == 1 or dropped_count % 100 == 0:
+                logger.error(
+                    f"Event queue full - dropped {dropped_count} events. "
+                    "Processing may be falling behind."
+                )
+
+            # Call overflow callback if configured
+            if self.config.on_queue_full:
+                try:
+                    self.config.on_queue_full(dropped_count)
+                except Exception as e:
+                    logger.error(f"Error in on_queue_full callback: {e}")
+
+            return False
+
+    def reset_dropped_events(self) -> int:
+        """
+        Reset the dropped events counter and return the previous count.
+
+        Useful for periodic monitoring that processes and clears the counter.
+
+        Returns:
+            The number of dropped events before reset
+        """
+        with self._dropped_events_lock:
+            count = self._dropped_events
+            self._dropped_events = 0
+            return count
 
     def __enter__(self):
         self.start()
@@ -441,7 +537,13 @@ class PollingWatcher:
 
     Use this when watchdog is not available or on network filesystems
     where inotify/FSEvents don't work.
+
+    Phase 6.2: Uses content hashing for small files to detect changes
+    that occur within the same second (same mtime).
     """
+
+    # Phase 6.2: Default threshold for content hashing (1 MB)
+    DEFAULT_HASH_THRESHOLD = 1024 * 1024
 
     def __init__(
         self,
@@ -449,6 +551,8 @@ class PollingWatcher:
         on_change: Optional[Callable[[WatchEvent], None]] = None,
         interval: float = 5.0,
         recursive: bool = True,
+        hash_threshold: Optional[int] = None,
+        on_queue_full: Optional[Callable[[int], None]] = None,
     ):
         """
         Initialize polling watcher.
@@ -458,15 +562,24 @@ class PollingWatcher:
             on_change: Callback for changes
             interval: Polling interval in seconds
             recursive: Watch subdirectories
+            hash_threshold: Files smaller than this are content-hashed (Phase 6.2).
+                          Set to 0 to disable hashing, None for default (1MB).
+            on_queue_full: Callback when events are dropped (Phase 6.1)
         """
         self.path = Path(path).resolve()
         self.on_change = on_change
         self.interval = interval
         self.recursive = recursive
+        self.hash_threshold = hash_threshold if hash_threshold is not None else self.DEFAULT_HASH_THRESHOLD
+        self.on_queue_full = on_queue_full
 
         self._running = False
         self._thread: Optional[threading.Thread] = None
-        self._known_files: dict = {}  # path -> (mtime, size)
+        self._known_files: dict = {}  # path -> (mtime, size, content_hash)
+
+        # Phase 6.1: Dropped events tracking
+        self._dropped_events: int = 0
+        self._dropped_events_lock = threading.Lock()
 
     def start(self) -> None:
         """Start polling."""
@@ -490,21 +603,27 @@ class PollingWatcher:
             self._thread = None
 
     def _poll_loop(self) -> None:
-        """Main polling loop."""
+        """
+        Main polling loop.
+
+        Phase 6.2: Uses content hashing for small files to detect changes
+        that occur within the same second (same mtime/size).
+        """
         while self._running:
             try:
                 time.sleep(self.interval)
 
                 current_files = self._scan_directory()
 
-                # Find new files
-                for path, (mtime, size) in current_files.items():
+                # Find new and modified files (Phase 6.2: compare including content_hash)
+                for path, file_state in current_files.items():
                     if path not in self._known_files:
                         self._dispatch(WatchEvent(
                             event_type=EventType.CREATED,
                             path=path,
                         ))
-                    elif self._known_files[path] != (mtime, size):
+                    elif self._known_files[path] != file_state:
+                        # File state changed (mtime, size, or content_hash)
                         self._dispatch(WatchEvent(
                             event_type=EventType.MODIFIED,
                             path=path,
@@ -524,7 +643,16 @@ class PollingWatcher:
                 logger.error(f"Polling error: {e}")
 
     def _scan_directory(self) -> dict:
-        """Scan directory and return file info."""
+        """
+        Scan directory and return file info.
+
+        Phase 6.2: Includes content hash for small files to detect
+        changes that occur within the same second.
+
+        Returns:
+            Dict mapping path to (mtime, size, content_hash) tuple.
+            content_hash is None for files larger than hash_threshold.
+        """
         files = {}
         walker = self.path.rglob("*") if self.recursive else self.path.glob("*")
 
@@ -532,11 +660,48 @@ class PollingWatcher:
             if file_path.is_file():
                 try:
                     st = file_path.stat()
-                    files[str(file_path)] = (st.st_mtime, st.st_size)
+                    # Phase 6.2: Include content hash for small files
+                    if self.hash_threshold > 0 and st.st_size < self.hash_threshold:
+                        content_hash = self._quick_hash(file_path)
+                    else:
+                        content_hash = None
+                    files[str(file_path)] = (st.st_mtime, st.st_size, content_hash)
                 except OSError:
                     pass
 
         return files
+
+    def _quick_hash(self, path: Path, block_size: int = 65536) -> str:
+        """
+        Calculate a fast hash of a file (Phase 6.2).
+
+        Uses first and last blocks + size for fast comparison.
+        Not cryptographically secure, but good for change detection.
+
+        Args:
+            path: File to hash
+            block_size: Size of blocks to read (default 64KB)
+
+        Returns:
+            Hex digest string (32 chars)
+        """
+        try:
+            size = path.stat().st_size
+            hasher = hashlib.blake2b()
+            hasher.update(str(size).encode())
+
+            with open(path, 'rb') as f:
+                # Read first block
+                hasher.update(f.read(block_size))
+
+                # Read last block if file is large enough
+                if size > block_size * 2:
+                    f.seek(-block_size, 2)  # Seek from end
+                    hasher.update(f.read(block_size))
+
+            return hasher.hexdigest()[:32]
+        except OSError:
+            return ""
 
     def _dispatch(self, event: WatchEvent) -> None:
         """Dispatch event to callback."""
@@ -545,10 +710,51 @@ class PollingWatcher:
                 self.on_change(event)
             except Exception as e:
                 logger.error(f"Callback error: {e}")
+                # Phase 6.1: Track callback failures as dropped events
+                with self._dropped_events_lock:
+                    self._dropped_events += 1
+                    dropped_count = self._dropped_events
+
+                if dropped_count == 1 or dropped_count % 100 == 0:
+                    logger.error(
+                        f"Callback failures - dropped {dropped_count} events. "
+                        "Check callback implementation."
+                    )
+
+                if self.on_queue_full:
+                    try:
+                        self.on_queue_full(dropped_count)
+                    except Exception as callback_error:
+                        logger.error(f"Error in on_queue_full callback: {callback_error}")
 
     @property
     def is_running(self) -> bool:
         return self._running
+
+    @property
+    def dropped_events(self) -> int:
+        """
+        Number of events dropped due to callback failures (Phase 6.1).
+
+        Use this for monitoring. If this number is growing, there may be
+        issues with your callback implementation.
+        """
+        with self._dropped_events_lock:
+            return self._dropped_events
+
+    def reset_dropped_events(self) -> int:
+        """
+        Reset the dropped events counter and return the previous count.
+
+        Useful for periodic monitoring that processes and clears the counter.
+
+        Returns:
+            The number of dropped events before reset
+        """
+        with self._dropped_events_lock:
+            count = self._dropped_events
+            self._dropped_events = 0
+            return count
 
     def __enter__(self):
         self.start()
