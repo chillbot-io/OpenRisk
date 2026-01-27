@@ -419,13 +419,12 @@ class TestOrchestratorContextIntegration:
         """Orchestrator without Context uses legacy globals with warning."""
         from openlabels.adapters.scanner.detectors.orchestrator import (
             DetectorOrchestrator,
-            _DEPRECATED_GLOBALS_WARNING_ISSUED,
         )
         from openlabels.adapters.scanner.config import Config
-        import openlabels.adapters.scanner.detectors.orchestrator as orch
+        import openlabels.adapters.scanner.detectors.thread_pool as thread_pool
 
         # Reset warning flag
-        orch._DEPRECATED_GLOBALS_WARNING_ISSUED = False
+        thread_pool._DEPRECATED_GLOBALS_WARNING_ISSUED = False
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")

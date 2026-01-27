@@ -19,60 +19,40 @@ Phase 4 Changes:
     - Module-level globals are kept for backward compatibility but deprecated
     - Issue 4.5: Uses context.detection_slot() for safe semaphore handling
 
-SECURITY NOTE (LOW-005): Thread Timeout Limitations
-    Python threads cannot be forcibly killed - only cancelled gracefully via
-    Future.cancel(). When a detector times out:
-
-    1. If the thread hasn't started yet, it can be cancelled (good)
-    2. If the thread is running, cancel() has NO EFFECT (problematic)
-
-    Runaway threads (those that can't be cancelled) will continue executing
-    in the background, consuming CPU and memory. This is a fundamental Python
-    limitation, not a bug in this code.
-
-    Mitigations:
-    - We track runaway thread count via get_runaway_detection_count()
-    - Critical warnings are logged when runaway count exceeds threshold
-    - Use detect_with_metadata() to check metadata.detectors_timed_out
-    - For true isolation, consider process-based parallelism (multiprocessing)
-    - Monitor and restart long-running processes if runaway count grows
-
-    The timeout mechanism still provides value:
-    - Fast-responding detectors return results immediately
-    - Callers don't wait indefinitely for slow detectors
-    - Results are available even if some detectors hang
+For thread timeout limitations and mitigations, see thread_pool.py.
 """
 
-import atexit
-import threading
-import warnings
-from concurrent.futures import ThreadPoolExecutor, TimeoutError, Future
-from typing import List, Optional, Dict, Tuple, TYPE_CHECKING
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, Future
+from contextlib import contextmanager
+from typing import List, Optional, Dict, Tuple, TYPE_CHECKING
 
 from ..types import Span, Tier, CLINICAL_CONTEXT_TYPES
 from ..config import Config
-from ..constants import DETECTOR_TIMEOUT, MAX_DETECTOR_WORKERS
+from ..constants import DETECTOR_TIMEOUT
 
 if TYPE_CHECKING:
     from ....context import Context
 
-# Maximum concurrent detection requests (backpressure)
-# If exceeded, new requests will block until a slot is available
-# DEPRECATED: Use Context.max_concurrent_detections instead
-MAX_CONCURRENT_DETECTIONS = 10
+# Import from split modules
+from .metadata import (
+    DetectionMetadata,
+    DetectionQueueFullError,
+    DetectorFailureError,
+)
+from .thread_pool import (
+    get_detection_queue_depth,
+    get_runaway_detection_count,
+    track_runaway_detection,
+    detection_slot_legacy,
+    get_executor_legacy,
+    # Backward compatibility aliases
+    _track_runaway_detection,
+    _detection_slot_legacy,
+    _get_executor_legacy,
+)
 
-# Maximum queue depth before rejecting requests (prevents unbounded memory growth)
-# Set to 0 to disable queue depth limit (block indefinitely)
-# DEPRECATED: Use Context.max_queue_depth instead
-MAX_QUEUE_DEPTH = 50
-
-# Maximum runaway detections before logging critical warning (Phase 3, Issue 3.4)
-# Runaway detections are threads that timed out but couldn't be cancelled
-# DEPRECATED: Use Context.max_runaway_detections instead
-MAX_RUNAWAY_DETECTIONS = 5
-
-from dataclasses import dataclass, field as dataclass_field
+# Detector imports
 from .base import BaseDetector
 from .checksum import ChecksumDetector
 from .patterns import PatternDetector  # patterns/ module
@@ -89,6 +69,9 @@ from .government import GovernmentDetector
 from ..pipeline.merger import filter_tracking_numbers
 from ..pipeline.confidence import normalize_spans_confidence
 
+# Confidence constant for known entities
+from .constants import CONFIDENCE_VERY_HIGH
+
 # Context enhancement - optional
 ContextEnhancer = None
 create_enhancer = None
@@ -99,277 +82,6 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
-
-
-class DetectionQueueFullError(Exception):
-    """Raised when detection queue depth exceeds maximum.
-
-    This is a backpressure mechanism to prevent unbounded memory growth
-    under high load. Callers should either retry with exponential backoff
-    or return a 503 Service Unavailable response.
-    """
-    def __init__(self, queue_depth: int, max_depth: int):
-        self.queue_depth = queue_depth
-        self.max_depth = max_depth
-        super().__init__(
-            f"Detection queue full: {queue_depth} pending requests "
-            f"(max: {max_depth}). Try again later."
-        )
-
-
-class DetectorFailureError(Exception):
-    """
-    Raised when detector(s) fail in strict mode (LOW-004).
-
-    SECURITY FIX (LOW-004): By default, detector failures are logged but don't
-    fail the scan (tolerant mode). In strict mode, any detector failure raises
-    this exception to ensure complete coverage.
-
-    Use strict mode when:
-    - Complete detection coverage is required (compliance scanning)
-    - False negatives are more dangerous than performance impact
-    - Running in validation/testing mode
-
-    Attributes:
-        failed_detectors: List of detector names that failed
-        metadata: Full detection metadata for debugging
-    """
-    def __init__(self, failed_detectors: List[str], metadata: "DetectionMetadata"):
-        self.failed_detectors = failed_detectors
-        self.metadata = metadata
-        super().__init__(
-            f"Detector(s) failed in strict mode: {', '.join(failed_detectors)}. "
-            f"Detection results may be incomplete."
-        )
-
-
-# =============================================================================
-# MODULE-LEVEL GLOBALS (DEPRECATED - Phase 4.1)
-# =============================================================================
-# These globals are kept for backward compatibility but are deprecated.
-# For isolated operation, pass a Context to DetectorOrchestrator.
-# When a Context is provided, these globals are NOT used.
-
-# Module-level thread pool for reuse
-# Created lazily on first use, shared across all DetectorOrchestrator instances
-# DEPRECATED: Use Context.get_executor() instead
-_SHARED_EXECUTOR: Optional[ThreadPoolExecutor] = None
-
-# Backpressure semaphore - limits concurrent detect() calls
-# Prevents unbounded queue growth under high load
-# DEPRECATED: Use Context.detection_slot() instead
-_DETECTION_SEMAPHORE = threading.BoundedSemaphore(MAX_CONCURRENT_DETECTIONS)
-
-# Track queue depth for monitoring
-# DEPRECATED: Use Context.detection_slot() instead
-_QUEUE_DEPTH = 0
-_QUEUE_LOCK = threading.Lock()
-
-# Track runaway detections (Phase 3, Issue 3.4)
-# Threads that timed out but couldn't be cancelled.
-# NOTE: This counter only increases, never decreases. We cannot detect when
-# a runaway thread eventually terminates. The counter serves as a warning
-# signal - if it grows large, the process should be restarted.
-# DEPRECATED: Use Context.track_runaway_detection() instead
-_RUNAWAY_DETECTIONS = 0
-_RUNAWAY_LOCK = threading.Lock()
-
-# Flag to track if we've warned about using deprecated globals
-_DEPRECATED_GLOBALS_WARNING_ISSUED = False
-
-
-@dataclass
-class DetectionMetadata:
-    """
-    Metadata about the detection process (Phase 3: Error Observability).
-
-    Tracks:
-    - Which detectors succeeded
-    - Which detectors failed and why
-    - Whether results are degraded
-    - Warnings generated during detection
-
-    This enables callers to understand if results may be incomplete.
-    """
-    detectors_run: List[str] = dataclass_field(default_factory=list)
-    detectors_failed: List[str] = dataclass_field(default_factory=list)
-    detectors_timed_out: List[str] = dataclass_field(default_factory=list)
-    warnings: List[str] = dataclass_field(default_factory=list)
-    degraded: bool = False
-    all_detectors_failed: bool = False
-    structured_extractor_failed: bool = False
-    runaway_threads: int = 0
-
-    def add_failure(self, detector_name: str, error: str):
-        """Record a detector failure."""
-        self.detectors_failed.append(detector_name)
-        self.warnings.append(f"Detector {detector_name} failed: {error}")
-
-    def add_timeout(self, detector_name: str, timeout_seconds: float, cancelled: bool):
-        """Record a detector timeout."""
-        self.detectors_timed_out.append(detector_name)
-        status = "cancelled" if cancelled else "still running"
-        self.warnings.append(
-            f"Detector {detector_name} timed out after {timeout_seconds:.1f}s ({status})"
-        )
-
-    def add_success(self, detector_name: str):
-        """Record a successful detector run."""
-        self.detectors_run.append(detector_name)
-
-    def finalize(self):
-        """
-        Finalize metadata after all detectors have run.
-
-        Sets all_detectors_failed if no detectors succeeded.
-        """
-        total_attempted = len(self.detectors_run) + len(self.detectors_failed) + len(self.detectors_timed_out)
-        if total_attempted > 0 and len(self.detectors_run) == 0:
-            self.all_detectors_failed = True
-            self.warnings.append(
-                f"All {total_attempted} detectors failed - results unreliable"
-            )
-
-
-def get_detection_queue_depth() -> int:
-    """Get current number of pending detection requests."""
-    with _QUEUE_LOCK:
-        return _QUEUE_DEPTH
-
-
-def get_runaway_detection_count() -> int:
-    """
-    Get count of runaway detections (Phase 3, Issue 3.4).
-
-    Runaway detections are threads that timed out but could not be
-    cancelled. They continue running in the background, consuming
-    resources.
-    """
-    with _RUNAWAY_LOCK:
-        return _RUNAWAY_DETECTIONS
-
-
-def _track_runaway_detection(detector_name: str) -> int:
-    """
-    Track a runaway detection thread (Phase 3, Issue 3.4).
-
-    Called when a detector times out and cannot be cancelled.
-
-    Returns:
-        Current runaway detection count
-    """
-    global _RUNAWAY_DETECTIONS
-
-    with _RUNAWAY_LOCK:
-        _RUNAWAY_DETECTIONS += 1
-        count = _RUNAWAY_DETECTIONS
-
-    if count == 1:
-        logger.warning(
-            f"Detector {detector_name} timed out and could not be cancelled. "
-            "Thread still running in background."
-        )
-    elif count % 5 == 0 or count >= MAX_RUNAWAY_DETECTIONS:
-        logger.warning(
-            f"Runaway detection count: {count}. "
-            f"Detector {detector_name} is the latest."
-        )
-
-    if count >= MAX_RUNAWAY_DETECTIONS:
-        logger.critical(
-            f"CRITICAL: {count} runaway detections (max: {MAX_RUNAWAY_DETECTIONS}). "
-            "System may be under adversarial input attack or has a detector bug. "
-            "Consider restarting the process to reclaim resources."
-        )
-
-    return count
-
-
-from contextlib import contextmanager
-
-
-def _warn_deprecated_globals():
-    """Emit warning about using deprecated module-level globals."""
-    global _DEPRECATED_GLOBALS_WARNING_ISSUED
-    if not _DEPRECATED_GLOBALS_WARNING_ISSUED:
-        _DEPRECATED_GLOBALS_WARNING_ISSUED = True
-        warnings.warn(
-            "DetectorOrchestrator is using deprecated module-level globals for "
-            "resource management. For isolated operation, pass a Context instance "
-            "to the orchestrator. This will become an error in a future version.",
-            DeprecationWarning,
-            stacklevel=4,
-        )
-
-
-@contextmanager
-def _detection_slot_legacy():
-    """
-    DEPRECATED: Legacy context manager using module-level globals.
-
-    Use Context.detection_slot() instead for proper isolation.
-
-    Handles queue depth tracking and semaphore acquisition/release.
-    Raises DetectionQueueFullError if queue is at capacity.
-    """
-    global _QUEUE_DEPTH
-
-    _warn_deprecated_globals()
-
-    # Check queue depth and increment
-    with _QUEUE_LOCK:
-        if MAX_QUEUE_DEPTH > 0 and _QUEUE_DEPTH >= MAX_QUEUE_DEPTH:
-            raise DetectionQueueFullError(_QUEUE_DEPTH, MAX_QUEUE_DEPTH)
-        _QUEUE_DEPTH += 1
-        current_depth = _QUEUE_DEPTH
-
-    # Phase 4.5: Safer ordering - track acquired state
-    acquired = False
-    try:
-        _DETECTION_SEMAPHORE.acquire()
-        acquired = True
-        yield current_depth
-    finally:
-        if acquired:
-            _DETECTION_SEMAPHORE.release()
-        with _QUEUE_LOCK:
-            _QUEUE_DEPTH = max(0, _QUEUE_DEPTH - 1)
-
-
-# Backward compatibility alias
-_detection_slot = _detection_slot_legacy
-
-
-def _get_executor_legacy() -> ThreadPoolExecutor:
-    """
-    DEPRECATED: Get or create the shared thread pool using module-level globals.
-
-    Use Context.get_executor() instead for proper isolation.
-    """
-    global _SHARED_EXECUTOR
-
-    _warn_deprecated_globals()
-
-    if _SHARED_EXECUTOR is None:
-        _SHARED_EXECUTOR = ThreadPoolExecutor(
-            max_workers=MAX_DETECTOR_WORKERS,
-            thread_name_prefix="detector_"
-        )
-        # Ensure cleanup on process exit
-        atexit.register(_shutdown_executor)
-    return _SHARED_EXECUTOR
-
-
-# Backward compatibility alias
-_get_executor = _get_executor_legacy
-
-
-def _shutdown_executor():
-    """Shutdown the shared executor on process exit."""
-    global _SHARED_EXECUTOR
-    if _SHARED_EXECUTOR is not None:
-        _SHARED_EXECUTOR.shutdown(wait=False)
-        _SHARED_EXECUTOR = None
 
 
 class DetectorOrchestrator:
@@ -436,23 +148,23 @@ class DetectorOrchestrator:
 
         # Initialize core detectors (unless disabled)
         self._detectors: List[BaseDetector] = []
-        
+
         if "checksum" not in disabled:
             self._detectors.append(ChecksumDetector())
         if "patterns" not in disabled:
             self._detectors.append(PatternDetector())
         if "additional_patterns" not in disabled:
             self._detectors.append(AdditionalPatternDetector())
-        
+
         # Add domain-specific detectors based on configuration
         if enable_secrets and "secrets" not in disabled:
             self._detectors.append(SecretsDetector())
             logger.info("SecretsDetector enabled (API keys, tokens, credentials)")
-        
+
         if enable_financial and "financial" not in disabled:
             self._detectors.append(FinancialDetector())
             logger.info("FinancialDetector enabled (CUSIP, ISIN, crypto)")
-        
+
         if enable_government and "government" not in disabled:
             self._detectors.append(GovernmentDetector())
             logger.info("GovernmentDetector enabled (classification, contracts)")
@@ -461,7 +173,7 @@ class DetectorOrchestrator:
         if "dictionaries" not in disabled and self.config.dictionaries_dir.exists():
             self._detectors.append(DictionaryDetector(self.config.dictionaries_dir))
             logger.info(f"DictionaryDetector enabled ({self.config.dictionaries_dir})")
-        
+
         # Cache available detectors (checked once at init, not on every detect call)
         # Detector availability doesn't change after loading
         self._available_detectors: List[BaseDetector] = [
@@ -511,7 +223,7 @@ class DetectorOrchestrator:
         """
         if self._context is not None:
             return self._context.get_executor()
-        return _get_executor_legacy()
+        return get_executor_legacy()
 
     @contextmanager
     def _get_detection_slot(self):
@@ -528,7 +240,7 @@ class DetectorOrchestrator:
             with self._context.detection_slot() as depth:
                 yield depth
         else:
-            with _detection_slot_legacy() as depth:
+            with detection_slot_legacy() as depth:
                 yield depth
 
     def _track_runaway(self, detector_name: str) -> int:
@@ -543,7 +255,7 @@ class DetectorOrchestrator:
         """
         if self._context is not None:
             return self._context.track_runaway_detection(detector_name)
-        return _track_runaway_detection(detector_name)
+        return track_runaway_detection(detector_name)
 
     # SECURITY FIX (HIGH-009): Maximum matches per search term to prevent memory exhaustion
     MAX_MATCHES_PER_TERM = 100
@@ -779,7 +491,7 @@ class DetectorOrchestrator:
             other_spans = self._detect_parallel(processed_text, available, timeout, metadata)
         else:
             other_spans = self._detect_sequential(processed_text, available, timeout, metadata)
-        
+
         # Step 3: Map pattern/ML spans back to original text coordinates
         if char_map and processed_text != text:
             mapped_spans = []
@@ -789,7 +501,7 @@ class DetectorOrchestrator:
                 )
                 # Get actual text at original position
                 orig_text = text[orig_start:orig_end] if orig_start < len(text) else span.text
-                
+
                 mapped_spans.append(Span(
                     start=orig_start,
                     end=orig_end,
@@ -861,9 +573,9 @@ class DetectorOrchestrator:
     def detect_with_processed_text(self, text: str, timeout: float = DETECTOR_TIMEOUT) -> Tuple[List[Span], str]:
         """
         Run all detectors and return both spans and processed text.
-        
+
         Useful when caller needs the OCR-corrected text.
-        
+
         Returns:
             Tuple of (spans, processed_text)
         """
@@ -872,7 +584,7 @@ class DetectorOrchestrator:
 
         all_spans: List[Span] = []
         processed_text = text
-        
+
         # Step 1: Run structured extractor first
         if self.enable_structured:
             try:
@@ -949,7 +661,7 @@ class DetectorOrchestrator:
         self,
         text: str,
         detectors: List[BaseDetector],
-        timeout: float,
+        timeout: float = DETECTOR_TIMEOUT,
         metadata: Optional[DetectionMetadata] = None,
     ) -> List[Span]:
         """
@@ -1011,7 +723,7 @@ class DetectorOrchestrator:
         self,
         text: str,
         detectors: List[BaseDetector],
-        timeout: float,
+        timeout: float = DETECTOR_TIMEOUT,
         metadata: Optional[DetectionMetadata] = None,
     ) -> List[Span]:
         """
@@ -1122,3 +834,19 @@ def detect_all(
         enable_government=enable_government,
     )
     return orchestrator.detect(text)
+
+
+# Re-export for backward compatibility
+__all__ = [
+    # Main class
+    'DetectorOrchestrator',
+    # Convenience function
+    'detect_all',
+    # Metadata and exceptions (from metadata.py)
+    'DetectionMetadata',
+    'DetectionQueueFullError',
+    'DetectorFailureError',
+    # Thread pool utilities (from thread_pool.py)
+    'get_detection_queue_depth',
+    'get_runaway_detection_count',
+]

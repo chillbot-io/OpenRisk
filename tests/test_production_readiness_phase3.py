@@ -206,12 +206,12 @@ class TestRunawayThreadTracking:
 
     def test_track_runaway_increments_count(self):
         """Tracking runaway detection increments count."""
-        from openlabels.adapters.scanner.detectors.orchestrator import (
-            _track_runaway_detection,
+        from openlabels.adapters.scanner.detectors.thread_pool import (
+            track_runaway_detection as _track_runaway_detection,
             get_runaway_detection_count,
             _RUNAWAY_LOCK,
         )
-        import openlabels.adapters.scanner.detectors.orchestrator as orch
+        import openlabels.adapters.scanner.detectors.thread_pool as orch
 
         # Get initial count
         initial = get_runaway_detection_count()
