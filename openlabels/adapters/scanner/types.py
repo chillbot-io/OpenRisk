@@ -266,11 +266,32 @@ class Span:
 
 @dataclass
 class DetectionResult:
-    """Result of scanning content for PII/PHI."""
+    """
+    Result of scanning content for PII/PHI.
+
+    Includes information about detector execution status to enable
+    callers to understand if results may be incomplete or degraded.
+
+    Attributes:
+        text: The scanned text
+        spans: Detected PII/PHI spans
+        processing_time_ms: Time taken for detection
+        detectors_used: Names of detectors that ran successfully
+        detectors_failed: Names of detectors that failed (Issue 3.3)
+        warnings: Warning messages from detection pipeline (Issue 3.2)
+        degraded: True if results may have reduced accuracy (Issue 3.2)
+        all_detectors_failed: True if no detectors succeeded (Issue 3.3)
+    """
     text: str
     spans: List[Span]
     processing_time_ms: float
     detectors_used: List[str] = field(default_factory=list)
+
+    # Phase 3 additions: Error visibility and observability
+    detectors_failed: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    degraded: bool = False
+    all_detectors_failed: bool = False
 
     @property
     def entity_counts(self) -> Dict[str, int]:
@@ -285,19 +306,45 @@ class DetectionResult:
         """Check if any PII/PHI was detected."""
         return len(self.spans) > 0
 
+    @property
+    def is_reliable(self) -> bool:
+        """
+        Check if detection results are reliable.
+
+        Returns False if:
+        - All detectors failed
+        - Detection is in degraded mode
+        """
+        return not self.all_detectors_failed and not self.degraded
+
     def __repr__(self) -> str:
+        status = ""
+        if self.all_detectors_failed:
+            status = ", ALL_FAILED"
+        elif self.degraded:
+            status = ", DEGRADED"
         return (
             f"DetectionResult(spans={len(self.spans)}, "
             f"entities={self.entity_counts}, "
-            f"processing_time_ms={self.processing_time_ms:.2f})"
+            f"processing_time_ms={self.processing_time_ms:.2f}{status})"
         )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        result = {
             "text": self.text,
             "spans": [s.to_dict() for s in self.spans],
             "entity_counts": self.entity_counts,
             "processing_time_ms": self.processing_time_ms,
             "detectors_used": self.detectors_used,
         }
+        # Include failure info only if there are issues
+        if self.detectors_failed:
+            result["detectors_failed"] = self.detectors_failed
+        if self.warnings:
+            result["warnings"] = self.warnings
+        if self.degraded:
+            result["degraded"] = self.degraded
+        if self.all_detectors_failed:
+            result["all_detectors_failed"] = self.all_detectors_failed
+        return result

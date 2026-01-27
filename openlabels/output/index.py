@@ -10,6 +10,11 @@ The index stores the full LabelSet data for files using virtual labels
 - Querying by entity type, risk score, etc.
 
 Per the spec, the index MUST NOT leave the user's tenant.
+
+Phase 3 additions:
+- Structured exception types from core/exceptions.py
+- Optional error propagation via raise_on_error parameter
+- Callers can now distinguish "not found" from "database error"
 """
 
 import json
@@ -17,23 +22,18 @@ import sqlite3
 import logging
 import threading
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from contextlib import contextmanager
 
 from ..core.labels import LabelSet, VirtualLabelPointer
+from ..core.exceptions import (
+    DatabaseError,
+    CorruptedDataError,
+    NotFoundError,
+)
 
 logger = logging.getLogger(__name__)
-
-
-class DatabaseError(Exception):
-    """Database operation failed - may be retryable."""
-    pass
-
-
-class CorruptedDataError(Exception):
-    """Data in database is corrupted or invalid."""
-    pass
 
 
 def _validate_label_json(json_str: str) -> dict:
@@ -331,6 +331,7 @@ class LabelIndex:
         self,
         label_id: str,
         content_hash: Optional[str] = None,
+        raise_on_error: bool = False,
     ) -> Optional[LabelSet]:
         """
         Retrieve a LabelSet from the index.
@@ -338,9 +339,17 @@ class LabelIndex:
         Args:
             label_id: The label ID to look up
             content_hash: Optional specific version. If None, returns latest.
+            raise_on_error: If True, raise exceptions instead of returning None.
+                           Allows callers to distinguish "not found" from
+                           "database error" (Phase 3, Issue 3.1).
 
         Returns:
-            LabelSet if found, None otherwise
+            LabelSet if found, None otherwise (when raise_on_error=False)
+
+        Raises:
+            NotFoundError: Label not found (when raise_on_error=True)
+            DatabaseError: Database operation failed (when raise_on_error=True)
+            CorruptedDataError: Stored data is corrupted (when raise_on_error=True)
         """
         try:
             with self._get_connection() as conn:
@@ -363,24 +372,47 @@ class LabelIndex:
                     # Validate JSON before deserializing
                     validated_data = _validate_label_json(row['labels_json'])
                     return LabelSet.from_dict(validated_data)
+
+                # Not found
+                if raise_on_error:
+                    raise NotFoundError(
+                        f"Label not found: {label_id}",
+                        resource_type="label",
+                        resource_id=label_id,
+                    )
                 return None
 
         except CorruptedDataError as e:
             logger.error(f"Corrupted label data for {label_id}: {e}")
+            if raise_on_error:
+                raise
             return None
         except sqlite3.Error as e:
             logger.error(f"Failed to get label: {e}")
+            if raise_on_error:
+                raise DatabaseError(f"Failed to get label: {e}", operation="get") from e
             return None
 
-    def get_by_path(self, file_path: str) -> Optional[LabelSet]:
+    def get_by_path(
+        self,
+        file_path: str,
+        raise_on_error: bool = False,
+    ) -> Optional[LabelSet]:
         """
         Retrieve a LabelSet by file path.
 
         Args:
             file_path: The file path to look up
+            raise_on_error: If True, raise exceptions instead of returning None
+                           (Phase 3, Issue 3.1).
 
         Returns:
-            LabelSet if found, None otherwise
+            LabelSet if found, None otherwise (when raise_on_error=False)
+
+        Raises:
+            NotFoundError: Label not found for path (when raise_on_error=True)
+            DatabaseError: Database operation failed (when raise_on_error=True)
+            CorruptedDataError: Stored data is corrupted (when raise_on_error=True)
         """
         try:
             with self._get_connection() as conn:
@@ -396,13 +428,25 @@ class LabelIndex:
                     # Validate JSON before deserializing
                     validated_data = _validate_label_json(row['labels_json'])
                     return LabelSet.from_dict(validated_data)
+
+                # Not found
+                if raise_on_error:
+                    raise NotFoundError(
+                        f"No label found for path: {file_path}",
+                        resource_type="file_label",
+                        resource_id=file_path,
+                    )
                 return None
 
         except CorruptedDataError as e:
             logger.error(f"Corrupted label data for path {file_path}: {e}")
+            if raise_on_error:
+                raise
             return None
         except sqlite3.Error as e:
             logger.error(f"Failed to get label by path: {e}")
+            if raise_on_error:
+                raise DatabaseError(f"Failed to get label by path: {e}", operation="get_by_path") from e
             return None
 
     def resolve(self, pointer: VirtualLabelPointer) -> Optional[LabelSet]:

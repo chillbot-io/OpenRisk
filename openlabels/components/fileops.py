@@ -2,18 +2,25 @@
 OpenLabels FileOps Component.
 
 Handles file operations: quarantine, move, delete.
+
+Phase 3 additions:
+- Structured error classification (FileErrorType)
+- Error retryability information
+- Detailed error reporting
 """
 
+import errno
 import json
 import logging
 import os
 import shutil
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 
 from ..core.types import FilterCriteria, OperationResult
+from ..core.exceptions import FileErrorType, FileOperationError
 from ..utils.hashing import quick_hash
 
 if TYPE_CHECKING:
@@ -28,13 +35,57 @@ QUARANTINE_MANIFEST = ".quarantine_manifest.json"
 
 
 @dataclass
+class FileError:
+    """
+    Structured file operation error (Phase 3, Issue 3.5).
+
+    Provides classification and retryability information for errors.
+    """
+    path: str
+    error_type: FileErrorType
+    message: str
+    retryable: bool
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "path": self.path,
+            "error_type": self.error_type.value,
+            "message": self.message,
+            "retryable": self.retryable,
+        }
+
+    @classmethod
+    def from_exception(cls, e: Exception, path: str) -> "FileError":
+        """Create FileError from a standard exception."""
+        file_op_error = FileOperationError.from_exception(e, path)
+        return cls(
+            path=path,
+            error_type=file_op_error.error_type,
+            message=file_op_error.message,
+            retryable=file_op_error.retryable,
+        )
+
+
+@dataclass
 class QuarantineResult:
     """Result of a quarantine operation."""
     moved_count: int
     error_count: int
     moved_files: List[Dict[str, Any]]
-    errors: List[Dict[str, str]]
+    errors: List[Dict[str, Any]]  # Changed from List[Dict[str, str]] for structured errors
     destination: str
+
+    # Phase 3: Error classification summary
+    retryable_errors: int = 0
+    permanent_errors: int = 0
+
+    def __post_init__(self):
+        """Calculate error classification counts."""
+        self.retryable_errors = sum(
+            1 for e in self.errors if e.get("retryable", False)
+        )
+        self.permanent_errors = self.error_count - self.retryable_errors
 
 
 @dataclass
@@ -43,7 +94,18 @@ class DeleteResult:
     deleted_count: int
     error_count: int
     deleted_files: List[str]
-    errors: List[Dict[str, str]]
+    errors: List[Dict[str, Any]]  # Changed from List[Dict[str, str]] for structured errors
+
+    # Phase 3: Error classification summary
+    retryable_errors: int = 0
+    permanent_errors: int = 0
+
+    def __post_init__(self):
+        """Calculate error classification counts."""
+        self.retryable_errors = sum(
+            1 for e in self.errors if e.get("retryable", False)
+        )
+        self.permanent_errors = self.error_count - self.retryable_errors
 
 
 class FileOps:
@@ -108,7 +170,7 @@ class FileOps:
         source: Path,
         dest: Path,
         manifest_path: Path,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, Optional[FileError]]:
         """
         Perform idempotent file move operation.
 
@@ -119,7 +181,9 @@ class FileOps:
         - Dest exists with different content (error)
 
         Returns:
-            Tuple of (success, error_message)
+            Tuple of (success, FileError or None)
+
+        Phase 3 (Issue 3.5): Returns structured FileError instead of string.
         """
         source_exists = source.exists()
         dest_exists = dest.exists()
@@ -130,13 +194,23 @@ class FileOps:
             dest_hash = quick_hash(dest)
             # If we can't hash either file, we can't compare - treat as error
             if source_hash is None or dest_hash is None:
-                return False, f"Cannot verify content: unable to hash files"
+                return False, FileError(
+                    path=str(source),
+                    error_type=FileErrorType.UNKNOWN,
+                    message="Cannot verify content: unable to hash files",
+                    retryable=True,  # May work after temporary issue resolves
+                )
             if source_hash == dest_hash:
                 # Same file, skip (idempotent success)
                 logger.debug(f"Skipping {source}: already at destination with same content")
                 return True, None
             else:
-                return False, f"Different file already exists at {dest}"
+                return False, FileError(
+                    path=str(source),
+                    error_type=FileErrorType.ALREADY_EXISTS,
+                    message=f"Different file already exists at {dest}",
+                    retryable=False,
+                )
 
         # Case 2: Only dest exists - check manifest
         if not source_exists and dest_exists:
@@ -146,15 +220,30 @@ class FileOps:
                 logger.debug(f"Skipping {source}: found in manifest as processed")
                 return True, None
             # Source missing unexpectedly
-            return False, f"Source missing and not in manifest: {source}"
+            return False, FileError(
+                path=str(source),
+                error_type=FileErrorType.NOT_FOUND,
+                message=f"Source missing and not in manifest: {source}",
+                retryable=False,
+            )
 
         # Case 3: Source missing, dest missing - check manifest
         if not source_exists and not dest_exists:
             manifest = self._load_manifest(manifest_path)
             if str(source) in manifest.get("processed", {}):
                 # Dest may have been moved/deleted since
-                return False, f"Previously processed but destination missing: {dest}"
-            return False, f"Source not found: {source}"
+                return False, FileError(
+                    path=str(source),
+                    error_type=FileErrorType.NOT_FOUND,
+                    message=f"Previously processed but destination missing: {dest}",
+                    retryable=False,
+                )
+            return False, FileError(
+                path=str(source),
+                error_type=FileErrorType.NOT_FOUND,
+                message=f"Source not found: {source}",
+                retryable=False,
+            )
 
         # Case 4: Normal case - source exists, dest doesn't
         try:
@@ -172,7 +261,8 @@ class FileOps:
 
             return True, None
         except OSError as e:
-            return False, str(e)
+            # Classify the OS error (Phase 3, Issue 3.5)
+            return False, FileError.from_exception(e, str(source))
 
     def quarantine(
         self,
@@ -216,7 +306,13 @@ class FileOps:
             filter_expr=filter_expr,
         ):
             if result.error:
-                errors.append({"path": result.path, "error": result.error})
+                # Scan errors are not file operation errors
+                errors.append({
+                    "path": result.path,
+                    "error_type": FileErrorType.UNKNOWN.value,
+                    "message": result.error,
+                    "retryable": False,
+                })
                 continue
 
             try:
@@ -236,7 +332,7 @@ class FileOps:
                 })
             else:
                 manifest_path = destination / QUARANTINE_MANIFEST
-                success, error = self._idempotent_move(
+                success, file_error = self._idempotent_move(
                     Path(result.path), dest_path, manifest_path
                 )
                 if success:
@@ -247,7 +343,16 @@ class FileOps:
                         "tier": result.tier,
                     })
                 else:
-                    errors.append({"path": result.path, "error": error or "Unknown error"})
+                    # Use structured error (Phase 3, Issue 3.5)
+                    if file_error:
+                        errors.append(file_error.to_dict())
+                    else:
+                        errors.append({
+                            "path": result.path,
+                            "error_type": FileErrorType.UNKNOWN.value,
+                            "message": "Unknown error",
+                            "retryable": False,
+                        })
 
         return QuarantineResult(
             moved_count=len(moved_files),
@@ -270,7 +375,9 @@ class FileOps:
             destination: Destination path
 
         Returns:
-            OperationResult indicating success or failure
+            OperationResult indicating success or failure.
+            Error is a string for backward compatibility, but metadata
+            contains structured error info (Phase 3, Issue 3.5).
         """
         source = Path(source)
         destination = Path(destination)
@@ -282,6 +389,10 @@ class FileOps:
                     operation="move",
                     source_path=str(source),
                     error=f"Source not found: {source}",
+                    metadata={
+                        "error_type": FileErrorType.NOT_FOUND.value,
+                        "retryable": False,
+                    },
                 )
 
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -295,11 +406,17 @@ class FileOps:
             )
 
         except OSError as e:
+            # Classify the error (Phase 3, Issue 3.5)
+            file_error = FileError.from_exception(e, str(source))
             return OperationResult(
                 success=False,
                 operation="move",
                 source_path=str(source),
                 error=str(e),
+                metadata={
+                    "error_type": file_error.error_type.value,
+                    "retryable": file_error.retryable,
+                },
             )
 
     def delete(
@@ -336,7 +453,7 @@ class FileOps:
             logger.warning("Delete operation requires confirmation")
 
         deleted_files: List[str] = []
-        errors: List[Dict[str, str]] = []
+        errors: List[Dict[str, Any]] = []
 
         # Single file
         if path.is_file():
@@ -356,11 +473,13 @@ class FileOps:
                     errors=[],
                 )
             except OSError as e:
+                # Classify the error (Phase 3, Issue 3.5)
+                file_error = FileError.from_exception(e, str(path))
                 return DeleteResult(
                     deleted_count=0,
                     error_count=1,
                     deleted_files=[],
-                    errors=[{"path": str(path), "error": str(e)}],
+                    errors=[file_error.to_dict()],
                 )
 
         # Directory
@@ -371,7 +490,13 @@ class FileOps:
             filter_expr=filter_expr,
         ):
             if result.error:
-                errors.append({"path": result.path, "error": result.error})
+                # Scan errors
+                errors.append({
+                    "path": result.path,
+                    "error_type": FileErrorType.UNKNOWN.value,
+                    "message": result.error,
+                    "retryable": False,
+                })
                 continue
 
             if dry_run:
@@ -381,7 +506,9 @@ class FileOps:
                     Path(result.path).unlink()
                     deleted_files.append(result.path)
                 except OSError as e:
-                    errors.append({"path": result.path, "error": str(e)})
+                    # Classify the error (Phase 3, Issue 3.5)
+                    file_error = FileError.from_exception(e, result.path)
+                    errors.append(file_error.to_dict())
 
         return DeleteResult(
             deleted_count=len(deleted_files),
