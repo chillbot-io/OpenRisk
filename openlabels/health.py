@@ -450,9 +450,9 @@ class HealthChecker:
     def _check_audit_log(self) -> CheckResult:
         """Check audit log path is writable."""
         try:
-            from openlabels.logging_config import DEFAULT_AUDIT_LOG_PATH
+            from openlabels.logging_config import DEFAULT_AUDIT_LOG
 
-            audit_path = Path(DEFAULT_AUDIT_LOG_PATH)
+            audit_path = Path(DEFAULT_AUDIT_LOG)
             audit_dir = audit_path.parent
 
             # Create directory if needed
