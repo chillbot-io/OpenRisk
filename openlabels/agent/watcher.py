@@ -154,12 +154,11 @@ class FileWatcher:
         self.on_change = on_change
         self.config = config or WatcherConfig()
 
-        # Event queue and debouncing
-        self._event_queue: queue.Queue = queue.Queue(maxsize=self.config.max_queue_size)
+        # Debouncing state
         self._pending_events: dict = {}  # path -> (event, timestamp)
         self._lock = threading.Lock()
 
-        # Phase 6.1: Queue overflow tracking
+        # Phase 6.1: Dropped events tracking (callback failures)
         self._dropped_events: int = 0
         self._dropped_events_lock = threading.Lock()
 
@@ -281,47 +280,13 @@ class FileWatcher:
     @property
     def dropped_events(self) -> int:
         """
-        Number of events dropped due to queue overflow (Phase 6.1).
+        Number of events dropped due to callback failures (Phase 6.1).
 
-        Use this for monitoring. If this number is growing, the watcher
-        is falling behind and events are being lost.
+        Use this for monitoring. If this number is growing, the event
+        callback may be failing and events are being lost.
         """
         with self._dropped_events_lock:
             return self._dropped_events
-
-    def _enqueue_event(self, event: WatchEvent) -> bool:
-        """
-        Enqueue an event with overflow handling (Phase 6.1).
-
-        Args:
-            event: The event to enqueue
-
-        Returns:
-            True if event was queued, False if dropped due to overflow
-        """
-        try:
-            self._event_queue.put_nowait(event)
-            return True
-        except queue.Full:
-            with self._dropped_events_lock:
-                self._dropped_events += 1
-                dropped_count = self._dropped_events
-
-            # Log at first drop and every 100 drops
-            if dropped_count == 1 or dropped_count % 100 == 0:
-                logger.error(
-                    f"Event queue full - dropped {dropped_count} events. "
-                    "Processing may be falling behind."
-                )
-
-            # Call overflow callback if configured
-            if self.config.on_queue_full:
-                try:
-                    self.config.on_queue_full(dropped_count)
-                except Exception as e:
-                    logger.error(f"Error in on_queue_full callback: {e}")
-
-            return False
 
     def reset_dropped_events(self) -> int:
         """
