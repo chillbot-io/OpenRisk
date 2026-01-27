@@ -13,10 +13,13 @@ This module provides a unified interface for reading/writing embedded labels
 across all supported file types.
 """
 
+import logging
 from pathlib import Path
 from typing import Optional, Union
 
 from ...core.labels import LabelSet
+
+logger = logging.getLogger(__name__)
 
 # Import base class and constants
 from .base import (
@@ -78,9 +81,6 @@ def write_embedded_label(
         >>> write_embedded_label("document.pdf", label_set)
         True
     """
-    import logging
-    logger = logging.getLogger(__name__)
-
     path = Path(path)
     writer = get_writer(path)
     if writer is None:

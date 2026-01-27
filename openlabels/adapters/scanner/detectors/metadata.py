@@ -9,10 +9,7 @@ These are separated from orchestrator.py for cleaner imports and testing.
 """
 
 from dataclasses import dataclass, field as dataclass_field
-from typing import List, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass  # Forward references if needed
+from typing import List
 
 
 class DetectionQueueFullError(Exception):
