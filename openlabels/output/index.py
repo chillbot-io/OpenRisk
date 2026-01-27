@@ -36,33 +36,6 @@ class CorruptedDataError(Exception):
     pass
 
 
-# JSON Schema for LabelSet validation
-LABEL_SET_SCHEMA = {
-    "type": "object",
-    "required": ["labelID", "content_hash", "labels", "source"],
-    "properties": {
-        "labelID": {"type": "string", "minLength": 1},
-        "content_hash": {"type": "string", "minLength": 1},
-        "source": {"type": "string"},
-        "created_at": {"type": "string"},
-        "labels": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                    "type": {"type": "string"},
-                    "count": {"type": "integer", "minimum": 0},
-                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "source": {"type": "string"},
-                    "spans": {"type": "array"},
-                }
-            }
-        }
-    }
-}
-
-
 def _validate_label_json(json_str: str) -> dict:
     """
     Validate and parse label JSON data.

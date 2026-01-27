@@ -4,15 +4,17 @@ OpenLabels FileOps Component.
 Handles file operations: quarantine, move, delete.
 """
 
-import hashlib
 import json
 import logging
+import os
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 
 from ..core.types import FilterCriteria, OperationResult
+from ..utils.hashing import quick_hash
 
 if TYPE_CHECKING:
     from ..context import Context
@@ -68,27 +70,6 @@ class FileOps:
         self._ctx = context
         self._scanner = scanner
 
-    def _quick_hash(self, path: Path, block_size: int = 65536) -> str:
-        """
-        Compute a quick hash of a file using first/last blocks + size.
-
-        This is faster than full file hash while still detecting changes.
-        """
-        try:
-            size = path.stat().st_size
-            hasher = hashlib.blake2b()
-            hasher.update(str(size).encode())
-
-            with open(path, 'rb') as f:
-                hasher.update(f.read(block_size))
-                if size > block_size * 2:
-                    f.seek(-block_size, 2)
-                    hasher.update(f.read(block_size))
-
-            return hasher.hexdigest()[:32]
-        except OSError:
-            return ""
-
     def _load_manifest(self, manifest_path: Path) -> Dict[str, Any]:
         """Load quarantine manifest file."""
         if manifest_path.exists():
@@ -100,10 +81,25 @@ class FileOps:
         return {"processed": {}}
 
     def _save_manifest(self, manifest_path: Path, manifest: Dict[str, Any]) -> None:
-        """Save quarantine manifest file."""
+        """Save quarantine manifest file atomically."""
         try:
-            with open(manifest_path, 'w') as f:
-                json.dump(manifest, f)
+            # Write to temp file then rename for atomic update
+            fd, tmp_path = tempfile.mkstemp(
+                dir=manifest_path.parent,
+                prefix='.manifest_',
+                suffix='.tmp'
+            )
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(manifest, f)
+                os.replace(tmp_path, manifest_path)
+            except Exception:
+                # Clean up temp file on error
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
         except OSError as e:
             logger.warning(f"Failed to save quarantine manifest: {e}")
 
@@ -130,8 +126,11 @@ class FileOps:
 
         # Case 1: Both exist - verify content
         if source_exists and dest_exists:
-            source_hash = self._quick_hash(source)
-            dest_hash = self._quick_hash(dest)
+            source_hash = quick_hash(source)
+            dest_hash = quick_hash(dest)
+            # If we can't hash either file, we can't compare - treat as error
+            if source_hash is None or dest_hash is None:
+                return False, f"Cannot verify content: unable to hash files"
             if source_hash == dest_hash:
                 # Same file, skip (idempotent success)
                 logger.debug(f"Skipping {source}: already at destination with same content")
@@ -160,10 +159,10 @@ class FileOps:
         # Case 4: Normal case - source exists, dest doesn't
         try:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            source_hash = self._quick_hash(source)
+            source_hash = quick_hash(source)
             shutil.move(str(source), str(dest))
 
-            # Record in manifest
+            # Record in manifest (hash may be None if file was unreadable)
             manifest = self._load_manifest(manifest_path)
             manifest.setdefault("processed", {})[str(source)] = {
                 "dest": str(dest),

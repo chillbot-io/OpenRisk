@@ -5,7 +5,6 @@ Handles file and directory scanning operations.
 """
 
 import fnmatch
-import hashlib
 import logging
 import time
 from datetime import datetime
@@ -15,6 +14,7 @@ from typing import Callable, Iterator, Optional, Union, TYPE_CHECKING
 from ..core.scorer import score as score_entities
 from ..core.types import ScanResult, FilterCriteria, TreeNode
 from ..cli.filter import Filter, parse_filter
+from ..utils.hashing import quick_hash
 
 if TYPE_CHECKING:
     from ..context import Context
@@ -55,35 +55,6 @@ class Scanner:
     @property
     def default_exposure(self) -> str:
         return self._ctx.default_exposure
-
-    def _quick_hash(self, path: Path, block_size: int = 65536) -> str:
-        """
-        Compute a quick hash of a file using first/last blocks + size.
-
-        This is faster than a full file hash while still detecting most changes.
-        Used to detect file modifications during scanning.
-
-        Args:
-            path: Path to the file
-            block_size: Size of blocks to read from start/end
-
-        Returns:
-            Hex digest string (32 chars)
-        """
-        try:
-            size = path.stat().st_size
-            hasher = hashlib.blake2b()
-            hasher.update(str(size).encode())
-
-            with open(path, 'rb') as f:
-                hasher.update(f.read(block_size))
-                if size > block_size * 2:
-                    f.seek(-block_size, 2)
-                    hasher.update(f.read(block_size))
-
-            return hasher.hexdigest()[:32]
-        except OSError:
-            return ""
 
     def scan(
         self,
@@ -233,7 +204,7 @@ class Scanner:
 
         try:
             # Capture hash before detection to detect concurrent modification
-            pre_hash = self._quick_hash(path)
+            pre_hash = quick_hash(path)
             pre_stat = path.stat()
 
             detection_result = detect_file(path)
@@ -247,10 +218,11 @@ class Scanner:
             )
 
             # Verify file unchanged after detection
-            post_hash = self._quick_hash(path)
+            post_hash = quick_hash(path)
             post_stat = path.stat()
 
-            if pre_hash != post_hash:
+            # If either hash failed, skip modification check (file may be locked)
+            if pre_hash is not None and post_hash is not None and pre_hash != post_hash:
                 raise FileModifiedError(
                     f"File modified during scan: {path} "
                     f"(hash changed from {pre_hash[:8]}... to {post_hash[:8]}...)"
