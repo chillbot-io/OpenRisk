@@ -652,19 +652,56 @@ class LabelIndex:
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
+import warnings
+
 _default_index: Optional[LabelIndex] = None
 _default_index_lock = threading.Lock()
+_default_index_warning_issued = False
 
 
-def get_default_index() -> LabelIndex:
-    """Get the default label index singleton (thread-safe)."""
-    global _default_index
+def get_default_index(warn: bool = True) -> LabelIndex:
+    """
+    Get the default label index singleton (thread-safe).
+
+    WARNING: Default index shares state across all callers (Phase 4.2).
+    For isolated operation, create explicit LabelIndex instances.
+
+    Args:
+        warn: If True, emit a warning about shared state (default True).
+              Set to False to suppress warning (e.g., in internal code).
+
+    Returns:
+        The default shared LabelIndex instance
+    """
+    global _default_index, _default_index_warning_issued
+
+    # Phase 4.2: Warn about shared state (once per process)
+    if warn and not _default_index_warning_issued:
+        with _default_index_lock:
+            if not _default_index_warning_issued:
+                warnings.warn(
+                    "Using default index shares state across all callers. "
+                    "For isolated operation, create explicit LabelIndex instances. "
+                    "Suppress this warning with get_default_index(warn=False).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                _default_index_warning_issued = True
+
     if _default_index is None:
         with _default_index_lock:
             # Double-check inside lock
             if _default_index is None:
                 _default_index = LabelIndex()
     return _default_index
+
+
+def reset_default_index() -> None:
+    """Reset the default index (mainly for testing)."""
+    global _default_index, _default_index_warning_issued
+    with _default_index_lock:
+        _default_index = None
+        _default_index_warning_issued = False
 
 
 def store_label(

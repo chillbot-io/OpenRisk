@@ -1185,11 +1185,11 @@ Use this checklist to track remediation progress:
 - [x] 3.5 Classify file operation errors
 
 ### Phase 4: State Isolation & Context
-- [ ] 4.1 Move orchestrator globals to Context
-- [ ] 4.2 Add warnings for default singletons
-- [ ] 4.3 Fix atexit handler leakage
-- [ ] 4.4 Move cloud handlers to Context
-- [ ] 4.5 Fix detection queue counter leak
+- [x] 4.1 Move orchestrator globals to Context
+- [x] 4.2 Add warnings for default singletons
+- [x] 4.3 Fix atexit handler leakage
+- [x] 4.4 Move cloud handlers to Context
+- [x] 4.5 Fix detection queue counter leak
 
 ### Phase 5: Contract Consistency
 - [ ] 5.1 Centralize entity type normalization
