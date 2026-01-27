@@ -19,6 +19,7 @@ from collections import Counter
 
 from openlabels import Client
 from openlabels.cli.commands.scan import scan_directory, scan_file, ScanResult
+from openlabels.core.scorer import TIER_THRESHOLDS
 
 
 def generate_summary(results: List[ScanResult]) -> Dict[str, Any]:
@@ -38,12 +39,18 @@ def generate_summary(results: List[ScanResult]) -> Dict[str, Any]:
         for etype, count in r.entities.items():
             entity_counts[etype] += count
 
+    # Use actual tier thresholds from scorer for consistent display
+    crit = TIER_THRESHOLDS['critical']
+    high = TIER_THRESHOLDS['high']
+    med = TIER_THRESHOLDS['medium']
+    low = TIER_THRESHOLDS['low']
+
     score_dist = {
-        "critical (90-100)": sum(1 for r in results if r.score >= 90),
-        "high (70-89)": sum(1 for r in results if 70 <= r.score < 90),
-        "medium (50-69)": sum(1 for r in results if 50 <= r.score < 70),
-        "low (25-49)": sum(1 for r in results if 25 <= r.score < 50),
-        "minimal (0-24)": sum(1 for r in results if r.score < 25),
+        f"critical ({crit}-100)": sum(1 for r in results if r.score >= crit),
+        f"high ({high}-{crit-1})": sum(1 for r in results if high <= r.score < crit),
+        f"medium ({med}-{high-1})": sum(1 for r in results if med <= r.score < high),
+        f"low ({low}-{med-1})": sum(1 for r in results if low <= r.score < med),
+        f"minimal (0-{low-1})": sum(1 for r in results if r.score < low),
     }
 
     return {
@@ -108,6 +115,19 @@ def results_to_html(results: List[ScanResult], summary: Dict[str, Any]) -> str:
         "LOW": "#28a745",
         "MINIMAL": "#6c757d",
     }
+
+    # Build tier distribution bars dynamically
+    tier_bar_colors = ["#dc3545", "#fd7e14", "#ffc107", "#28a745", "#6c757d"]
+    tier_bar_styles = ["", "", "color: #333;", "", ""]
+    score_dist = summary.get('score_distribution', {})
+    tier_bars = []
+    for i, (label, count) in enumerate(score_dist.items()):
+        color = tier_bar_colors[i] if i < len(tier_bar_colors) else "#6c757d"
+        style = tier_bar_styles[i] if i < len(tier_bar_styles) else ""
+        tier_name = label.split()[0].capitalize()
+        tier_bars.append(
+            f'<div class="tier-bar" style="background: {color};{style}">{tier_name}: {count}</div>'
+        )
 
     def get_color(tier: str) -> str:
         return tier_colors.get(tier.upper(), "#6c757d")
@@ -214,11 +234,7 @@ def results_to_html(results: List[ScanResult], summary: Dict[str, Any]) -> str:
 
     <h2>Risk Distribution</h2>
     <div class="tier-chart">
-        <div class="tier-bar" style="background: #dc3545;">Critical: {summary['score_distribution'].get('critical (90-100)', 0)}</div>
-        <div class="tier-bar" style="background: #fd7e14;">High: {summary['score_distribution'].get('high (70-89)', 0)}</div>
-        <div class="tier-bar" style="background: #ffc107; color: #333;">Medium: {summary['score_distribution'].get('medium (50-69)', 0)}</div>
-        <div class="tier-bar" style="background: #28a745;">Low: {summary['score_distribution'].get('low (25-49)', 0)}</div>
-        <div class="tier-bar" style="background: #6c757d;">Minimal: {summary['score_distribution'].get('minimal (0-24)', 0)}</div>
+        {"".join(tier_bars)}
     </div>
 
     <h2>Top Entity Types</h2>

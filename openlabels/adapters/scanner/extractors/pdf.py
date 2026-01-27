@@ -36,7 +36,7 @@ class PDFExtractor(BaseExtractor):
             try:
                 from ..enhanced_ocr import EnhancedOCRProcessor
                 self._enhanced_processor = EnhancedOCRProcessor()
-            except Exception as e:
+            except (ImportError, OSError, ValueError) as e:
                 logger.warning(f"Could not initialize EnhancedOCRProcessor: {e}")
                 self.enable_enhanced_processing = False
         return self._enhanced_processor
@@ -138,7 +138,7 @@ class PDFExtractor(BaseExtractor):
                                         f"phi_fields={len(phi_fields) if phi_fields else 0}"
                                     )
 
-                            except Exception as e:
+                            except (ValueError, RuntimeError) as e:
                                 logger.warning(f"Enhanced processing failed for page {i+1}: {e}")
 
                         pages_text.append(ocr_result.full_text)
@@ -155,7 +155,7 @@ class PDFExtractor(BaseExtractor):
                             temp_image_path=temp_path,
                         ))
 
-                    except Exception as e:
+                    except (OSError, ValueError) as e:
                         logger.warning(f"OCR failed for page {i+1}: {e}")
                         pages_text.append("")
                         enhanced_texts.append("")

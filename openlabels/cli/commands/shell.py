@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional, List
 
 from openlabels import Client
+from openlabels.cli import MAX_PREVIEW_RESULTS
 from openlabels.cli.commands.find import find_matching
 from openlabels.cli.commands.scan import ScanResult
 
@@ -115,14 +116,14 @@ class OpenLabelsShell:
                 return
 
             print(f"\nFound {len(results)} files:\n")
-            for r in results[:20]:
+            for r in results[:MAX_PREVIEW_RESULTS]:
                 entities = ", ".join(f"{k}({v})" for k, v in r.entities.items()) if r.entities else "none"
                 print(f"  {r.score:3d} {r.tier:8s} {r.path}")
                 if r.entities:
                     print(f"      entities: {entities}")
 
-            if len(results) > 20:
-                print(f"\n  ... and {len(results) - 20} more")
+            if len(results) > MAX_PREVIEW_RESULTS:
+                print(f"\n  ... and {len(results) - MAX_PREVIEW_RESULTS} more")
 
         except Exception as e:
             print(f"Error: {e}")

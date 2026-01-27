@@ -132,7 +132,7 @@ class FileOps:
                         "score": result.score,
                         "tier": result.tier,
                     })
-                except Exception as e:
+                except OSError as e:
                     errors.append({"path": result.path, "error": str(e)})
 
         return QuarantineResult(
@@ -180,7 +180,7 @@ class FileOps:
                 dest_path=str(destination),
             )
 
-        except Exception as e:
+        except OSError as e:
             return OperationResult(
                 success=False,
                 operation="move",
@@ -241,7 +241,7 @@ class FileOps:
                     deleted_files=[str(path)],
                     errors=[],
                 )
-            except Exception as e:
+            except OSError as e:
                 return DeleteResult(
                     deleted_count=0,
                     error_count=1,
@@ -266,7 +266,7 @@ class FileOps:
                 try:
                     Path(result.path).unlink()
                     deleted_files.append(result.path)
-                except Exception as e:
+                except OSError as e:
                     errors.append({"path": result.path, "error": str(e)})
 
         return DeleteResult(

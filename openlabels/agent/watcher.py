@@ -225,7 +225,7 @@ class FileWatcher:
                 for event in to_process:
                     self._dispatch_event(event)
 
-            except Exception as e:
+            except (KeyError, RuntimeError, TypeError) as e:
                 logger.error(f"Error processing events: {e}")
 
     def _dispatch_event(self, event: WatchEvent) -> None:
@@ -520,7 +520,7 @@ class PollingWatcher:
 
                 self._known_files = current_files
 
-            except Exception as e:
+            except OSError as e:
                 logger.error(f"Polling error: {e}")
 
     def _scan_directory(self) -> dict:

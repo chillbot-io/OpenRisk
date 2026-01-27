@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 
 from openlabels import Client
+from openlabels.cli import MAX_PREVIEW_RESULTS
 
 logger = logging.getLogger(__name__)
 from openlabels.cli.commands.find import find_matching
@@ -50,10 +51,10 @@ def cmd_tag(args) -> int:
     # Dry run - just show what would be tagged
     if args.dry_run:
         print(f"Would tag {len(matches)} files:\n")
-        for result in matches[:20]:
+        for result in matches[:MAX_PREVIEW_RESULTS]:
             print(f"  {result.path} (score: {result.score})")
-        if len(matches) > 20:
-            print(f"  ... and {len(matches) - 20} more")
+        if len(matches) > MAX_PREVIEW_RESULTS:
+            print(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
         return 0
 
     # Tag files
@@ -102,7 +103,7 @@ def cmd_tag(args) -> int:
                 tag_type = "embedded" if embedded else "virtual"
                 print(f"[{i+1}/{len(matches)}] Tagged ({tag_type}): {result.path}")
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             errors.append({"path": result.path, "error": str(e)})
             if not args.quiet:
                 print(f"[{i+1}/{len(matches)}] Error: {result.path} - {e}", file=sys.stderr)

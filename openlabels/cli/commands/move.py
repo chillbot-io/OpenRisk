@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from openlabels import Client
+from openlabels.cli import MAX_PREVIEW_RESULTS
 from openlabels.cli.commands.find import find_matching
 from openlabels.cli.commands.quarantine import move_file
 
@@ -53,10 +54,10 @@ def cmd_move(args) -> int:
     # Dry run - just show what would be moved
     if args.dry_run:
         print(f"Would move {len(matches)} files to {dest}:\n")
-        for result in matches[:20]:
+        for result in matches[:MAX_PREVIEW_RESULTS]:
             print(f"  {result.path} (score: {result.score})")
-        if len(matches) > 20:
-            print(f"  ... and {len(matches) - 20} more")
+        if len(matches) > MAX_PREVIEW_RESULTS:
+            print(f"  ... and {len(matches) - MAX_PREVIEW_RESULTS} more")
         return 0
 
     # Confirm if not forced
@@ -97,7 +98,7 @@ def cmd_move(args) -> int:
             if not args.quiet:
                 print(f"[{i+1}/{len(matches)}] Moved: {result.path} -> {new_path}")
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             errors.append({"path": result.path, "error": str(e)})
             if not args.quiet:
                 print(f"[{i+1}/{len(matches)}] Error: {result.path} - {e}", file=sys.stderr)
