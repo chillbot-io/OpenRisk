@@ -101,13 +101,21 @@ class LabelIndex:
     - label_objects: Core identity (labelID, tenant, created_at)
     - label_versions: Version history (content_hash, labels, risk_score)
 
+    Features thread-local connection pooling for efficient reuse of SQLite
+    connections within the same thread, reducing connection overhead.
+
     Usage:
         >>> index = LabelIndex()
         >>> index.store(label_set)
         >>> retrieved = index.get(label_id, content_hash)
+        >>> index.close()  # Optional: explicitly close connections
     """
 
     SCHEMA_VERSION = 1
+
+    # Thread-local storage for connection pooling
+    # Each thread gets its own connection to avoid SQLite threading issues
+    _thread_local = threading.local()
 
     def __init__(
         self,
@@ -123,7 +131,8 @@ class LabelIndex:
         """
         self.db_path = Path(db_path) if db_path else DEFAULT_INDEX_PATH
         self.tenant_id = tenant_id
-        self._connection: Optional[sqlite3.Connection] = None
+        self._lock = threading.Lock()
+        self._closed = False
 
         # Ensure directory exists
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,15 +200,103 @@ class LabelIndex:
             )
             conn.commit()
 
+    def _get_thread_connection(self) -> sqlite3.Connection:
+        """
+        Get or create a thread-local database connection.
+
+        Uses thread-local storage to reuse connections within the same thread,
+        reducing connection overhead. Each thread gets its own connection to
+        avoid SQLite threading issues.
+
+        Returns:
+            sqlite3.Connection for the current thread
+        """
+        # Use db_path as key to support multiple LabelIndex instances
+        conn_key = f"conn_{self.db_path}"
+
+        conn = getattr(self._thread_local, conn_key, None)
+
+        if conn is None:
+            conn = sqlite3.connect(
+                str(self.db_path),
+                check_same_thread=False,  # We handle thread safety via thread-local
+                timeout=30.0,  # Wait up to 30s for locks
+            )
+            conn.row_factory = sqlite3.Row
+            # Enable WAL mode for better concurrent access
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            setattr(self._thread_local, conn_key, conn)
+            logger.debug(f"Created new connection for thread {threading.current_thread().name}")
+
+        return conn
+
     @contextmanager
     def _get_connection(self):
-        """Get database connection with context management."""
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row
+        """
+        Get database connection with context management.
+
+        Uses thread-local connection pooling for efficiency.
+        Connection is NOT closed after use - it's reused for subsequent operations.
+        """
+        if self._closed:
+            raise DatabaseError("LabelIndex has been closed")
+
+        conn = self._get_thread_connection()
         try:
             yield conn
-        finally:
-            conn.close()
+        except sqlite3.Error as e:
+            # On database error, close and remove the connection so next call gets fresh one
+            conn_key = f"conn_{self.db_path}"
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+            try:
+                delattr(self._thread_local, conn_key)
+            except AttributeError:
+                pass
+            raise DatabaseError(f"Database error: {e}") from e
+
+    def close(self):
+        """
+        Close all thread-local connections.
+
+        Should be called when the LabelIndex is no longer needed to release
+        database resources. Safe to call multiple times.
+        """
+        with self._lock:
+            self._closed = True
+
+        # Close connection for current thread
+        conn_key = f"conn_{self.db_path}"
+        conn = getattr(self._thread_local, conn_key, None)
+        if conn is not None:
+            try:
+                conn.close()
+                logger.debug(f"Closed connection for thread {threading.current_thread().name}")
+            except sqlite3.Error as e:
+                logger.warning(f"Error closing connection: {e}")
+            try:
+                delattr(self._thread_local, conn_key)
+            except AttributeError:
+                pass
+
+    def __del__(self):
+        """Cleanup on garbage collection."""
+        try:
+            self.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - closes connections."""
+        self.close()
+        return False
 
     @contextmanager
     def _transaction(self, conn):
