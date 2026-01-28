@@ -12,6 +12,7 @@ __all__ = [
     "OCR_READY_TIMEOUT",
     "THREAD_JOIN_TIMEOUT",
     "SUBPROCESS_TIMEOUT",
+    "DATABASE_LOCK_TIMEOUT",
     # Retry/resilience
     "DEFAULT_MAX_RETRIES",
     "DEFAULT_RETRY_BASE_DELAY",
@@ -68,6 +69,7 @@ DETECTOR_TIMEOUT = 120.0
 OCR_READY_TIMEOUT = 30.0
 THREAD_JOIN_TIMEOUT = 5.0  # For thread.join() calls
 SUBPROCESS_TIMEOUT = 5.0  # For subprocess calls
+DATABASE_LOCK_TIMEOUT = 30.0  # SQLite lock wait timeout
 
 # --- RETRY/RESILIENCE ---
 DEFAULT_MAX_RETRIES = 3

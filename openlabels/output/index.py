@@ -27,7 +27,7 @@ from datetime import datetime
 from contextlib import contextmanager
 
 from ..core.labels import LabelSet, VirtualLabelPointer
-from ..adapters.scanner.constants import DEFAULT_QUERY_LIMIT, DEFAULT_BATCH_SIZE
+from ..adapters.scanner.constants import DEFAULT_QUERY_LIMIT, DEFAULT_BATCH_SIZE, DATABASE_LOCK_TIMEOUT
 from ..core.exceptions import (
     DatabaseError,
     CorruptedDataError,
@@ -221,7 +221,7 @@ class LabelIndex:
             conn = sqlite3.connect(
                 str(self.db_path),
                 check_same_thread=False,  # We handle thread safety via thread-local
-                timeout=30.0,  # Wait up to 30s for locks
+                timeout=DATABASE_LOCK_TIMEOUT,
             )
             conn.row_factory = sqlite3.Row
             # Enable WAL mode for better concurrent access
