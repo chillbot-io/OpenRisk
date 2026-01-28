@@ -286,8 +286,11 @@ class LabelIndex:
         """Cleanup on garbage collection."""
         try:
             self.close()
-        except Exception:
-            pass  # Ignore errors during cleanup
+        except Exception as e:
+            # Can't reliably use logger in __del__ (may be garbage collected)
+            # Print to stderr so cleanup failures are visible
+            import sys
+            print(f"LabelIndex cleanup warning: {e}", file=sys.stderr)
 
     def __enter__(self):
         """Context manager entry."""
@@ -323,14 +326,15 @@ class LabelIndex:
         except sqlite3.Error as e:
             try:
                 conn.rollback()
-            except sqlite3.Error:
-                pass  # Rollback failed, but we'll raise the original error
+            except sqlite3.Error as rollback_err:
+                # Log rollback failure - important for debugging connection issues
+                logger.warning(f"Transaction rollback also failed: {rollback_err}")
             raise DatabaseError(f"Transaction failed: {e}") from e
         except Exception:
             try:
                 conn.rollback()
-            except sqlite3.Error:
-                pass
+            except sqlite3.Error as rollback_err:
+                logger.warning(f"Transaction rollback failed: {rollback_err}")
             raise
 
     def store(
