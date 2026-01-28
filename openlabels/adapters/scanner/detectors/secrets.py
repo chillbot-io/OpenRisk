@@ -35,6 +35,7 @@ Entity Types:
 
 import base64
 import binascii
+import logging
 import re
 from typing import List, Tuple
 
@@ -49,6 +50,8 @@ from .constants import (
     CONFIDENCE_VERY_HIGH,
     CONFIDENCE_WEAK,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Pattern definitions: (regex, entity_type, confidence, group_index, flags)
@@ -324,27 +327,51 @@ class SecretsDetector(BasePatternDetector):
         """Return secrets patterns."""
         return SECRETS_PATTERNS
 
+    def detect(self, text: str) -> List[Span]:
+        """Detect secrets in text with logging."""
+        spans = super().detect(text)
+
+        if spans:
+            # Summarize by entity type
+            type_counts = {}
+            for span in spans:
+                type_counts[span.entity_type] = type_counts.get(span.entity_type, 0) + 1
+            logger.info(f"SecretsDetector found {len(spans)} secrets: {type_counts}")
+
+            # Log high-severity findings at DEBUG level (don't log actual values)
+            high_severity = ['AWS_ACCESS_KEY', 'AWS_SECRET_KEY', 'PRIVATE_KEY', 'DATABASE_URL', 'PASSWORD']
+            for span in spans:
+                if span.entity_type in high_severity:
+                    logger.debug(f"High-severity secret detected: {span.entity_type} at position {span.start}-{span.end}")
+
+        return spans
+
     def _validate_match(self, entity_type: str, value: str) -> bool:
         """Validate matched values, especially JWTs."""
         if entity_type == 'JWT':
-            return self._validate_jwt(value)
+            is_valid = self._validate_jwt(value)
+            if not is_valid:
+                logger.debug(f"JWT validation failed for token at matched position")
+            return is_valid
         return True
 
     def _validate_jwt(self, token: str) -> bool:
         """Basic JWT structure validation."""
         parts = token.split('.')
         if len(parts) != 3:
+            logger.debug(f"JWT validation failed: expected 3 parts, got {len(parts)}")
             return False
 
         # Each part should be base64url
-        for part in parts[:2]:  # Header and payload
+        for i, part in enumerate(parts[:2]):  # Header and payload
             try:
                 # Add padding if needed
                 padded = part + '=' * (4 - len(part) % 4)
                 # Replace URL-safe chars
                 padded = padded.replace('-', '+').replace('_', '/')
                 base64.b64decode(padded)
-            except (ValueError, binascii.Error):
+            except (ValueError, binascii.Error) as e:
+                logger.debug(f"JWT validation failed: part {i} is not valid base64url: {e}")
                 return False
 
         return True

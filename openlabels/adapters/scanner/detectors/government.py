@@ -18,6 +18,7 @@ Entity Types:
 - EAR_MARKING: Export Administration Regulations
 """
 
+import logging
 import re
 from typing import List, Tuple
 
@@ -33,6 +34,8 @@ from .constants import (
     CONFIDENCE_RELIABLE,
     CONFIDENCE_VERY_HIGH,
 )
+
+logger = logging.getLogger(__name__)
 
 
 GOVERNMENT_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
@@ -233,6 +236,25 @@ class GovernmentDetector(BasePatternDetector):
         """Return government patterns."""
         return GOVERNMENT_PATTERNS
 
+    def detect(self, text: str) -> List[Span]:
+        """Detect government markings in text with logging."""
+        spans = super().detect(text)
+
+        if spans:
+            # Summarize by entity type
+            type_counts = {}
+            for span in spans:
+                type_counts[span.entity_type] = type_counts.get(span.entity_type, 0) + 1
+            logger.info(f"GovernmentDetector found {len(spans)} entities: {type_counts}")
+
+            # Log classification markings at DEBUG (sensitive indicators)
+            classification_types = ['CLASSIFICATION_LEVEL', 'CLASSIFICATION_MARKING', 'SCI_MARKING']
+            for span in spans:
+                if span.entity_type in classification_types:
+                    logger.debug(f"Classification marking detected: {span.entity_type} at position {span.start}-{span.end}")
+
+        return spans
+
     def _is_false_positive(self, entity_type: str, value: str,
                            text: str, start: int) -> bool:
         """Filter false positives for classification words."""
@@ -256,6 +278,7 @@ class GovernmentDetector(BasePatternDetector):
             ]
 
             if not any(ctx in context for ctx in classification_context):
+                logger.debug(f"Filtered false positive 'SECRET' - no classification context found")
                 return True
 
         return False

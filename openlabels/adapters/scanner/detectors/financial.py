@@ -17,8 +17,9 @@ Entity Types:
 - CARDANO_ADDRESS: Cardano wallet addresses (addr1...)
 """
 
-import re
 import hashlib
+import logging
+import re
 import secrets
 from typing import List, Tuple
 
@@ -33,22 +34,25 @@ from .constants import (
     CONFIDENCE_WEAK,
 )
 
+logger = logging.getLogger(__name__)
+
 
 # --- CHECKSUM VALIDATORS ---
 def _validate_cusip(cusip: str) -> bool:
     """
     Validate CUSIP check digit (position 9).
-    
+
     CUSIP: 9 characters
     - Positions 1-6: Issuer (alphanumeric)
     - Positions 7-8: Issue (alphanumeric)
     - Position 9: Check digit
-    
+
     Algorithm: Modified Luhn (different from credit card Luhn)
     """
     cusip = cusip.upper().replace(' ', '').replace('-', '')
-    
+
     if len(cusip) != 9:
+        logger.debug(f"CUSIP validation failed: expected 9 chars, got {len(cusip)}")
         return False
     
     # Convert characters to values
@@ -83,10 +87,14 @@ def _validate_cusip(cusip: str) -> bool:
         total += val // 10 + val % 10
     
     check_digit = (10 - (total % 10)) % 10
-    
+
     try:
-        return int(cusip[8]) == check_digit
+        if int(cusip[8]) != check_digit:
+            logger.debug(f"CUSIP checksum failed: expected {check_digit}, got {cusip[8]}")
+            return False
+        return True
     except ValueError:
+        logger.debug(f"CUSIP validation failed: check digit is not numeric")
         return False
 
 
@@ -563,9 +571,29 @@ class FinancialDetector(BasePatternDetector):
         """Return financial patterns."""
         return FINANCIAL_PATTERNS
 
+    def detect(self, text: str) -> List[Span]:
+        """Detect financial identifiers in text with logging."""
+        spans = super().detect(text)
+
+        if spans:
+            # Summarize by entity type
+            type_counts = {}
+            for span in spans:
+                type_counts[span.entity_type] = type_counts.get(span.entity_type, 0) + 1
+            logger.info(f"FinancialDetector found {len(spans)} entities: {type_counts}")
+
+            # Log crypto addresses at DEBUG (high-value targets)
+            crypto_types = ['BITCOIN_ADDRESS', 'ETHEREUM_ADDRESS', 'CRYPTO_SEED_PHRASE']
+            for span in spans:
+                if span.entity_type in crypto_types:
+                    logger.debug(f"Cryptocurrency entity detected: {span.entity_type} at position {span.start}-{span.end}")
+
+        return spans
+
     def _adjust_confidence(self, entity_type: str, confidence: float,
                            value: str, has_validator: bool) -> float:
         """Boost confidence if validator passed."""
         if has_validator:
+            logger.debug(f"Boosting confidence for {entity_type}: validator passed")
             return min(CONFIDENCE_PERFECT, confidence + 0.02)
         return confidence

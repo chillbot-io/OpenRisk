@@ -5,11 +5,14 @@ Finds field labels (DOB:, NAME:, MRN:, etc.) in OCR text and maps them
 to PHI types using the label taxonomy.
 """
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import List, Optional
 
 from .label_taxonomy import LABEL_TO_PHI_TYPE, SORTED_LABELS, normalize_label
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -177,5 +180,9 @@ def detect_labels(text: str) -> List[DetectedLabel]:
         if label.label_start not in seen_positions:
             seen_positions.add(label.label_start)
             unique_labels.append(label)
+
+    if unique_labels:
+        phi_labels = [l for l in unique_labels if l.phi_type]
+        logger.debug(f"Detected {len(unique_labels)} labels, {len(phi_labels)} mapped to PHI types")
 
     return unique_labels

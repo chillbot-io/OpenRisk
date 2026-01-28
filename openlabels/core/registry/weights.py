@@ -1,7 +1,7 @@
 """Entity weights for risk scoring.
 
-This module defines the weight (1-10 scale) for each entity type,
-representing the risk/sensitivity level of that type of information.
+This module loads entity weights from weights.yaml as the primary source.
+Weights define the risk/sensitivity level (1-10 scale) for each entity type.
 
 Weight Scale:
 - 10: Critical - Direct identifiers that can uniquely identify someone
@@ -41,518 +41,97 @@ from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# DIRECT IDENTIFIERS (8-10)
-# =============================================================================
-DIRECT_IDENTIFIER_WEIGHTS: Dict[str, int] = {
-    "SSN": 10,
-    "PASSPORT": 10,
-    "DRIVERS_LICENSE": 7,
-    "STATE_ID": 7,
-    "TAX_ID": 8,
-    "AADHAAR": 10,
-    "NHS_NUMBER": 8,
-    "MEDICARE_ID": 8,
-    "MBI": 8,
-    "HICN": 8,
-}
-
-# =============================================================================
-# HEALTHCARE / PHI (5-8)
-# =============================================================================
-HEALTHCARE_WEIGHTS: Dict[str, int] = {
-    "MRN": 8,
-    "HEALTH_PLAN_ID": 8,
-    "NPI": 7,
-    "DEA": 7,
-    "DIAGNOSIS": 8,
-    "MEDICATION": 6,
-    "LAB_TEST": 5,
-    "ENCOUNTER_ID": 5,
-    "ACCESSION_ID": 5,
-    "PHARMACY_ID": 5,
-    "PATIENT_ACCOUNT": 6,
-    "DATE_MEDICAL": 3,
-    "PAYER": 2,
-    "ROOM": 2,
-    "MEDICAL_LICENSE": 5,
-}
-
-# =============================================================================
-# PERSONAL INFORMATION (2-8)
-# =============================================================================
-PERSONAL_INFO_WEIGHTS: Dict[str, int] = {
-    "NAME": 5,
-    "NAME_PATIENT": 8,
-    "NAME_PROVIDER": 4,
-    "NAME_RELATIVE": 7,
-    "DATE_DOB": 6,
-    "DOB": 6,
-    "DATE": 3,
-    "TIME": 2,
-    "DATETIME": 3,
-    "AGE": 4,
-    "GENDER": 2,
-    "RACE_ETHNICITY": 4,
-    "ETHNICITY": 4,
-    "RELIGION": 4,
-    "SEXUAL_ORIENTATION": 5,
-    "EMPLOYER": 4,
-    "PROFESSION": 3,
-    "EMPLOYEE_ID": 5,
-}
-
-# =============================================================================
-# CONTACT INFORMATION (2-5)
-# =============================================================================
-CONTACT_INFO_WEIGHTS: Dict[str, int] = {
-    "EMAIL": 5,
-    "PHONE": 4,
-    "ADDRESS": 5,
-    "ZIP": 3,
-    "CITY": 2,
-    "STATE": 2,
-    "LOCATION": 3,
-    "FACILITY": 4,
-}
-
-# =============================================================================
-# FINANCIAL (5-10)
-# =============================================================================
-FINANCIAL_WEIGHTS: Dict[str, int] = {
-    "CREDIT_CARD": 10,
-    "BANK_ACCOUNT": 7,
-    "BANK_ROUTING": 6,
-    "IBAN": 7,
-    "SWIFT_BIC": 5,
-    # Securities
-    "CUSIP": 5,
-    "ISIN": 5,
-    "SEDOL": 5,
-    "FIGI": 5,
-    "LEI": 5,
-    # Crypto
-    "BITCOIN_ADDRESS": 8,
-    "ETHEREUM_ADDRESS": 8,
-    "CRYPTO_SEED_PHRASE": 10,
-    "SOLANA_ADDRESS": 8,
-    "CARDANO_ADDRESS": 8,
-    "LITECOIN_ADDRESS": 8,
-    "DOGECOIN_ADDRESS": 8,
-    "XRP_ADDRESS": 8,
-}
-
-# =============================================================================
-# DIGITAL IDENTIFIERS (2-6)
-# =============================================================================
-DIGITAL_IDENTIFIER_WEIGHTS: Dict[str, int] = {
-    "IP_ADDRESS": 4,
-    "MAC_ADDRESS": 4,
-    "URL": 3,
-    "USERNAME": 5,
-    "DEVICE_ID": 5,
-    "IMEI": 6,
-    "VIN": 5,
-    "BIOMETRIC_ID": 8,
-    "IMAGE_ID": 4,
-    "TRACKING_NUMBER": 2,
-}
-
-# =============================================================================
-# CREDENTIALS & SECRETS (8-10)
-# =============================================================================
-CREDENTIAL_WEIGHTS: Dict[str, int] = {
-    "PASSWORD": 10,
-    "API_KEY": 10,
-    "SECRET": 10,
-    "PRIVATE_KEY": 10,
-    "JWT": 8,
-    "BASIC_AUTH": 10,
-    "BEARER_TOKEN": 8,
-    "DATABASE_URL": 10,
-    # Cloud Provider Credentials
-    "AWS_ACCESS_KEY": 10,
-    "AWS_SECRET_KEY": 10,
-    "AWS_SESSION_TOKEN": 10,
-    "AZURE_STORAGE_KEY": 10,
-    "AZURE_CONNECTION_STRING": 10,
-    "AZURE_SAS_TOKEN": 8,
-    "GOOGLE_API_KEY": 10,
-    "GOOGLE_OAUTH_ID": 6,
-    "GOOGLE_OAUTH_SECRET": 10,
-    "FIREBASE_KEY": 10,
-    "GCP_CREDENTIALS": 10,
-    "GCP_SERVICE_ACCOUNT": 10,
-    "GCP_API_KEY": 10,
-    "DIGITALOCEAN_TOKEN": 10,
-    "LINODE_TOKEN": 10,
-    "VULTR_API_KEY": 10,
-    "ALIBABA_ACCESS_KEY": 10,
-    "ORACLE_CLOUD_KEY": 10,
-    "IBM_CLOUD_KEY": 10,
-    "CLOUDFLARE_API_KEY": 10,
-    "CLOUDFLARE_TOKEN": 10,
-    # AI/ML Platform Keys
-    "OPENAI_API_KEY": 10,
-    "ANTHROPIC_API_KEY": 10,
-    "HUGGINGFACE_TOKEN": 10,
-    "COHERE_API_KEY": 10,
-    "REPLICATE_TOKEN": 10,
-    "STABILITY_API_KEY": 10,
-    "MISTRAL_API_KEY": 10,
-    "TOGETHER_API_KEY": 10,
-    "GROQ_API_KEY": 10,
-    # CI/CD Platform Tokens
-    "CIRCLECI_TOKEN": 10,
-    "TRAVIS_TOKEN": 10,
-    "JENKINS_TOKEN": 10,
-    "AZURE_DEVOPS_PAT": 10,
-    "BITBUCKET_TOKEN": 10,
-    "VERCEL_TOKEN": 10,
-    "NETLIFY_TOKEN": 10,
-    "RENDER_API_KEY": 10,
-    "RAILWAY_TOKEN": 10,
-    "FLY_TOKEN": 10,
-    # Container Registry Tokens
-    "DOCKER_HUB_TOKEN": 10,
-    "QUAY_TOKEN": 10,
-    "ECR_TOKEN": 10,
-    "GCR_TOKEN": 10,
-    "ACR_TOKEN": 10,
-    "HARBOR_TOKEN": 10,
-    # Communication Platform Tokens
-    "TELEGRAM_BOT_TOKEN": 10,
-    "TEAMS_WEBHOOK": 8,
-    "ZOOM_JWT": 10,
-    "WEBEX_TOKEN": 10,
-    "TWITCH_TOKEN": 10,
-    "WHATSAPP_TOKEN": 10,
-    # Payment Processor Tokens
-    "PAYPAL_CLIENT_ID": 8,
-    "PAYPAL_SECRET": 10,
-    "BRAINTREE_TOKEN": 10,
-    "PLAID_CLIENT_ID": 8,
-    "PLAID_SECRET": 10,
-    "ADYEN_API_KEY": 10,
-    "KLARNA_TOKEN": 10,
-    # SaaS API Tokens
-    "ATLASSIAN_TOKEN": 10,
-    "NOTION_TOKEN": 10,
-    "AIRTABLE_KEY": 10,
-    "LINEAR_TOKEN": 10,
-    "FIGMA_TOKEN": 10,
-    "ASANA_TOKEN": 10,
-    "MONDAY_TOKEN": 10,
-    "ZENDESK_TOKEN": 10,
-    "INTERCOM_TOKEN": 10,
-    "SEGMENT_KEY": 10,
-    "MIXPANEL_TOKEN": 8,
-    "AMPLITUDE_KEY": 8,
-    "LAUNCHDARKLY_KEY": 10,
-    "SENTRY_DSN": 8,
-    "PAGERDUTY_KEY": 10,
-    "OPSGENIE_KEY": 10,
-    "ROLLBAR_TOKEN": 8,
-    # Database & Data Platform Tokens
-    "SUPABASE_KEY": 10,
-    "PLANETSCALE_TOKEN": 10,
-    "NEON_TOKEN": 10,
-    "COCKROACHDB_TOKEN": 10,
-    "SNOWFLAKE_TOKEN": 10,
-    "DATABRICKS_TOKEN": 10,
-    "ELASTICSEARCH_KEY": 10,
-    "ALGOLIA_KEY": 10,
-    "REDIS_URL": 10,
-    "GRAFANA_TOKEN": 10,
-    # Email Service Tokens
-    "POSTMARK_TOKEN": 10,
-    "MAILGUN_KEY": 10,
-    "RESEND_KEY": 10,
-    "SPARKPOST_KEY": 10,
-    "SES_CREDENTIALS": 10,
-    # SMS/Voice Service Tokens
-    "VONAGE_KEY": 10,
-    "VONAGE_SECRET": 10,
-    "PLIVO_AUTH_ID": 8,
-    "PLIVO_TOKEN": 10,
-    "MESSAGEBIRD_KEY": 10,
-    "BANDWIDTH_TOKEN": 10,
-    # Legacy Service Provider Tokens
-    "GITHUB_TOKEN": 10,
-    "GITLAB_TOKEN": 10,
-    "SLACK_TOKEN": 10,
-    "SLACK_WEBHOOK": 8,
-    "DISCORD_TOKEN": 10,
-    "DISCORD_WEBHOOK": 7,
-    "STRIPE_KEY": 10,
-    "TWILIO_ACCOUNT_SID": 7,
-    "TWILIO_KEY": 10,
-    "TWILIO_TOKEN": 10,
-    "SENDGRID_KEY": 10,
-    "MAILCHIMP_KEY": 8,
-    "SQUARE_TOKEN": 10,
-    "SQUARE_SECRET": 10,
-    "SHOPIFY_TOKEN": 10,
-    "SHOPIFY_KEY": 8,
-    "SHOPIFY_SECRET": 10,
-    "HEROKU_KEY": 10,
-    "DATADOG_KEY": 8,
-    "NEWRELIC_KEY": 8,
-    "NPM_TOKEN": 10,
-    "PYPI_TOKEN": 10,
-    "NUGET_KEY": 8,
-}
-
-# =============================================================================
-# GOVERNMENT & CLASSIFICATION (4-10)
-# =============================================================================
-GOVERNMENT_WEIGHTS: Dict[str, int] = {
-    "CLASSIFICATION_LEVEL": 8,
-    "CLASSIFICATION_MARKING": 10,
-    "SCI_MARKING": 10,
-    "DISSEMINATION_CONTROL": 8,
-    "CLEARANCE_LEVEL": 7,
-    "ITAR_MARKING": 8,
-    "EAR_MARKING": 7,
-    "CAGE_CODE": 4,
-    "DUNS_NUMBER": 4,
-    "UEI": 4,
-    "DOD_CONTRACT": 5,
-    "GSA_CONTRACT": 4,
-}
-
-# =============================================================================
-# EDUCATION / FERPA (5-8)
-# =============================================================================
-EDUCATION_WEIGHTS: Dict[str, int] = {
-    "STUDENT_ID": 7,
-    "TRANSCRIPT": 7,
-    "ENROLLMENT_ID": 6,
-    "FINANCIAL_AID_ID": 7,
-    "SCHOOL_RECORD": 6,
-    "GPA": 5,
-    "DISCIPLINARY_RECORD": 7,
-    "IEP_ID": 8,
-    "TEACHER_ID": 5,
-    "FERPA_DIRECTORY_INFO": 4,
-}
-
-# =============================================================================
-# LEGAL (4-8)
-# =============================================================================
-LEGAL_WEIGHTS: Dict[str, int] = {
-    "CASE_NUMBER": 6,
-    "BAR_NUMBER": 5,
-    "COURT_ID": 4,
-    "PACER_ID": 6,
-    "INMATE_NUMBER": 7,
-    "PROBATION_ID": 7,
-    "ARREST_RECORD": 8,
-    "WARRANT_NUMBER": 7,
-    "JUDGMENT_ID": 6,
-    "LEGAL_HOLD_ID": 5,
-}
-
-# =============================================================================
-# VEHICLE & TRANSPORTATION (4-7)
-# =============================================================================
-VEHICLE_WEIGHTS: Dict[str, int] = {
-    "LICENSE_PLATE": 5,
-    "REGISTRATION_NUMBER": 5,
-    "TITLE_NUMBER": 5,
-    "DOT_NUMBER": 4,
-    "MC_NUMBER": 4,
-    "VESSEL_ID": 5,
-    "AIRCRAFT_TAIL": 5,
-    "PILOT_LICENSE": 6,
-    "CDL_NUMBER": 7,
-    "TOLL_ACCOUNT": 4,
-}
-
-# =============================================================================
-# IMMIGRATION (6-10)
-# =============================================================================
-IMMIGRATION_WEIGHTS: Dict[str, int] = {
-    "A_NUMBER": 10,
-    "VISA_NUMBER": 8,
-    "I94_NUMBER": 8,
-    "GREEN_CARD_NUMBER": 10,
-    "EAD_NUMBER": 8,
-    "SEVIS_ID": 7,
-    "TRAVEL_DOCUMENT_NUMBER": 8,
-    "PETITION_NUMBER": 6,
-    "NATURALIZATION_NUMBER": 8,
-}
-
-# =============================================================================
-# INSURANCE (3-7)
-# =============================================================================
-INSURANCE_WEIGHTS: Dict[str, int] = {
-    "POLICY_NUMBER": 6,
-    "CLAIM_NUMBER": 6,
-    "AGENT_NUMBER": 4,
-    "ADJUSTER_ID": 4,
-    "NAIC_NUMBER": 3,
-    "AUTO_POLICY_ID": 6,
-    "HOME_POLICY_ID": 6,
-    "LIFE_POLICY_ID": 7,
-    "WORKERS_COMP_CLAIM": 7,
-    "DISABILITY_CLAIM_ID": 7,
-}
-
-# =============================================================================
-# REAL ESTATE (3-7)
-# =============================================================================
-REAL_ESTATE_WEIGHTS: Dict[str, int] = {
-    "PARCEL_NUMBER": 4,
-    "DEED_NUMBER": 5,
-    "MORTGAGE_ACCOUNT": 7,
-    "ESCROW_NUMBER": 6,
-    "MLS_NUMBER": 3,
-    "HOA_ACCOUNT": 4,
-    "TITLE_POLICY_NUMBER": 5,
-    "PROPERTY_TAX_ID": 4,
-}
-
-# =============================================================================
-# TELECOMMUNICATIONS (4-7)
-# =============================================================================
-TELECOM_WEIGHTS: Dict[str, int] = {
-    "IMSI": 7,
-    "ICCID": 6,
-    "MSISDN": 6,
-    "MEID": 6,
-    "ESN": 5,
-    "CARRIER_ACCOUNT": 5,
-    "VOIP_ACCOUNT": 4,
-    "CALLING_CARD_NUMBER": 5,
-    "PORT_NUMBER": 4,
-}
-
-# =============================================================================
-# BIOMETRIC & GENETIC (7-10)
-# =============================================================================
-BIOMETRIC_WEIGHTS: Dict[str, int] = {
-    "FINGERPRINT_TEMPLATE": 10,
-    "FACE_TEMPLATE": 10,
-    "IRIS_TEMPLATE": 10,
-    "VOICE_PRINT": 8,
-    "RETINAL_SCAN": 10,
-    "PALM_PRINT": 8,
-    "GAIT_SIGNATURE": 7,
-    "DNA_SEQUENCE": 10,
-    "GENETIC_MARKER": 10,
-    "ANCESTRY_ID": 7,
-    "BIOBANK_ID": 8,
-}
-
-# =============================================================================
-# MILITARY (3-10)
-# =============================================================================
-MILITARY_WEIGHTS: Dict[str, int] = {
-    "EDIPI": 8,
-    "SERVICE_NUMBER": 8,
-    "MILITARY_ID": 8,
-    "VA_CLAIM_NUMBER": 7,
-    "DD214_NUMBER": 8,
-    "MOS_CODE": 3,
-    "UNIT_IDENTIFICATION": 4,
-    "SECURITY_BADGE_ID": 6,
-    "SIPR_TOKEN": 10,
-    "CAC_PIN": 10,
-}
-
-# =============================================================================
-# SENSITIVE FILES & CONTEXT (6-10)
-# =============================================================================
-SENSITIVE_FILE_WEIGHTS: Dict[str, int] = {
-    "DOTENV_FILE": 10,
-    "KUBECONFIG": 10,
-    "SSH_CONFIG": 8,
-    "DOCKER_CONFIG": 8,
-    "NPM_RC": 10,
-    "PYPIRC": 10,
-    "AWS_CREDENTIALS_FILE": 10,
-    "NETRC": 10,
-    "HTPASSWD": 8,
-    "PGP_PRIVATE": 10,
-    "TERRAFORM_STATE": 10,
-    "ANSIBLE_VAULT": 8,
-    "CERTIFICATE_BUNDLE": 7,
-    "KEYSTORE": 10,
-    "WALLET_FILE": 10,
-    "HISTORY_FILE": 6,
-    "SHADOW_FILE": 10,
-}
-
-# =============================================================================
-# INTERNATIONAL IDs (7-10)
-# =============================================================================
-INTERNATIONAL_ID_WEIGHTS: Dict[str, int] = {
-    "SIN_CA": 10,
-    "NINO_UK": 8,
-    "UTR_UK": 8,
-    "INSEE_FR": 8,
-    "PERSONALAUSWEIS_DE": 8,
-    "CODICE_FISCALE_IT": 8,
-    "DNI_ES": 8,
-    "CPF_BR": 10,
-    "RG_BR": 8,
-    "CURP_MX": 8,
-    "AADHAAR_IN": 10,
-    "PAN_IN": 8,
-    "TFN_AU": 8,
-    "MY_NRIC": 8,
-    "CHINA_RESIDENT_ID": 10,
-    "JAPAN_MY_NUMBER": 10,
-}
-
-# =============================================================================
-# MISCELLANEOUS
-# =============================================================================
-MISC_WEIGHTS: Dict[str, int] = {
-    "UNIQUE_ID": 5,
-}
-
-
-# =============================================================================
-# COMBINED ENTITY WEIGHTS
-# =============================================================================
-def _build_entity_weights() -> Dict[str, int]:
-    """Build combined entity weights from all categories."""
-    combined = {}
-    combined.update(DIRECT_IDENTIFIER_WEIGHTS)
-    combined.update(HEALTHCARE_WEIGHTS)
-    combined.update(PERSONAL_INFO_WEIGHTS)
-    combined.update(CONTACT_INFO_WEIGHTS)
-    combined.update(FINANCIAL_WEIGHTS)
-    combined.update(DIGITAL_IDENTIFIER_WEIGHTS)
-    combined.update(CREDENTIAL_WEIGHTS)
-    combined.update(GOVERNMENT_WEIGHTS)
-    combined.update(EDUCATION_WEIGHTS)
-    combined.update(LEGAL_WEIGHTS)
-    combined.update(VEHICLE_WEIGHTS)
-    combined.update(IMMIGRATION_WEIGHTS)
-    combined.update(INSURANCE_WEIGHTS)
-    combined.update(REAL_ESTATE_WEIGHTS)
-    combined.update(TELECOM_WEIGHTS)
-    combined.update(BIOMETRIC_WEIGHTS)
-    combined.update(MILITARY_WEIGHTS)
-    combined.update(SENSITIVE_FILE_WEIGHTS)
-    combined.update(INTERNATIONAL_ID_WEIGHTS)
-    combined.update(MISC_WEIGHTS)
-    return combined
-
-
-ENTITY_WEIGHTS: Dict[str, int] = _build_entity_weights()
+# Path to the bundled weights.yaml
+_BUNDLED_WEIGHTS_FILE = Path(__file__).parent / "weights.yaml"
 
 # Default weight for unknown entity types
 DEFAULT_WEIGHT = 5
 
 
-# =============================================================================
-# WEIGHT OVERRIDES (Local Customization)
-# =============================================================================
+def _load_yaml_file(path: Path) -> Optional[Dict]:
+    """
+    Load a YAML file safely.
+
+    Args:
+        path: Path to the YAML file
+
+    Returns:
+        Parsed YAML content as dict, or None if loading fails
+    """
+    try:
+        import yaml
+    except ImportError:
+        logger.debug("PyYAML not installed, cannot load YAML files")
+        return None
+
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        logger.debug(f"Weights file not found: {path}")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to load weights from {path}: {e}")
+        return None
+
+
+def _flatten_weights(data: Dict) -> Dict[str, int]:
+    """
+    Flatten categorized weights from YAML into a single dictionary.
+
+    The YAML file has categories like 'direct_identifiers', 'healthcare', etc.
+    This function extracts all entity types into a flat {ENTITY_TYPE: weight} dict.
+
+    Args:
+        data: Parsed YAML data with categories
+
+    Returns:
+        Flat dictionary mapping entity types (uppercase) to weights
+    """
+    flat_weights: Dict[str, int] = {}
+
+    # Keys to skip (not categories)
+    skip_keys = {'schema_version', 'default_weight'}
+
+    for key, value in data.items():
+        if key in skip_keys:
+            continue
+        if isinstance(value, dict):
+            # This is a category with entity types
+            for entity_type, weight in value.items():
+                if isinstance(weight, int) and 1 <= weight <= 10:
+                    flat_weights[entity_type.upper()] = weight
+                else:
+                    logger.warning(f"Invalid weight for {entity_type}: {weight} (must be int 1-10)")
+        elif isinstance(value, int):
+            # Direct entity type at root level (not recommended but supported)
+            flat_weights[key.upper()] = value
+
+    return flat_weights
+
+
+@lru_cache(maxsize=1)
+def _load_bundled_weights() -> Dict[str, int]:
+    """
+    Load weights from the bundled weights.yaml file.
+
+    This is the primary source of entity weights. Falls back to minimal
+    builtin weights if YAML loading fails.
+
+    Returns:
+        Dictionary mapping entity types to weights
+    """
+    data = _load_yaml_file(_BUNDLED_WEIGHTS_FILE)
+
+    if data is not None:
+        weights = _flatten_weights(data)
+        logger.info(f"Loaded {len(weights)} entity weights from {_BUNDLED_WEIGHTS_FILE.name}")
+        return weights
+
+    # Fallback to minimal builtin weights
+    logger.warning("Using minimal builtin weights (YAML loading failed)")
+    return _BUILTIN_WEIGHTS.copy()
+
 
 def _find_override_file() -> Optional[Path]:
     """
@@ -587,7 +166,7 @@ def _find_override_file() -> Optional[Path]:
 @lru_cache(maxsize=1)
 def _load_overrides() -> Dict[str, int]:
     """
-    Load weight overrides from YAML file.
+    Load weight overrides from user/system YAML file.
 
     Cached to avoid repeated file I/O. Cache is cleared on reload_overrides().
 
@@ -598,47 +177,72 @@ def _load_overrides() -> Dict[str, int]:
     if override_file is None:
         return {}
 
-    try:
-        import yaml
-    except ImportError:
-        logger.debug("PyYAML not installed, weight overrides disabled")
+    data = _load_yaml_file(override_file)
+    if data is None:
         return {}
 
-    try:
-        with open(override_file) as f:
-            overrides = yaml.safe_load(f) or {}
-
-        # Validate overrides
-        valid_overrides = {}
-        for entity_type, weight in overrides.items():
-            if not isinstance(entity_type, str):
-                logger.warning(f"Invalid override key (not string): {entity_type}")
-                continue
-            if not isinstance(weight, int) or not 1 <= weight <= 10:
-                logger.warning(f"Invalid weight for {entity_type}: {weight} (must be int 1-10)")
-                continue
+    # Validate overrides (flat format expected)
+    valid_overrides: Dict[str, int] = {}
+    for entity_type, weight in data.items():
+        if entity_type in ('schema_version', 'default_weight'):
+            continue
+        if not isinstance(entity_type, str):
+            logger.warning(f"Invalid override key (not string): {entity_type}")
+            continue
+        if isinstance(weight, dict):
+            # Category format - flatten it
+            for sub_type, sub_weight in weight.items():
+                if isinstance(sub_weight, int) and 1 <= sub_weight <= 10:
+                    valid_overrides[sub_type.upper()] = sub_weight
+        elif isinstance(weight, int) and 1 <= weight <= 10:
             valid_overrides[entity_type.upper()] = weight
+        else:
+            logger.warning(f"Invalid weight for {entity_type}: {weight} (must be int 1-10)")
 
-        if valid_overrides:
-            logger.info(f"Loaded {len(valid_overrides)} weight overrides from {override_file}")
+    if valid_overrides:
+        logger.info(f"Loaded {len(valid_overrides)} weight overrides from {override_file}")
 
-        return valid_overrides
-
-    except Exception as e:
-        logger.warning(f"Failed to load weight overrides from {override_file}: {e}")
-        return {}
+    return valid_overrides
 
 
 def get_effective_weights() -> Dict[str, int]:
     """
-    Get effective weights (standard + overrides).
+    Get effective weights (bundled + overrides).
 
     Returns:
-        Combined dict with overrides taking precedence over standard weights
+        Combined dict with overrides taking precedence over bundled weights
     """
-    effective = ENTITY_WEIGHTS.copy()
+    effective = _load_bundled_weights().copy()
     effective.update(_load_overrides())
     return effective
+
+
+def get_weight(entity_type: str) -> int:
+    """
+    Get weight for an entity type.
+
+    Args:
+        entity_type: The entity type (case-insensitive)
+
+    Returns:
+        Weight from 1-10, or DEFAULT_WEIGHT if type unknown
+    """
+    weights = get_effective_weights()
+    return weights.get(entity_type.upper(), DEFAULT_WEIGHT)
+
+
+def reload_weights() -> None:
+    """
+    Reload all weights from disk.
+
+    Call this after modifying the weights files to pick up changes
+    without restarting the process.
+    """
+    _load_bundled_weights.cache_clear()
+    _load_overrides.cache_clear()
+
+    weights = get_effective_weights()
+    logger.info(f"Reloaded weights: {len(weights)} entity types")
 
 
 def reload_overrides() -> None:
@@ -654,3 +258,185 @@ def reload_overrides() -> None:
         logger.info(f"Reloaded {len(overrides)} weight overrides")
     else:
         logger.info("No weight overrides loaded")
+
+
+# =============================================================================
+# BACKWARD COMPATIBILITY
+# =============================================================================
+
+class _LazyWeights(dict):
+    """
+    Lazy-loading dict for backward compatibility with ENTITY_WEIGHTS.
+
+    Loads weights on first access, supporting the existing API:
+        from openlabels.core.registry.weights import ENTITY_WEIGHTS
+        weight = ENTITY_WEIGHTS.get('SSN', 5)
+    """
+    _loaded = False
+
+    def _ensure_loaded(self):
+        if not self._loaded:
+            self.update(get_effective_weights())
+            self._loaded = True
+
+    def __getitem__(self, key):
+        self._ensure_loaded()
+        return super().get(key.upper(), DEFAULT_WEIGHT)
+
+    def get(self, key, default=None):
+        self._ensure_loaded()
+        if default is None:
+            default = DEFAULT_WEIGHT
+        return super().get(key.upper(), default)
+
+    def __contains__(self, key):
+        self._ensure_loaded()
+        return super().__contains__(key.upper())
+
+    def __iter__(self):
+        self._ensure_loaded()
+        return super().__iter__()
+
+    def __len__(self):
+        self._ensure_loaded()
+        return super().__len__()
+
+    def keys(self):
+        self._ensure_loaded()
+        return super().keys()
+
+    def values(self):
+        self._ensure_loaded()
+        return super().values()
+
+    def items(self):
+        self._ensure_loaded()
+        return super().items()
+
+
+# Backward-compatible module-level constant
+# This loads lazily on first access
+ENTITY_WEIGHTS = _LazyWeights()
+
+
+# =============================================================================
+# BUILTIN FALLBACK WEIGHTS
+# =============================================================================
+# Minimal set of weights used when YAML loading fails (e.g., PyYAML not installed)
+# This ensures the system works even without the full weights.yaml
+
+_BUILTIN_WEIGHTS: Dict[str, int] = {
+    # Critical identifiers
+    "SSN": 10,
+    "PASSPORT": 10,
+    "CREDIT_CARD": 10,
+    "PASSWORD": 10,
+    "API_KEY": 10,
+    "PRIVATE_KEY": 10,
+    "AWS_ACCESS_KEY": 10,
+    "AWS_SECRET_KEY": 10,
+    "DATABASE_URL": 10,
+    # High-risk identifiers
+    "MRN": 8,
+    "DIAGNOSIS": 8,
+    "DRIVERS_LICENSE": 7,
+    "NPI": 7,
+    "HEALTH_PLAN_ID": 8,
+    "GITHUB_TOKEN": 10,
+    "SLACK_TOKEN": 10,
+    "JWT": 8,
+    # Moderate identifiers
+    "EMAIL": 5,
+    "PHONE": 4,
+    "NAME": 5,
+    "ADDRESS": 5,
+    "IP_ADDRESS": 4,
+    # Low-risk
+    "DATE": 3,
+    "CITY": 2,
+    "STATE": 2,
+    "AGE": 4,
+}
+
+
+# =============================================================================
+# BACKWARD COMPATIBILITY: CATEGORY EXPORTS
+# =============================================================================
+# These provide the old category-level dictionaries for code that imports them.
+# They are dynamically generated from the YAML on first access.
+
+class _LazyCategoryWeights(dict):
+    """Lazy-loading dict for a specific category."""
+
+    def __init__(self, category_key: str):
+        self._category_key = category_key
+        self._loaded = False
+
+    def _ensure_loaded(self):
+        if not self._loaded:
+            data = _load_yaml_file(_BUNDLED_WEIGHTS_FILE)
+            if data and self._category_key in data:
+                category_data = data[self._category_key]
+                if isinstance(category_data, dict):
+                    for k, v in category_data.items():
+                        if isinstance(v, int):
+                            self[k.upper()] = v
+            self._loaded = True
+
+    def __getitem__(self, key):
+        self._ensure_loaded()
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        self._ensure_loaded()
+        return super().get(key, default)
+
+    def __contains__(self, key):
+        self._ensure_loaded()
+        return super().__contains__(key)
+
+    def __iter__(self):
+        self._ensure_loaded()
+        return super().__iter__()
+
+    def __len__(self):
+        self._ensure_loaded()
+        return super().__len__()
+
+    def keys(self):
+        self._ensure_loaded()
+        return super().keys()
+
+    def values(self):
+        self._ensure_loaded()
+        return super().values()
+
+    def items(self):
+        self._ensure_loaded()
+        return super().items()
+
+    def update(self, *args, **kwargs):
+        self._ensure_loaded()
+        return super().update(*args, **kwargs)
+
+
+# Category-level weight dictionaries (backward compatibility)
+DIRECT_IDENTIFIER_WEIGHTS = _LazyCategoryWeights('direct_identifiers')
+HEALTHCARE_WEIGHTS = _LazyCategoryWeights('healthcare')
+PERSONAL_INFO_WEIGHTS = _LazyCategoryWeights('personal_info')
+CONTACT_INFO_WEIGHTS = _LazyCategoryWeights('contact_info')
+FINANCIAL_WEIGHTS = _LazyCategoryWeights('financial')
+DIGITAL_IDENTIFIER_WEIGHTS = _LazyCategoryWeights('digital_identifiers')
+CREDENTIAL_WEIGHTS = _LazyCategoryWeights('credentials')
+GOVERNMENT_WEIGHTS = _LazyCategoryWeights('government')
+EDUCATION_WEIGHTS = _LazyCategoryWeights('education')
+LEGAL_WEIGHTS = _LazyCategoryWeights('legal')
+VEHICLE_WEIGHTS = _LazyCategoryWeights('vehicle')
+IMMIGRATION_WEIGHTS = _LazyCategoryWeights('immigration')
+INSURANCE_WEIGHTS = _LazyCategoryWeights('insurance')
+REAL_ESTATE_WEIGHTS = _LazyCategoryWeights('real_estate')
+TELECOM_WEIGHTS = _LazyCategoryWeights('telecom')
+BIOMETRIC_WEIGHTS = _LazyCategoryWeights('biometric')
+MILITARY_WEIGHTS = _LazyCategoryWeights('military')
+SENSITIVE_FILE_WEIGHTS = _LazyCategoryWeights('sensitive_files')
+INTERNATIONAL_ID_WEIGHTS = _LazyCategoryWeights('international_ids')

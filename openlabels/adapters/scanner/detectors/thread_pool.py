@@ -312,8 +312,8 @@ def _shutdown_executor():
         )
         try:
             executor.shutdown(wait=False, cancel_futures=True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error during forced executor shutdown: {e}")
 
 
 # Export all public symbols
