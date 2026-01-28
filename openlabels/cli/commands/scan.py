@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import stat as stat_module
 from pathlib import Path
 from typing import Iterator, Optional, Dict, Any, List
 from dataclasses import dataclass
@@ -103,8 +104,15 @@ def scan_directory(
     else:
         files = list(path.glob("*"))
 
-    # Filter to files only
-    files = [f for f in files if f.is_file()]
+    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+    def is_regular_file(p):
+        try:
+            st = p.lstat()
+            return stat_module.S_ISREG(st.st_mode)
+        except OSError:
+            return False
+
+    files = [f for f in files if is_regular_file(f)]
 
     # Apply extension filter
     if extensions:
@@ -158,7 +166,15 @@ def cmd_scan(args) -> int:
     files_with_risk = 0
     max_score = 0
 
-    if path.is_file():
+    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+    def is_regular_file_check(p):
+        try:
+            st = p.lstat()
+            return stat_module.S_ISREG(st.st_mode)
+        except OSError:
+            return False
+
+    if is_regular_file_check(path):
         result = scan_file(path, client, args.exposure)
         results.append(result)
         total_files = 1
@@ -176,7 +192,8 @@ def cmd_scan(args) -> int:
             all_files = list(path.rglob("*"))
         else:
             all_files = list(path.glob("*"))
-        all_files = [f for f in all_files if f.is_file()]
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+        all_files = [f for f in all_files if is_regular_file_check(f)]
         if extensions:
             exts = {e.lower().lstrip(".") for e in extensions}
             all_files = [f for f in all_files if f.suffix.lower().lstrip(".") in exts]

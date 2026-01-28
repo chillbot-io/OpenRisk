@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import stat as stat_module
 from pathlib import Path
 from typing import Iterator, Optional, Dict, Any, List
 
@@ -49,8 +50,16 @@ def find_matching(
     # Parse filter if provided
     filter_obj = parse_filter(filter_expr) if filter_expr else None
 
+    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+    def is_regular_file(p):
+        try:
+            st = p.lstat()
+            return stat_module.S_ISREG(st.st_mode)
+        except OSError:
+            return False
+
     # Scan files
-    if path.is_file():
+    if is_regular_file(path):
         result = scan_file(path, client, exposure)
         if not filter_obj or filter_obj.evaluate(result_to_filter_dict(result)):
             yield result

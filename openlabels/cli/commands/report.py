@@ -11,6 +11,7 @@ Usage:
 import csv
 import io
 import json
+import stat as stat_module
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -294,7 +295,15 @@ def cmd_report(args) -> int:
     results = []
     extensions = args.extensions.split(",") if args.extensions else None
 
-    if path.is_file():
+    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+    def is_regular_file(p):
+        try:
+            st = p.lstat()
+            return stat_module.S_ISREG(st.st_mode)
+        except OSError:
+            return False
+
+    if is_regular_file(path):
         result = scan_file(path, client, args.exposure)
         results.append(result)
     else:
@@ -306,7 +315,8 @@ def cmd_report(args) -> int:
             all_files = list(path.rglob("*"))
         else:
             all_files = list(path.glob("*"))
-        all_files = [f for f in all_files if f.is_file()]
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+        all_files = [f for f in all_files if is_regular_file(f)]
         if extensions:
             exts = {e.lower().lstrip(".") for e in extensions}
             all_files = [f for f in all_files if f.suffix.lower().lstrip(".") in exts]
