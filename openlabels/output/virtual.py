@@ -25,6 +25,12 @@ from typing import Optional, Tuple, Union
 
 from ..core.labels import LabelSet, VirtualLabelPointer
 from ..utils.retry import with_retry, CircuitBreaker
+from ..adapters.scanner.constants import (
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_RETRY_BASE_DELAY,
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
+)
 from ..utils.validation import (
     validate_path_for_subprocess,
     validate_xattr_value,
@@ -583,18 +589,18 @@ def has_virtual_label(path: Union[str, Path]) -> bool:
 # Module-level circuit breakers for each cloud provider
 # These prevent overwhelming failing services with retries
 _s3_circuit_breaker = CircuitBreaker(
-    failure_threshold=5,
-    recovery_timeout=60.0,
+    failure_threshold=CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+    recovery_timeout=CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
     name="s3_metadata",
 )
 _gcs_circuit_breaker = CircuitBreaker(
-    failure_threshold=5,
-    recovery_timeout=60.0,
+    failure_threshold=CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+    recovery_timeout=CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
     name="gcs_metadata",
 )
 _azure_circuit_breaker = CircuitBreaker(
-    failure_threshold=5,
-    recovery_timeout=60.0,
+    failure_threshold=CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+    recovery_timeout=CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
     name="azure_metadata",
 )
 
@@ -621,7 +627,7 @@ class S3MetadataHandler:
             logger.error(f"S3 metadata write failed: {e}")
             return False
 
-    @with_retry(max_retries=3, base_delay=1.0)
+    @with_retry(max_retries=DEFAULT_MAX_RETRIES, base_delay=DEFAULT_RETRY_BASE_DELAY)
     def _write_with_retry(self, client, bucket: str, key: str, value: str) -> bool:
         """Internal write with retry decorator."""
         # Get current metadata
@@ -657,7 +663,7 @@ class S3MetadataHandler:
             logger.debug(f"S3 metadata read failed for {bucket}/{key}: {e}")
             return None
 
-    @with_retry(max_retries=3, base_delay=1.0)
+    @with_retry(max_retries=DEFAULT_MAX_RETRIES, base_delay=DEFAULT_RETRY_BASE_DELAY)
     def _read_with_retry(self, client, bucket: str, key: str) -> Optional[str]:
         """Internal read with retry decorator."""
         response = client.head_object(Bucket=bucket, Key=key)
@@ -687,7 +693,7 @@ class GCSMetadataHandler:
             logger.error(f"GCS metadata write failed: {e}")
             return False
 
-    @with_retry(max_retries=3, base_delay=1.0)
+    @with_retry(max_retries=DEFAULT_MAX_RETRIES, base_delay=DEFAULT_RETRY_BASE_DELAY)
     def _write_with_retry(self, gcs_client, bucket: str, blob_name: str, value: str) -> bool:
         """Internal write with retry decorator."""
         bucket_obj = gcs_client.bucket(bucket)
@@ -717,7 +723,7 @@ class GCSMetadataHandler:
             logger.debug(f"GCS metadata read failed for {bucket}/{blob_name}: {e}")
             return None
 
-    @with_retry(max_retries=3, base_delay=1.0)
+    @with_retry(max_retries=DEFAULT_MAX_RETRIES, base_delay=DEFAULT_RETRY_BASE_DELAY)
     def _read_with_retry(self, gcs_client, bucket: str, blob_name: str) -> Optional[str]:
         """Internal read with retry decorator."""
         bucket_obj = gcs_client.bucket(bucket)
@@ -785,7 +791,7 @@ class AzureBlobMetadataHandler:
             logger.error(f"Azure Blob metadata write failed: {_redact_connection_string(str(e))}")
             return False
 
-    @with_retry(max_retries=3, base_delay=1.0)
+    @with_retry(max_retries=DEFAULT_MAX_RETRIES, base_delay=DEFAULT_RETRY_BASE_DELAY)
     def _write_with_retry(
         self, conn_str: str, container: str, blob_name: str, value: str
     ) -> bool:
@@ -826,7 +832,7 @@ class AzureBlobMetadataHandler:
             logger.debug(f"Azure blob metadata read failed for {container}/{blob_name}: {_redact_connection_string(str(e))}")
             return None
 
-    @with_retry(max_retries=3, base_delay=1.0)
+    @with_retry(max_retries=DEFAULT_MAX_RETRIES, base_delay=DEFAULT_RETRY_BASE_DELAY)
     def _read_with_retry(
         self, conn_str: str, container: str, blob_name: str
     ) -> Optional[str]:
