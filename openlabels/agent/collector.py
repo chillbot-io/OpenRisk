@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Iterator
 
 from ..adapters.base import NormalizedContext, ExposureLevel
-from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE, PARTIAL_HASH_SIZE
+from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE, PARTIAL_HASH_SIZE, SUBPROCESS_TIMEOUT
 from ..utils.validation import validate_path_for_subprocess
 
 logger = logging.getLogger(__name__)
@@ -474,7 +474,7 @@ class FileCollector:
                     ["getfattr", "-d", path_str],
                     capture_output=True,
                     text=True,
-                    timeout=5,
+                    timeout=SUBPROCESS_TIMEOUT,
                 )
                 if result.returncode == 0:
                     attr_count = 0

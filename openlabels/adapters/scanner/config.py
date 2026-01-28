@@ -223,13 +223,6 @@ class Config:
         # Update to current version after migration
         self.schema_version = CURRENT_SCHEMA_VERSION
 
-    def ensure_directories(self) -> None:
-        """Create data directories with secure permissions (0700)."""
-        import stat
-        for dir_path in [self.data_dir, self.models_dir, self.dictionaries_dir]:
-            dir_path.mkdir(parents=True, exist_ok=True)
-            dir_path.chmod(stat.S_IRWXU)
-
     @classmethod
     def from_env(cls) -> "Config":
         """Create config from environment variables."""
