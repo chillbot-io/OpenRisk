@@ -10,7 +10,7 @@ scale while preserving relative ordering within each detector.
 """
 
 import math
-from typing import List, Optional
+from typing import List
 from ..types import Span
 
 # Detector-specific calibration parameters
@@ -198,29 +198,6 @@ def combine_confidences(confidences: List[float], method: str = "max") -> float:
         return weighted_sum / total_weight
     else:
         raise ValueError(f"Unknown combination method: {method}")
-
-
-def confidence_meets_threshold(
-    confidence: float,
-    threshold: float,
-    detector: Optional[str] = None
-) -> bool:
-    """
-    Check if a confidence value meets a threshold.
-
-    Applies normalization before comparison if detector is specified.
-
-    Args:
-        confidence: Raw or calibrated confidence value
-        threshold: Minimum threshold to meet
-        detector: Optional detector name for calibration
-
-    Returns:
-        True if (calibrated) confidence >= threshold
-    """
-    if detector:
-        confidence = normalize_confidence(confidence, detector)
-    return confidence >= threshold
 
 
 # Confidence level constants for common thresholds
