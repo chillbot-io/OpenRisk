@@ -1,14 +1,4 @@
-"""PII pattern definitions for PHI/PII entity recognition.
-
-This module contains patterns for detecting personally identifiable information:
-- Phone numbers (including OCR-aware patterns)
-- Email addresses
-- Dates (various formats including ISO 8601)
-- Time (12-hour, 24-hour, timezone-aware)
-- Age
-- Room/Bed numbers
-- Names (patient, provider, relative, international)
-"""
+"""PII patterns: phone, email, dates, times, age, names."""
 
 import re
 from typing import List, Tuple
@@ -29,16 +19,10 @@ from ..constants import (
     CONFIDENCE_WEAK,
 )
 
-# PII PATTERN DEFINITIONS
-# Each pattern is (regex, entity_type, confidence, group_index)
-# group_index is which capture group contains the value (default 0 = whole match)
+from ..pattern_registry import create_pattern_adder
 
 PII_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
-
-
-def add_pattern(pattern: str, entity_type: str, confidence: float, group: int = 0, flags: int = 0):
-    """Helper to add patterns to PII_PATTERNS."""
-    PII_PATTERNS.append((re.compile(pattern, flags), entity_type, confidence, group))
+add_pattern = create_pattern_adder(PII_PATTERNS)
 
 
 # =============================================================================

@@ -1,20 +1,4 @@
-"""Healthcare pattern definitions for PHI/PII entity recognition.
-
-This module contains patterns for detecting healthcare-specific identifiers:
-- Medical Record Numbers (MRN)
-- National Provider Identifier (NPI)
-- DEA numbers
-- Health Plan IDs (Member ID, Medicaid, etc.)
-- Medicare Beneficiary Identifier (MBI)
-- National Drug Codes (NDC)
-- Blood type
-- Facility names (hospitals, clinics, pharmacies)
-- Room/Bed numbers (healthcare context)
-- Pager/Extension numbers
-- Prior Authorization/Claim numbers
-- Physical identifiers (Height, Weight, BMI)
-- Prescription/RX numbers
-"""
+"""Healthcare patterns: MRN, NPI, DEA, health plan IDs, NDC, facility names."""
 
 import re
 from typing import List, Tuple
@@ -32,16 +16,10 @@ from ..constants import (
     CONFIDENCE_WEAK,
 )
 
-# HEALTHCARE PATTERN DEFINITIONS
-# Each pattern is (regex, entity_type, confidence, group_index)
-# group_index is which capture group contains the value (default 0 = whole match)
+from ..pattern_registry import create_pattern_adder
 
 HEALTHCARE_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
-
-
-def add_pattern(pattern: str, entity_type: str, confidence: float, group: int = 0, flags: int = 0):
-    """Helper to add patterns to HEALTHCARE_PATTERNS."""
-    HEALTHCARE_PATTERNS.append((re.compile(pattern, flags), entity_type, confidence, group))
+add_pattern = create_pattern_adder(HEALTHCARE_PATTERNS)
 
 
 # =============================================================================

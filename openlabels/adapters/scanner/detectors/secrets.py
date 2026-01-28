@@ -1,37 +1,4 @@
-"""Tier 2: Secrets and credential detectors.
-
-Detects API keys, tokens, private keys, JWTs, connection strings,
-and other sensitive credentials that should never be exposed.
-
-All patterns have high confidence (0.90+) because they use distinctive
-prefixes or formats that are unlikely to appear in normal text.
-
-Entity Types:
-- AWS_ACCESS_KEY: AWS access key IDs (AKIA...)
-- AWS_SECRET_KEY: AWS secret access keys (contextual)
-- GITHUB_TOKEN: GitHub personal access tokens (ghp_, gho_, ghs_, ghu_)
-- GITLAB_TOKEN: GitLab personal access tokens (glpat-)
-- SLACK_TOKEN: Slack bot/user tokens (xoxb-, xoxp-, xoxa-, xoxr-)
-- SLACK_WEBHOOK: Slack webhook URLs
-- STRIPE_KEY: Stripe API keys (sk_live_, pk_live_, etc.)
-- GOOGLE_API_KEY: Google API keys (AIza...)
-- TWILIO_KEY: Twilio API keys and account SIDs
-- SENDGRID_KEY: SendGrid API keys
-- DISCORD_TOKEN: Discord bot tokens
-- DISCORD_WEBHOOK: Discord webhook URLs
-- NPM_TOKEN: NPM access tokens
-- PYPI_TOKEN: PyPI API tokens
-- PRIVATE_KEY: PEM-encoded private keys
-- JWT: JSON Web Tokens
-- BASIC_AUTH: Basic authentication headers
-- BEARER_TOKEN: Bearer tokens in auth context
-- DATABASE_URL: Connection strings with credentials
-- AZURE_KEY: Azure storage keys and connection strings
-- HEROKU_KEY: Heroku API keys
-- MAILCHIMP_KEY: Mailchimp API keys
-- SQUARE_KEY: Square API keys
-- GENERIC_SECRET: Generic secret patterns (password=, api_key=, etc.)
-"""
+"""Tier 2: Secrets and credential detectors (API keys, tokens, private keys, JWTs)."""
 
 import base64
 import binascii
@@ -53,16 +20,10 @@ from .constants import (
 
 logger = logging.getLogger(__name__)
 
-
-# Pattern definitions: (regex, entity_type, confidence, group_index, flags)
-# group_index: which capture group contains the value (0 = whole match)
+from .pattern_registry import create_pattern_adder
 
 SECRETS_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
-
-
-def _add(pattern: str, entity_type: str, confidence: float, group: int = 0, flags: int = 0):
-    """Helper to compile and add patterns."""
-    SECRETS_PATTERNS.append((re.compile(pattern, flags), entity_type, confidence, group))
+_add = create_pattern_adder(SECRETS_PATTERNS)
 
 
 # --- AWS ---

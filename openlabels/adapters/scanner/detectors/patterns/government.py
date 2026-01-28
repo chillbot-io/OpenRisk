@@ -1,14 +1,4 @@
-"""Government ID pattern definitions for PHI/PII entity recognition.
-
-This module contains patterns for detecting government-issued identifiers:
-- Social Security Numbers (SSN)
-- Driver's License (state-specific formats)
-- State ID
-- Passport
-- Medical License
-- Military IDs
-- International IDs (UK NHS, Canadian SIN, Australian TFN, Indian Aadhaar, etc.)
-"""
+"""Government ID patterns: SSN, driver's license, passport, military, international IDs."""
 
 import re
 from typing import List, Tuple
@@ -28,16 +18,10 @@ from ..constants import (
     CONFIDENCE_WEAK,
 )
 
-# GOVERNMENT ID PATTERN DEFINITIONS
-# Each pattern is (regex, entity_type, confidence, group_index)
-# group_index is which capture group contains the value (default 0 = whole match)
+from ..pattern_registry import create_pattern_adder
 
 GOVERNMENT_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
-
-
-def add_pattern(pattern: str, entity_type: str, confidence: float, group: int = 0, flags: int = 0):
-    """Helper to add patterns to GOVERNMENT_PATTERNS."""
-    GOVERNMENT_PATTERNS.append((re.compile(pattern, flags), entity_type, confidence, group))
+add_pattern = create_pattern_adder(GOVERNMENT_PATTERNS)
 
 
 # =============================================================================

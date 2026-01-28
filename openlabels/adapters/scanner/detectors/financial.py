@@ -1,21 +1,4 @@
-"""Tier 3: Financial identifiers and cryptocurrency detectors.
-
-Detects financial security identifiers and cryptocurrency addresses,
-with checksum validation where applicable.
-
-Entity Types:
-- CUSIP: Committee on Uniform Securities Identification Procedures (9 chars)
-- ISIN: International Securities Identification Number (12 chars)
-- SEDOL: Stock Exchange Daily Official List (7 chars, UK)
-- SWIFT_BIC: Bank Identifier Code (8 or 11 chars)
-- FIGI: Financial Instrument Global Identifier (12 chars)
-- LEI: Legal Entity Identifier (20 chars)
-- BITCOIN_ADDRESS: Bitcoin wallet addresses (all formats)
-- ETHEREUM_ADDRESS: Ethereum wallet addresses (0x + 40 hex)
-- CRYPTO_SEED_PHRASE: BIP-39 mnemonic seed phrases (12/24 words)
-- SOLANA_ADDRESS: Solana wallet addresses (base58, 32-44 chars)
-- CARDANO_ADDRESS: Cardano wallet addresses (addr1...)
-"""
+"""Tier 3: Financial identifiers and cryptocurrency (CUSIP, ISIN, SWIFT, crypto addresses)."""
 
 import hashlib
 import logging
@@ -460,19 +443,10 @@ def _validate_seed_phrase(text: str) -> bool:
 
 
 # --- PATTERN DEFINITIONS ---
+from .pattern_registry import create_pattern_adder
+
 FINANCIAL_PATTERNS: List[Tuple[re.Pattern, str, float, int, callable]] = []
-
-
-def _add(pattern: str, entity_type: str, confidence: float, group: int = 0, 
-         validator: callable = None, flags: int = 0):
-    """Helper to add patterns with optional validator."""
-    FINANCIAL_PATTERNS.append((
-        re.compile(pattern, flags), 
-        entity_type, 
-        confidence, 
-        group,
-        validator
-    ))
+_add = create_pattern_adder(FINANCIAL_PATTERNS, support_validator=True)
 
 
 # --- SECURITY IDENTIFIERS ---

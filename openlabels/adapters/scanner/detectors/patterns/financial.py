@@ -1,15 +1,4 @@
-"""Financial pattern definitions for PHI/PII entity recognition.
-
-This module contains patterns for detecting financial identifiers:
-- Credit Card Numbers
-- ABA Routing Numbers
-- Account Numbers
-- Certificate/License Numbers
-- Claim Numbers
-- Unique Identifiers
-- Vehicle Identification Numbers (VIN)
-- License Plates
-"""
+"""Financial patterns: credit cards, routing numbers, accounts, VIN, license plates."""
 
 import re
 from typing import List, Tuple
@@ -25,16 +14,10 @@ from ..constants import (
     CONFIDENCE_WEAK,
 )
 
-# FINANCIAL PATTERN DEFINITIONS
-# Each pattern is (regex, entity_type, confidence, group_index)
-# group_index is which capture group contains the value (default 0 = whole match)
+from ..pattern_registry import create_pattern_adder
 
 FINANCIAL_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
-
-
-def add_pattern(pattern: str, entity_type: str, confidence: float, group: int = 0, flags: int = 0):
-    """Helper to add patterns to FINANCIAL_PATTERNS."""
-    FINANCIAL_PATTERNS.append((re.compile(pattern, flags), entity_type, confidence, group))
+add_pattern = create_pattern_adder(FINANCIAL_PATTERNS)
 
 
 # =============================================================================
