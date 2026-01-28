@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Optional, Set, List
 import logging
 
+from .constants import MAX_FILE_SIZE_BYTES, MAX_PAGE_WORKERS, MAX_TEXT_LENGTH
+
 logger = logging.getLogger(__name__)
 
 
@@ -139,11 +141,11 @@ class Config:
     disabled_detectors: Set[str] = field(default_factory=set)
 
     # Parallel detection
-    max_workers: int = 4  # Max threads for parallel detection
+    max_workers: int = MAX_PAGE_WORKERS  # Max threads for parallel detection
 
     # Size limits (prevent OOM from adversarial input)
-    max_text_size: int = 10 * 1024 * 1024  # 10 MB max text input
-    max_file_size: int = 100 * 1024 * 1024  # 100 MB max file size
+    max_text_size: int = MAX_TEXT_LENGTH * 10  # Default 10MB, based on MAX_TEXT_LENGTH
+    max_file_size: int = MAX_FILE_SIZE_BYTES  # From central constants
 
     def __post_init__(self):
         """Validate configuration values and migrate if needed."""

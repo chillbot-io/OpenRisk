@@ -25,6 +25,7 @@ __all__ = [
     # Chunk sizes for file I/O
     "FILE_READ_CHUNK_SIZE",
     "PARTIAL_HASH_SIZE",
+    "MAGIC_BYTES_HEADER_SIZE",
     # File processing
     "MAX_DOCUMENT_PAGES",
     "MAX_PAGE_WORKERS",
@@ -85,6 +86,7 @@ MAX_XATTR_VALUE_SIZE = 65536  # Extended attribute value size limit
 # --- CHUNK SIZES FOR FILE I/O ---
 FILE_READ_CHUNK_SIZE = 8192  # Standard chunk size for reading files (8KB)
 PARTIAL_HASH_SIZE = 65536  # Bytes to read for partial hash (64KB)
+MAGIC_BYTES_HEADER_SIZE = 64  # Bytes to read for MIME type detection
 
 # --- FILE PROCESSING ---
 MAX_DOCUMENT_PAGES = 100  # Max pages to process per document

@@ -39,7 +39,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Optional
 
-from ..constants import MAX_DETECTOR_WORKERS
+from ..constants import MAX_DETECTOR_WORKERS, THREAD_JOIN_TIMEOUT
 from .metadata import DetectionQueueFullError
 
 logger = logging.getLogger(__name__)
@@ -266,7 +266,7 @@ _get_executor_legacy = get_executor_legacy
 _get_executor = get_executor_legacy
 
 
-_SHUTDOWN_TIMEOUT = 5.0  # seconds to wait for graceful shutdown
+# Use central constant for shutdown timeout
 
 
 def _shutdown_executor():
@@ -287,7 +287,7 @@ def _shutdown_executor():
     executor = _SHARED_EXECUTOR
     _SHARED_EXECUTOR = None  # Clear early to prevent double-shutdown
 
-    logger.info(f"Shutting down detection executor (timeout: {_SHUTDOWN_TIMEOUT}s)...")
+    logger.info(f"Shutting down detection executor (timeout: {THREAD_JOIN_TIMEOUT}s)...")
 
     # GA-FIX (1.3): Use background thread to enforce timeout
     shutdown_complete = threading.Event()
@@ -303,12 +303,12 @@ def _shutdown_executor():
     shutdown_thread.start()
 
     # Wait for graceful shutdown with timeout
-    if shutdown_complete.wait(timeout=_SHUTDOWN_TIMEOUT):
+    if shutdown_complete.wait(timeout=THREAD_JOIN_TIMEOUT):
         logger.debug("Detection executor shutdown complete")
     else:
         # Timeout - force shutdown
         logger.warning(
-            f"Executor shutdown timed out after {_SHUTDOWN_TIMEOUT}s, forcing cancellation"
+            f"Executor shutdown timed out after {THREAD_JOIN_TIMEOUT}s, forcing cancellation"
         )
         try:
             executor.shutdown(wait=False, cancel_futures=True)

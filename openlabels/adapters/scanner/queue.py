@@ -50,7 +50,7 @@ from enum import Enum
 from typing import Optional, List, Callable, Any, Dict
 
 from ...core.triggers import ScanTrigger
-from .constants import MAX_QUEUE_SIZE, DEFAULT_MAX_RETRIES
+from .constants import MAX_QUEUE_SIZE, DEFAULT_MAX_RETRIES, MAX_FILE_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
 
@@ -409,10 +409,10 @@ def calculate_priority(
 
     # Size adjustments
     if size_bytes > 0:
-        if size_bytes < 1024 * 1024:  # < 1MB
-            priority += 5  # Boost small files
-        elif size_bytes > 100 * 1024 * 1024:  # > 100MB
-            priority -= 10  # Deprioritize large files
+        if size_bytes < 1024 * 1024:  # < 1MB - boost small files
+            priority += 5
+        elif size_bytes > MAX_FILE_SIZE_BYTES:  # Deprioritize large files
+            priority -= 10
 
     # Cap at 100
     return min(100, max(0, priority))
