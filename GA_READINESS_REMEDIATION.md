@@ -242,10 +242,21 @@ except SomeError as e:
     logger.debug(f"Description of what failed: {e}")    # For expected/recoverable cases
 ```
 
+**Additional files fixed (discovered during deep scan):**
+
+| File | Location | Fix Applied |
+|------|----------|-------------|
+| `cli/commands/heatmap.py` | `build_tree()` (3 locations) | OSError → DEBUG |
+| `output/reader.py` | `find_unlabeled_files()`, `find_stale_labels()` | OSError → DEBUG |
+| `adapters/scanner/detectors/patterns/detector.py` | Date validation | ValueError/IndexError → DEBUG |
+
 **Remaining acceptable silent handlers (intentionally not fixed):**
 - `cli/filter.py`: Type coercion fallbacks (int→float→string) - idiomatic Python
 - `extractors/image.py`: EOFError for multi-page image iteration - expected behavior
 - `extractors/office.py`: UnicodeDecodeError for encoding detection - tries multiple encodings
+- `adapters/scanner/__init__.py`: ImportError for optional OCR - standard optional dependency
+- `adapters/scanner/detectors/orchestrator.py`: ImportError for optional ContextEnhancer - standard
+- `agent/watcher.py`: queue.Empty in event polling loop - expected behavior
 
 ---
 
