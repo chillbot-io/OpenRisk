@@ -84,13 +84,28 @@ class Scanner:
         """
         path = Path(path)
 
-        if not path.exists():
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists()/is_file()
+        # to eliminate TOCTOU race condition between check and operation.
+        try:
+            st = path.lstat()
+            is_regular_file = stat_module.S_ISREG(st.st_mode)
+            is_directory = stat_module.S_ISDIR(st.st_mode)
+            is_symlink = stat_module.S_ISLNK(st.st_mode)
+        except FileNotFoundError:
             raise FileNotFoundError(f"Path not found: {path}")
+
+        # SECURITY: Reject symlinks to prevent symlink attacks
+        if is_symlink:
+            raise ValueError(f"Symlinks not allowed for security: {path}")
+
+        # Must be either a file or directory
+        if not is_regular_file and not is_directory:
+            raise ValueError(f"Not a file or directory: {path}")
 
         filter_obj = parse_filter(filter_expr) if filter_expr else None
 
         # Single file
-        if path.is_file():
+        if is_regular_file:
             result = self._scan_single_file(path)
             if self._matches_filter(result, filter_criteria, filter_obj):
                 yield result

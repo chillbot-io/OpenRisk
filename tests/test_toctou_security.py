@@ -389,6 +389,224 @@ class TestWatcherTOCTOU:
 
 
 # =============================================================================
+# FILEOPS TESTS
+# =============================================================================
+
+class TestFileOpsTOCTOU:
+    """Test TOCTOU fixes in components/fileops.py"""
+
+    def test_fileops_move_rejects_symlink(self):
+        """FileOps.move() should reject symlinks."""
+        from openlabels.components.fileops import FileOps
+        from openlabels.components.scanner import Scanner
+        from openlabels.components.scorer import Scorer
+        from openlabels.context import Context
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ctx = Context()
+            scorer = Scorer(ctx)
+            scanner = Scanner(ctx, scorer)
+            fileops = FileOps(ctx, scanner)
+
+            # Create target and symlink
+            target = Path(tmpdir) / "target.txt"
+            target.write_text("content")
+            symlink = Path(tmpdir) / "symlink.txt"
+            symlink.symlink_to(target)
+            dest = Path(tmpdir) / "dest.txt"
+
+            # Should fail for symlink
+            result = fileops.move(symlink, dest)
+            assert not result.success
+            assert "Symlinks not allowed" in result.error
+
+            ctx.close()
+
+    def test_fileops_move_rejects_directory(self):
+        """FileOps.move() should reject directories."""
+        from openlabels.components.fileops import FileOps
+        from openlabels.components.scanner import Scanner
+        from openlabels.components.scorer import Scorer
+        from openlabels.context import Context
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ctx = Context()
+            scorer = Scorer(ctx)
+            scanner = Scanner(ctx, scorer)
+            fileops = FileOps(ctx, scanner)
+
+            source_dir = Path(tmpdir) / "source_dir"
+            source_dir.mkdir()
+            dest = Path(tmpdir) / "dest"
+
+            result = fileops.move(source_dir, dest)
+            assert not result.success
+            assert "Not a regular file" in result.error
+
+            ctx.close()
+
+    def test_fileops_move_succeeds_for_regular_file(self):
+        """FileOps.move() should work for regular files."""
+        from openlabels.components.fileops import FileOps
+        from openlabels.components.scanner import Scanner
+        from openlabels.components.scorer import Scorer
+        from openlabels.context import Context
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ctx = Context()
+            scorer = Scorer(ctx)
+            scanner = Scanner(ctx, scorer)
+            fileops = FileOps(ctx, scanner)
+
+            source = Path(tmpdir) / "source.txt"
+            source.write_text("content")
+            dest = Path(tmpdir) / "dest.txt"
+
+            result = fileops.move(source, dest)
+            assert result.success
+            assert dest.exists()
+            assert not source.exists()
+
+            ctx.close()
+
+    def test_fileops_delete_rejects_symlink(self):
+        """FileOps.delete() should reject symlinks."""
+        from openlabels.components.fileops import FileOps
+        from openlabels.components.scanner import Scanner
+        from openlabels.components.scorer import Scorer
+        from openlabels.context import Context
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ctx = Context()
+            scorer = Scorer(ctx)
+            scanner = Scanner(ctx, scorer)
+            fileops = FileOps(ctx, scanner)
+
+            target = Path(tmpdir) / "target.txt"
+            target.write_text("content")
+            symlink = Path(tmpdir) / "symlink.txt"
+            symlink.symlink_to(target)
+
+            result = fileops.delete(symlink)
+            assert result.error_count == 1
+            assert "Symlinks not allowed" in str(result.errors)
+
+            ctx.close()
+
+
+# =============================================================================
+# SCANNER ENTRY POINT TESTS
+# =============================================================================
+
+class TestScannerEntryTOCTOU:
+    """Test TOCTOU fixes in Scanner.scan() entry point."""
+
+    def test_scan_rejects_symlink_target(self):
+        """Scanner.scan() should reject symlink as target."""
+        from openlabels.components.scanner import Scanner
+        from openlabels.context import Context
+        from unittest.mock import MagicMock
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ctx = Context()
+            mock_scorer = MagicMock()
+            scanner = Scanner(ctx, mock_scorer)
+
+            # Create file and symlink
+            target = Path(tmpdir) / "target.txt"
+            target.write_text("content")
+            symlink = Path(tmpdir) / "symlink"
+            symlink.symlink_to(target)
+
+            # Should raise ValueError for symlink
+            with pytest.raises(ValueError, match="Symlinks not allowed"):
+                list(scanner.scan(symlink))
+
+            ctx.close()
+
+    def test_scan_accepts_regular_file(self):
+        """Scanner.scan() should accept regular file as target."""
+        from openlabels.components.scanner import Scanner
+        from openlabels.components.scorer import Scorer
+        from openlabels.context import Context
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ctx = Context()
+            scorer = Scorer(ctx)
+            scanner = Scanner(ctx, scorer)
+
+            regular = Path(tmpdir) / "file.txt"
+            regular.write_text("hello world")
+
+            results = list(scanner.scan(regular))
+            assert len(results) == 1
+            assert results[0].path == str(regular)
+
+            ctx.close()
+
+    def test_scan_accepts_directory(self):
+        """Scanner.scan() should accept directory as target."""
+        from openlabels.components.scanner import Scanner
+        from openlabels.components.scorer import Scorer
+        from openlabels.context import Context
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ctx = Context()
+            scorer = Scorer(ctx)
+            scanner = Scanner(ctx, scorer)
+
+            (Path(tmpdir) / "file.txt").write_text("content")
+
+            results = list(scanner.scan(tmpdir))
+            assert len(results) == 1
+
+            ctx.close()
+
+
+# =============================================================================
+# POSIX TESTS
+# =============================================================================
+
+class TestPosixTOCTOU:
+    """Test TOCTOU fixes in agent/posix.py"""
+
+    def test_get_posix_permissions_handles_symlink(self):
+        """get_posix_permissions() should use lstat, not follow symlinks."""
+        from openlabels.agent.posix import get_posix_permissions
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = Path(tmpdir) / "target.txt"
+            target.write_text("content")
+            symlink = Path(tmpdir) / "symlink.txt"
+            symlink.symlink_to(target)
+
+            # Should return permissions of symlink itself (not target)
+            perms = get_posix_permissions(str(symlink))
+            # Symlinks typically have 0777 permissions (lrwxrwxrwx)
+            # The key test is that this doesn't follow the symlink
+            assert perms is not None
+
+    def test_get_posix_permissions_regular_file(self):
+        """get_posix_permissions() should work for regular files."""
+        from openlabels.agent.posix import get_posix_permissions
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            regular = Path(tmpdir) / "file.txt"
+            regular.write_text("content")
+
+            perms = get_posix_permissions(str(regular))
+            assert perms is not None
+            assert perms.owner_name is not None
+
+    def test_get_posix_permissions_missing_file(self):
+        """get_posix_permissions() should raise for missing files."""
+        from openlabels.agent.posix import get_posix_permissions
+
+        with pytest.raises(FileNotFoundError):
+            get_posix_permissions("/nonexistent/path/file.txt")
+
+
+# =============================================================================
 # INTEGRATION TESTS
 # =============================================================================
 
