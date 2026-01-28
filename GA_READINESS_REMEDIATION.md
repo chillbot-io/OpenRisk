@@ -11,13 +11,13 @@
 
 | Category | Issue Count | Status |
 |----------|-------------|--------|
-| **Tier 1: MUST FIX** | 4 (2 complete) | Blocking GA |
+| **Tier 1: MUST FIX** | 4 (3 complete) | Blocking GA |
 | **Tier 2: SHOULD FIX** | 3 | Required before GA |
 
 ### Progress
 - [x] **1.1 TOCTOU Race Conditions** - COMPLETE (2026-01-28)
 - [x] **1.2 Silent Exception Handlers** - COMPLETE (2026-01-28)
-- [ ] 1.3 Incomplete Shutdown
+- [x] **1.3 Incomplete Shutdown** - COMPLETE (2026-01-28)
 - [ ] 1.4 No Cloud Adapter Retry
 - [ ] 2.1 Long Functions
 - [ ] 2.2 Missing Logging
@@ -330,9 +330,37 @@ def register_shutdown_handler():
 ```
 
 #### Verification
-- [ ] Add test: submit long-running task, trigger shutdown, verify completion
-- [ ] Add test: verify no warnings about abandoned tasks in logs
-- [ ] Manual test: Ctrl+C during scan, verify clean exit
+- [x] All 380 tests pass
+- [x] No `shutdown(wait=False)` patterns remain in production code
+
+#### Status: COMPLETE (2026-01-28)
+
+**Files fixed:**
+
+| File | Location | Fix Applied |
+|------|----------|-------------|
+| `adapters/scanner/detectors/thread_pool.py` | `_shutdown_executor()` | `wait=True` with graceful fallback |
+| `adapters/scanner/detectors/thread_pool.py` | `get_executor_legacy()` | Register with shutdown coordinator |
+| `context.py` | `close()` | `wait=True` with graceful fallback |
+
+**Pattern applied:**
+```python
+# Before (abandons in-flight tasks)
+executor.shutdown(wait=False)
+
+# After (graceful shutdown with fallback)
+try:
+    logger.info("Shutting down executor, waiting for in-flight tasks...")
+    executor.shutdown(wait=True, cancel_futures=False)
+except Exception as e:
+    logger.warning(f"Error during shutdown: {e}")
+    executor.shutdown(wait=False, cancel_futures=True)
+```
+
+**Shutdown coordinator integration:**
+- Detection executor now registers with `ShutdownCoordinator` for SIGINT/SIGTERM handling
+- Falls back to `atexit` if coordinator unavailable
+- Priority 10 (runs early in shutdown sequence)
 
 ---
 

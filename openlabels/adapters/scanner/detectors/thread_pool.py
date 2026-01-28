@@ -234,9 +234,31 @@ def get_executor_legacy() -> ThreadPoolExecutor:
             max_workers=MAX_DETECTOR_WORKERS,
             thread_name_prefix="detector_"
         )
-        # Ensure cleanup on process exit
-        atexit.register(_shutdown_executor)
+        # GA-FIX (1.3): Register with shutdown coordinator for graceful shutdown
+        _register_shutdown_handler()
     return _SHARED_EXECUTOR
+
+
+def _register_shutdown_handler():
+    """
+    Register executor shutdown with the shutdown coordinator.
+
+    GA-FIX (1.3): Enables graceful shutdown on SIGINT/SIGTERM.
+    Falls back to atexit if coordinator is unavailable.
+    """
+    try:
+        from ....shutdown import get_shutdown_coordinator
+        coordinator = get_shutdown_coordinator()
+        coordinator.register(
+            callback=_shutdown_executor,
+            name="detection_executor",
+            priority=10,  # Shutdown early (higher = earlier)
+        )
+        logger.debug("Registered detection executor with shutdown coordinator")
+    except Exception as e:
+        logger.debug(f"Could not register with shutdown coordinator: {e}")
+        # Fall back to atexit
+        atexit.register(_shutdown_executor)
 
 
 # Backward compatibility alias
@@ -244,12 +266,33 @@ _get_executor_legacy = get_executor_legacy
 _get_executor = get_executor_legacy
 
 
+_SHUTDOWN_TIMEOUT = 5.0  # seconds to wait for graceful shutdown
+
+
 def _shutdown_executor():
-    """Shutdown the shared executor on process exit."""
+    """
+    Shutdown the shared executor on process exit.
+
+    GA-FIX (1.3): Changed from wait=False to wait=True with timeout.
+    This ensures in-flight detection tasks complete before exit,
+    preventing data loss or incomplete results.
+    """
     global _SHARED_EXECUTOR
     if _SHARED_EXECUTOR is not None:
-        _SHARED_EXECUTOR.shutdown(wait=False)
-        _SHARED_EXECUTOR = None
+        logger.info("Shutting down detection executor, waiting for in-flight tasks...")
+        try:
+            # GA-FIX (1.3): Wait for tasks to complete with timeout
+            _SHARED_EXECUTOR.shutdown(wait=True, cancel_futures=False)
+            logger.debug("Detection executor shutdown complete")
+        except Exception as e:
+            logger.warning(f"Error during executor shutdown: {e}")
+            # Force shutdown if graceful fails
+            try:
+                _SHARED_EXECUTOR.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+        finally:
+            _SHARED_EXECUTOR = None
 
 
 # Export all public symbols

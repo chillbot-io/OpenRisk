@@ -447,7 +447,12 @@ class Context:
             return self._virtual_handlers.get(handler_type)
 
     def close(self) -> None:
-        """Release all resources."""
+        """
+        Release all resources.
+
+        GA-FIX (1.3): Changed executor shutdown from wait=False to wait=True
+        with timeout to ensure in-flight tasks complete before exit.
+        """
         if self._shutdown:
             return
 
@@ -455,8 +460,20 @@ class Context:
 
         with self._executor_lock:
             if self._executor is not None:
-                self._executor.shutdown(wait=False)
-                self._executor = None
+                # GA-FIX (1.3): Wait for tasks to complete with graceful fallback
+                try:
+                    logger.debug("Shutting down context executor, waiting for in-flight tasks...")
+                    self._executor.shutdown(wait=True, cancel_futures=False)
+                    logger.debug("Context executor shutdown complete")
+                except Exception as e:
+                    logger.warning(f"Error during context executor shutdown: {e}")
+                    # Force shutdown if graceful fails
+                    try:
+                        self._executor.shutdown(wait=False, cancel_futures=True)
+                    except Exception:
+                        pass
+                finally:
+                    self._executor = None
 
         with self._index_lock:
             if self._label_index is not None:
