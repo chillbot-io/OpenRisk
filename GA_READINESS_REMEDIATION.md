@@ -11,14 +11,14 @@
 
 | Category | Issue Count | Status |
 |----------|-------------|--------|
-| **Tier 1: MUST FIX** | 4 (3 complete) | Blocking GA |
+| **Tier 1: MUST FIX** | 4 (4 complete) | **DONE** |
 | **Tier 2: SHOULD FIX** | 3 | Required before GA |
 
 ### Progress
 - [x] **1.1 TOCTOU Race Conditions** - COMPLETE (2026-01-28)
 - [x] **1.2 Silent Exception Handlers** - COMPLETE (2026-01-28)
 - [x] **1.3 Incomplete Shutdown** - COMPLETE (2026-01-28)
-- [ ] 1.4 No Cloud Adapter Retry
+- [x] **1.4 No Cloud Adapter Retry** - COMPLETE (2026-01-28)
 - [ ] 2.1 Long Functions
 - [ ] 2.2 Missing Logging
 - [ ] 2.3 Hardcoded Configuration
@@ -594,10 +594,55 @@ class MacieAdapter(Adapter):
 ```
 
 #### Verification
-- [ ] Add test: mock transient failure, verify retry occurs
-- [ ] Add test: mock repeated failures, verify circuit breaker opens
-- [ ] Add test: verify circuit breaker recovers after timeout
-- [ ] Integration test with network partition simulation
+- [x] Add test: mock transient failure, verify retry occurs
+- [x] Add test: mock repeated failures, verify circuit breaker opens
+- [x] Add test: verify circuit breaker recovers after timeout
+- [x] Integration test with network partition simulation
+
+#### Status: COMPLETE (2026-01-28)
+
+**Files created:**
+
+| File | Purpose |
+|------|---------|
+| `openlabels/utils/retry.py` | Retry decorator, circuit breaker, and combined resilience utilities |
+| `tests/test_retry.py` | 24 comprehensive tests for retry functionality |
+
+**Files modified:**
+
+| File | Changes |
+|------|---------|
+| `openlabels/utils/__init__.py` | Export retry utilities |
+| `openlabels/output/virtual.py` | Apply retry to S3, GCS, and Azure handlers |
+
+**Implementation details:**
+
+1. **Retry decorator** (`with_retry`):
+   - Exponential backoff with configurable base delay and max delay
+   - Configurable max retries (default: 3)
+   - Automatic detection of cloud-specific transient exceptions
+   - Optional callback on each retry attempt
+
+2. **Circuit breaker** (`CircuitBreaker`):
+   - Three states: CLOSED → OPEN → HALF_OPEN → CLOSED
+   - Configurable failure threshold (default: 5 failures)
+   - Configurable recovery timeout (default: 60 seconds)
+   - Thread-safe implementation
+   - Can be used as decorator or context manager
+   - Manual reset capability
+
+3. **Combined resilience** (`with_resilience`):
+   - Combines retry + circuit breaker in single decorator
+   - Fast-fails if circuit is open (no retry attempts)
+   - Tracks failures across retry attempts
+
+4. **Cloud handlers updated:**
+   - S3MetadataHandler: read/write with retry + circuit breaker
+   - GCSMetadataHandler: read/write with retry + circuit breaker
+   - AzureBlobMetadataHandler: read/write with retry + circuit breaker
+   - Module-level circuit breakers shared per provider
+
+**Note:** The adapters in `adapters/*.py` (Macie, DLP, Purview, M365) are data transformers that parse pre-fetched data - they don't make network calls. The actual cloud API calls are in `output/virtual.py` which now has retry logic.
 
 ---
 
