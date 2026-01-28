@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import shutil
+import stat as stat_module
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -164,8 +165,9 @@ class FileOps:
                 # Clean up temp file on error
                 try:
                     os.unlink(tmp_path)
-                except OSError:
-                    pass
+                except OSError as cleanup_err:
+                    # GA-FIX (1.2): Log cleanup failures at DEBUG level
+                    logger.debug(f"Failed to clean up temp manifest file {tmp_path}: {cleanup_err}")
                 raise
         except OSError as e:
             logger.warning(f"Failed to save quarantine manifest: {e}")
@@ -388,18 +390,50 @@ class FileOps:
             - SECURITY FIX (CVE-READY-002): Removed TOCTOU race condition by
               eliminating exists() check before move. Errors are caught instead.
             - SECURITY FIX (HIGH-002): Rejects symlinks to prevent symlink attacks.
+            - SECURITY FIX (TOCTOU-001): Uses lstat() instead of is_symlink() to
+              eliminate TOCTOU race window.
         """
         source = Path(source)
         destination = Path(destination)
 
         try:
+            # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_symlink()
+            # to eliminate TOCTOU race window. lstat() is atomic and doesn't
+            # follow symlinks.
+            try:
+                st = source.lstat()
+            except FileNotFoundError:
+                return OperationResult(
+                    success=False,
+                    operation="move",
+                    source_path=str(source),
+                    error=f"Source file not found: {source}",
+                    metadata={
+                        "error_type": FileErrorType.NOT_FOUND.value,
+                        "retryable": False,
+                    },
+                )
+
             # SECURITY FIX (HIGH-002): Reject symlinks to prevent symlink attacks
-            if source.is_symlink():
+            if stat_module.S_ISLNK(st.st_mode):
                 return OperationResult(
                     success=False,
                     operation="move",
                     source_path=str(source),
                     error=f"Symlinks not allowed for security reasons: {source}",
+                    metadata={
+                        "error_type": FileErrorType.PERMISSION_DENIED.value,
+                        "retryable": False,
+                    },
+                )
+
+            # SECURITY: Only allow regular files
+            if not stat_module.S_ISREG(st.st_mode):
+                return OperationResult(
+                    success=False,
+                    operation="move",
+                    source_path=str(source),
+                    error=f"Not a regular file: {source}",
                     metadata={
                         "error_type": FileErrorType.PERMISSION_DENIED.value,
                         "retryable": False,
@@ -468,8 +502,44 @@ class FileOps:
         deleted_files: List[str] = []
         errors: List[Dict[str, Any]] = []
 
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file() to detect
+        # if path is a single file vs directory. This eliminates TOCTOU window.
+        try:
+            st = path.lstat()
+            is_single_file = stat_module.S_ISREG(st.st_mode)
+            is_symlink = stat_module.S_ISLNK(st.st_mode)
+        except FileNotFoundError:
+            return DeleteResult(
+                deleted_count=0,
+                error_count=1,
+                deleted_files=[],
+                errors=[{"path": str(path), "error": "File not found"}],
+            )
+        except OSError as e:
+            file_error = FileError.from_exception(e, str(path))
+            return DeleteResult(
+                deleted_count=0,
+                error_count=1,
+                deleted_files=[],
+                errors=[file_error.to_dict()],
+            )
+
+        # SECURITY: Reject symlinks in single-file delete
+        if is_symlink:
+            return DeleteResult(
+                deleted_count=0,
+                error_count=1,
+                deleted_files=[],
+                errors=[{
+                    "path": str(path),
+                    "error_type": FileErrorType.PERMISSION_DENIED.value,
+                    "message": f"Symlinks not allowed for security: {path}",
+                    "retryable": False,
+                }],
+            )
+
         # Single file
-        if path.is_file():
+        if is_single_file:
             if dry_run:
                 return DeleteResult(
                     deleted_count=1,

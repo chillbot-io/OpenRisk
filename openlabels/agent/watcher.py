@@ -679,21 +679,24 @@ class PollingWatcher:
 
         for file_path in walker:
             # SECURITY FIX (CVE-READY-003): Use stat() directly instead of
-            # is_file() then stat() to eliminate TOCTOU race window
+            # is_file() then stat() to eliminate TOCTOU race window.
+            # SECURITY FIX (TOCTOU-001): Use follow_symlinks=False to prevent
+            # symlink attacks - symlinks will show S_ISLNK mode and be skipped.
             try:
-                st = file_path.stat()
+                st = file_path.stat(follow_symlinks=False)
                 # Check if it's a regular file using stat result
+                # This skips directories, symlinks, devices, etc.
                 if not stat_module.S_ISREG(st.st_mode):
-                    continue  # Skip directories, symlinks, etc.
+                    continue
                 # Phase 6.2: Include content hash for small files
                 if self.hash_threshold > 0 and st.st_size < self.hash_threshold:
                     content_hash = self._quick_hash(file_path)
                 else:
                     content_hash = None
                 files[str(file_path)] = (st.st_mtime, st.st_size, content_hash)
-            except OSError:
-                # File doesn't exist, permission denied, or other issue
-                pass
+            except OSError as e:
+                # GA-FIX (1.2): Log file access issues at DEBUG level for debugging
+                logger.debug(f"Could not stat file during watch scan: {file_path}: {e}")
 
         return files
 

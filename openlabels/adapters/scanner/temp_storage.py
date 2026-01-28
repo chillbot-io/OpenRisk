@@ -43,8 +43,26 @@ def _cleanup_on_exit() -> None:
             logger.warning(f"Failed to clean up temp dir {temp_dir}: {e}")
 
 
-# Register cleanup handler
-atexit.register(_cleanup_on_exit)
+# GA-FIX (1.3): Register cleanup with shutdown coordinator for signal handling
+# Falls back to atexit if coordinator is unavailable
+def _register_temp_cleanup():
+    """Register temp cleanup with shutdown coordinator."""
+    try:
+        from ...shutdown import get_shutdown_coordinator
+        coordinator = get_shutdown_coordinator()
+        coordinator.register(
+            callback=_cleanup_on_exit,
+            name="temp_storage_cleanup",
+            priority=5,  # Run after executors (priority 10) finish their work
+        )
+        logger.debug("Registered temp storage cleanup with shutdown coordinator")
+    except Exception as e:
+        logger.debug(f"Could not register with shutdown coordinator: {e}")
+        # Fall back to atexit
+        atexit.register(_cleanup_on_exit)
+
+
+_register_temp_cleanup()
 
 
 class SecureTempDir:

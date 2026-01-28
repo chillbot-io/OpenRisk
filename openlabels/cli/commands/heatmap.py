@@ -8,6 +8,7 @@ Usage:
     openlabels heatmap ./data --depth 3
 """
 
+import stat as stat_module
 from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
@@ -67,13 +68,21 @@ def build_tree(
     extensions: Optional[List[str]] = None,
 ) -> TreeNode:
     """Build a tree structure with risk scores."""
+    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()/is_dir()
+    try:
+        st = path.lstat()
+        is_regular_file = stat_module.S_ISREG(st.st_mode)
+        is_directory = stat_module.S_ISDIR(st.st_mode)
+    except OSError:
+        return TreeNode(name=path.name or str(path), path=path, is_dir=True, error="Cannot access")
+
     node = TreeNode(
         name=path.name or str(path),
         path=path,
-        is_dir=path.is_dir(),
+        is_dir=is_directory,
     )
 
-    if path.is_file():
+    if is_regular_file:
         # Scan file using scan_file for proper entity tracking
         scan_result = scan_file(path, client, exposure)
         node.score = scan_result.score
@@ -90,7 +99,14 @@ def build_tree(
         all_entities: Dict[str, int] = {}
 
         for file_path in path.rglob("*"):
-            if not file_path.is_file():
+            # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+            try:
+                child_st = file_path.lstat()
+                if not stat_module.S_ISREG(child_st.st_mode):
+                    continue
+            except OSError as e:
+                # GA-FIX (1.2): Log file access errors at DEBUG level
+                logger.debug(f"Could not stat file in heatmap scan: {file_path}: {e}")
                 continue
 
             if extensions:
@@ -111,7 +127,16 @@ def build_tree(
 
     # Recurse into children
     try:
-        children = sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+        # SECURITY FIX (TOCTOU-001): Use lstat() for sorting instead of is_dir()
+        def sort_key(p):
+            try:
+                s = p.lstat()
+                return (not stat_module.S_ISDIR(s.st_mode), p.name.lower())
+            except OSError as e:
+                # GA-FIX (1.2): Log at DEBUG - file may have been deleted during scan
+                logger.debug(f"Could not stat path during sort: {p}: {e}")
+                return (True, p.name.lower())
+        children = sorted(path.iterdir(), key=sort_key)
     except PermissionError:
         node.error = "Permission denied"
         return node
@@ -121,7 +146,16 @@ def build_tree(
         if child_path.name.startswith("."):
             continue
 
-        if child_path.is_file():
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+        try:
+            child_st = child_path.lstat()
+            child_is_file = stat_module.S_ISREG(child_st.st_mode)
+        except OSError as e:
+            # GA-FIX (1.2): Log file access errors at DEBUG level
+            logger.debug(f"Could not stat child path in heatmap: {child_path}: {e}")
+            continue
+
+        if child_is_file:
             if extensions:
                 if child_path.suffix.lower().lstrip(".") not in extensions:
                     continue

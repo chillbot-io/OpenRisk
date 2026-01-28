@@ -258,12 +258,14 @@ class LabelIndex:
         """Close and remove an invalid connection."""
         try:
             conn.close()
-        except sqlite3.Error:
-            pass
+        except sqlite3.Error as e:
+            # GA-FIX (1.2): Log instead of silently ignoring
+            logger.warning(f"Error closing stale database connection: {e}")
         try:
             delattr(self._thread_local, conn_key)
         except AttributeError:
-            pass
+            # GA-FIX (1.2): Log at DEBUG - expected when connection already removed
+            logger.debug(f"Connection key {conn_key} already removed from thread-local storage")
 
     @contextmanager
     def _get_connection(self):
@@ -318,7 +320,8 @@ class LabelIndex:
             try:
                 delattr(self._thread_local, conn_key)
             except AttributeError:
-                pass
+                # GA-FIX (1.2): Log at DEBUG - expected when connection already removed
+                logger.debug(f"Connection key {conn_key} already removed during close()")
 
     def __del__(self):
         """Cleanup on garbage collection."""

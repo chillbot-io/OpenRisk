@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 from ..core.labels import LabelSet, VirtualLabelPointer
+from ..utils.retry import with_retry, CircuitBreaker
 from ..utils.validation import (
     validate_path_for_subprocess,
     validate_xattr_value,
@@ -579,17 +580,32 @@ def has_virtual_label(path: Union[str, Path]) -> bool:
 # CLOUD STORAGE HANDLERS
 # =============================================================================
 
+# Module-level circuit breakers for each cloud provider
+# These prevent overwhelming failing services with retries
+_s3_circuit_breaker = CircuitBreaker(
+    failure_threshold=5,
+    recovery_timeout=60.0,
+    name="s3_metadata",
+)
+_gcs_circuit_breaker = CircuitBreaker(
+    failure_threshold=5,
+    recovery_timeout=60.0,
+    name="gcs_metadata",
+)
+_azure_circuit_breaker = CircuitBreaker(
+    failure_threshold=5,
+    recovery_timeout=60.0,
+    name="azure_metadata",
+)
+
+
 class S3MetadataHandler:
     """Handle OpenLabels metadata on S3 objects."""
 
     METADATA_KEY = "openlabels"  # Becomes x-amz-meta-openlabels
 
     def write(self, bucket: str, key: str, value: str, s3_client=None) -> bool:
-        """
-        Write OpenLabels metadata to S3 object.
-
-        Note: This requires copying the object to update metadata.
-        """
+        """Write OpenLabels metadata to S3 object (copies object to update)."""
         try:
             import boto3
         except ImportError:
@@ -599,26 +615,31 @@ class S3MetadataHandler:
         client = s3_client or boto3.client('s3')
 
         try:
-            # Get current metadata
-            response = client.head_object(Bucket=bucket, Key=key)
-            current_metadata = response.get('Metadata', {})
-
-            # Update with our label
-            current_metadata[self.METADATA_KEY] = value
-
-            # Copy object to itself with new metadata
-            client.copy_object(
-                Bucket=bucket,
-                Key=key,
-                CopySource={'Bucket': bucket, 'Key': key},
-                Metadata=current_metadata,
-                MetadataDirective='REPLACE',
-            )
-            return True
-
+            with _s3_circuit_breaker:
+                return self._write_with_retry(client, bucket, key, value)
         except Exception as e:
             logger.error(f"S3 metadata write failed: {e}")
             return False
+
+    @with_retry(max_retries=3, base_delay=1.0)
+    def _write_with_retry(self, client, bucket: str, key: str, value: str) -> bool:
+        """Internal write with retry decorator."""
+        # Get current metadata
+        response = client.head_object(Bucket=bucket, Key=key)
+        current_metadata = response.get('Metadata', {})
+
+        # Update with our label
+        current_metadata[self.METADATA_KEY] = value
+
+        # Copy object to itself with new metadata
+        client.copy_object(
+            Bucket=bucket,
+            Key=key,
+            CopySource={'Bucket': bucket, 'Key': key},
+            Metadata=current_metadata,
+            MetadataDirective='REPLACE',
+        )
+        return True
 
     def read(self, bucket: str, key: str, s3_client=None) -> Optional[str]:
         """Read OpenLabels metadata from S3 object."""
@@ -630,12 +651,18 @@ class S3MetadataHandler:
         client = s3_client or boto3.client('s3')
 
         try:
-            response = client.head_object(Bucket=bucket, Key=key)
-            metadata = response.get('Metadata', {})
-            return metadata.get(self.METADATA_KEY)
+            with _s3_circuit_breaker:
+                return self._read_with_retry(client, bucket, key)
         except Exception as e:
             logger.debug(f"S3 metadata read failed for {bucket}/{key}: {e}")
             return None
+
+    @with_retry(max_retries=3, base_delay=1.0)
+    def _read_with_retry(self, client, bucket: str, key: str) -> Optional[str]:
+        """Internal read with retry decorator."""
+        response = client.head_object(Bucket=bucket, Key=key)
+        metadata = response.get('Metadata', {})
+        return metadata.get(self.METADATA_KEY)
 
 
 class GCSMetadataHandler:
@@ -654,20 +681,25 @@ class GCSMetadataHandler:
         gcs_client = client or storage.Client()
 
         try:
-            bucket_obj = gcs_client.bucket(bucket)
-            blob = bucket_obj.blob(blob_name)
-
-            # Get current metadata
-            blob.reload()
-            metadata = blob.metadata or {}
-            metadata[self.METADATA_KEY] = value
-            blob.metadata = metadata
-            blob.patch()
-            return True
-
+            with _gcs_circuit_breaker:
+                return self._write_with_retry(gcs_client, bucket, blob_name, value)
         except Exception as e:
             logger.error(f"GCS metadata write failed: {e}")
             return False
+
+    @with_retry(max_retries=3, base_delay=1.0)
+    def _write_with_retry(self, gcs_client, bucket: str, blob_name: str, value: str) -> bool:
+        """Internal write with retry decorator."""
+        bucket_obj = gcs_client.bucket(bucket)
+        blob = bucket_obj.blob(blob_name)
+
+        # Get current metadata
+        blob.reload()
+        metadata = blob.metadata or {}
+        metadata[self.METADATA_KEY] = value
+        blob.metadata = metadata
+        blob.patch()
+        return True
 
     def read(self, bucket: str, blob_name: str, client=None) -> Optional[str]:
         """Read OpenLabels metadata from GCS object."""
@@ -679,14 +711,20 @@ class GCSMetadataHandler:
         gcs_client = client or storage.Client()
 
         try:
-            bucket_obj = gcs_client.bucket(bucket)
-            blob = bucket_obj.blob(blob_name)
-            blob.reload()
-            metadata = blob.metadata or {}
-            return metadata.get(self.METADATA_KEY)
+            with _gcs_circuit_breaker:
+                return self._read_with_retry(gcs_client, bucket, blob_name)
         except Exception as e:
             logger.debug(f"GCS metadata read failed for {bucket}/{blob_name}: {e}")
             return None
+
+    @with_retry(max_retries=3, base_delay=1.0)
+    def _read_with_retry(self, gcs_client, bucket: str, blob_name: str) -> Optional[str]:
+        """Internal read with retry decorator."""
+        bucket_obj = gcs_client.bucket(bucket)
+        blob = bucket_obj.blob(blob_name)
+        blob.reload()
+        metadata = blob.metadata or {}
+        return metadata.get(self.METADATA_KEY)
 
 
 class AzureBlobMetadataHandler:
@@ -708,25 +746,34 @@ class AzureBlobMetadataHandler:
             logger.error("azure-storage-blob not installed")
             return False
 
+        conn_str = connection_string or os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
+        if not conn_str:
+            logger.error("Azure connection string not provided")
+            return False
+
         try:
-            conn_str = connection_string or os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
-            if not conn_str:
-                logger.error("Azure connection string not provided")
-                return False
-
-            service = BlobServiceClient.from_connection_string(conn_str)
-            blob_client = service.get_blob_client(container=container, blob=blob_name)
-
-            # Get current metadata
-            props = blob_client.get_blob_properties()
-            metadata = props.metadata or {}
-            metadata[self.METADATA_KEY] = value
-            blob_client.set_blob_metadata(metadata)
-            return True
-
+            with _azure_circuit_breaker:
+                return self._write_with_retry(conn_str, container, blob_name, value)
         except Exception as e:
             logger.error(f"Azure Blob metadata write failed: {e}")
             return False
+
+    @with_retry(max_retries=3, base_delay=1.0)
+    def _write_with_retry(
+        self, conn_str: str, container: str, blob_name: str, value: str
+    ) -> bool:
+        """Internal write with retry decorator."""
+        from azure.storage.blob import BlobServiceClient
+
+        service = BlobServiceClient.from_connection_string(conn_str)
+        blob_client = service.get_blob_client(container=container, blob=blob_name)
+
+        # Get current metadata
+        props = blob_client.get_blob_properties()
+        metadata = props.metadata or {}
+        metadata[self.METADATA_KEY] = value
+        blob_client.set_blob_metadata(metadata)
+        return True
 
     def read(
         self,
@@ -740,19 +787,29 @@ class AzureBlobMetadataHandler:
         except ImportError:
             return None
 
-        try:
-            conn_str = connection_string or os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
-            if not conn_str:
-                return None
+        conn_str = connection_string or os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
+        if not conn_str:
+            return None
 
-            service = BlobServiceClient.from_connection_string(conn_str)
-            blob_client = service.get_blob_client(container=container, blob=blob_name)
-            props = blob_client.get_blob_properties()
-            metadata = props.metadata or {}
-            return metadata.get(self.METADATA_KEY)
+        try:
+            with _azure_circuit_breaker:
+                return self._read_with_retry(conn_str, container, blob_name)
         except Exception as e:
             logger.debug(f"Azure blob metadata read failed for {container}/{blob_name}: {e}")
             return None
+
+    @with_retry(max_retries=3, base_delay=1.0)
+    def _read_with_retry(
+        self, conn_str: str, container: str, blob_name: str
+    ) -> Optional[str]:
+        """Internal read with retry decorator."""
+        from azure.storage.blob import BlobServiceClient
+
+        service = BlobServiceClient.from_connection_string(conn_str)
+        blob_client = service.get_blob_client(container=container, blob=blob_name)
+        props = blob_client.get_blob_properties()
+        metadata = props.metadata or {}
+        return metadata.get(self.METADATA_KEY)
 
 
 # =============================================================================

@@ -22,6 +22,7 @@ Usage:
 
 import argparse
 import json
+import stat as stat_module
 import sys
 import logging
 from pathlib import Path
@@ -133,13 +134,25 @@ def cmd_detect_dir(args):
     detector = Detector(config)
 
     base_path = Path(args.directory)
-    if not base_path.exists():
+
+    # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists()/is_dir()/is_file()
+    try:
+        st = base_path.lstat()
+    except FileNotFoundError:
         error(f"Directory not found: {base_path}")
         sys.exit(1)
 
-    if not base_path.is_dir():
+    if not stat_module.S_ISDIR(st.st_mode):
         error(f"Not a directory: {base_path}")
         sys.exit(1)
+
+    # SECURITY FIX (TOCTOU-001): Helper to check for regular files
+    def is_regular_file(p):
+        try:
+            s = p.lstat()
+            return stat_module.S_ISREG(s.st_mode)
+        except OSError:
+            return False
 
     # Collect files
     if args.recursive:
@@ -147,7 +160,7 @@ def cmd_detect_dir(args):
     else:
         files = list(base_path.glob("*"))
 
-    files = [f for f in files if f.is_file()]
+    files = [f for f in files if is_regular_file(f)]
 
     if args.extensions:
         exts = {e.lower().lstrip(".") for e in args.extensions.split(",")}

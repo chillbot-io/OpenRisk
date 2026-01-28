@@ -11,6 +11,7 @@ Content-Type headers.
 import logging
 import os
 import re
+import stat as stat_module
 from pathlib import Path
 from typing import Optional, Union
 
@@ -70,8 +71,9 @@ def sanitize_filename(filename: str) -> str:
         if '%' in filename:
             import urllib.parse
             filename = urllib.parse.unquote(filename)
-    except (ValueError, UnicodeDecodeError):
-        pass  # If decoding fails, continue with original
+    except (ValueError, UnicodeDecodeError) as e:
+        # GA-FIX (1.2): Log decoding failures at DEBUG level
+        logger.debug(f"Failed to decode percent-encoded filename '{filename}': {e}")
 
     # SECURITY FIX (LOW-002): Replace non-ASCII characters to prevent homoglyph attacks
     # e.g., Cyrillic 'а' (U+0430) looks like Latin 'a' but is different
@@ -260,11 +262,20 @@ def validate_magic_bytes(
         source_name = "<memory>"
     elif file_path is not None:
         file_path = Path(file_path)
-        if not file_path.exists():
-            raise FileValidationError(f"File not found: {file_path}")
+        # SECURITY FIX (TOCTOU-001): Don't use exists() then open() - just try to open.
+        # Also check for symlinks to prevent symlink attacks.
         try:
+            st = file_path.lstat()
+            # Reject symlinks
+            if stat_module.S_ISLNK(st.st_mode):
+                raise FileValidationError(f"Symlinks not allowed for security: {file_path}")
+            # Only validate regular files
+            if not stat_module.S_ISREG(st.st_mode):
+                raise FileValidationError(f"Not a regular file: {file_path}")
             with open(file_path, "rb") as f:
                 header = f.read(64)
+        except FileNotFoundError:
+            raise FileValidationError(f"File not found: {file_path}")
         except IOError as e:
             raise FileValidationError(f"Cannot read file for validation: {e}")
         source_name = file_path.name
@@ -556,13 +567,19 @@ def validate_file(
         if file_content is not None:
             actual_mime = detect_mime_from_magic_bytes(file_content)
         else:
-            # Check file exists before reading
+            # SECURITY FIX (TOCTOU-001): Don't use exists() then open()
+            # Just try to open and handle errors
             file_path_obj = Path(file_path)
-            if not file_path_obj.exists():
+            try:
+                st = file_path_obj.lstat()
+                if stat_module.S_ISLNK(st.st_mode):
+                    raise FileValidationError(f"Symlinks not allowed: {file_path}")
+                if not stat_module.S_ISREG(st.st_mode):
+                    raise FileValidationError(f"Not a regular file: {file_path}")
+                with open(file_path, "rb") as f:
+                    actual_mime = detect_mime_from_magic_bytes(f.read(64))
+            except FileNotFoundError:
                 raise FileValidationError(f"File not found: {file_path}")
-            # Read file content for detection
-            with open(file_path, "rb") as f:
-                actual_mime = detect_mime_from_magic_bytes(f.read(64))
 
         # SECURITY: If actual type differs from claimed type, reject as spoofing
         # This prevents attackers from uploading malicious files by claiming
@@ -611,12 +628,20 @@ def validate_uploaded_file(
         FileValidationError: If validation fails
     """
     file_path = Path(file_path)
-    
-    if not file_path.exists():
+
+    # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists() then stat()
+    try:
+        st = file_path.lstat()
+    except FileNotFoundError:
         raise FileValidationError(f"File not found: {file_path}")
-    
-    size_bytes = file_path.stat().st_size
-    
+
+    if stat_module.S_ISLNK(st.st_mode):
+        raise FileValidationError(f"Symlinks not allowed: {file_path}")
+    if not stat_module.S_ISREG(st.st_mode):
+        raise FileValidationError(f"Not a regular file: {file_path}")
+
+    size_bytes = st.st_size
+
     validate_file(
         filename=filename,
         content_type=content_type,

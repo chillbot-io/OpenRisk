@@ -141,10 +141,15 @@ def get_posix_permissions(path: str) -> PosixPermissions:
         - User interface display
     """
     path = Path(path)
-    if not path.exists():
+
+    # SECURITY FIX (TOCTOU-001): Use lstat() directly instead of exists() then stat().
+    # lstat() doesn't follow symlinks, so we get the permissions of the symlink itself.
+    # For informational purposes, this is the safer default.
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
         raise FileNotFoundError(f"File not found: {path}")
 
-    st = path.stat()
     mode = st.st_mode
 
     # Get owner/group names

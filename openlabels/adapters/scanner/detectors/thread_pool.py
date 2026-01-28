@@ -234,9 +234,31 @@ def get_executor_legacy() -> ThreadPoolExecutor:
             max_workers=MAX_DETECTOR_WORKERS,
             thread_name_prefix="detector_"
         )
-        # Ensure cleanup on process exit
-        atexit.register(_shutdown_executor)
+        # GA-FIX (1.3): Register with shutdown coordinator for graceful shutdown
+        _register_shutdown_handler()
     return _SHARED_EXECUTOR
+
+
+def _register_shutdown_handler():
+    """
+    Register executor shutdown with the shutdown coordinator.
+
+    GA-FIX (1.3): Enables graceful shutdown on SIGINT/SIGTERM.
+    Falls back to atexit if coordinator is unavailable.
+    """
+    try:
+        from ....shutdown import get_shutdown_coordinator
+        coordinator = get_shutdown_coordinator()
+        coordinator.register(
+            callback=_shutdown_executor,
+            name="detection_executor",
+            priority=10,  # Shutdown early (higher = earlier)
+        )
+        logger.debug("Registered detection executor with shutdown coordinator")
+    except Exception as e:
+        logger.debug(f"Could not register with shutdown coordinator: {e}")
+        # Fall back to atexit
+        atexit.register(_shutdown_executor)
 
 
 # Backward compatibility alias
@@ -244,12 +266,54 @@ _get_executor_legacy = get_executor_legacy
 _get_executor = get_executor_legacy
 
 
+_SHUTDOWN_TIMEOUT = 5.0  # seconds to wait for graceful shutdown
+
+
 def _shutdown_executor():
-    """Shutdown the shared executor on process exit."""
+    """
+    Shutdown the shared executor on process exit.
+
+    GA-FIX (1.3): Changed from wait=False to wait=True with timeout.
+    This ensures in-flight detection tasks complete before exit,
+    preventing data loss or incomplete results.
+
+    Uses a background thread to enforce timeout since ThreadPoolExecutor.shutdown()
+    doesn't have a built-in timeout parameter.
+    """
     global _SHARED_EXECUTOR
-    if _SHARED_EXECUTOR is not None:
-        _SHARED_EXECUTOR.shutdown(wait=False)
-        _SHARED_EXECUTOR = None
+    if _SHARED_EXECUTOR is None:
+        return
+
+    executor = _SHARED_EXECUTOR
+    _SHARED_EXECUTOR = None  # Clear early to prevent double-shutdown
+
+    logger.info(f"Shutting down detection executor (timeout: {_SHUTDOWN_TIMEOUT}s)...")
+
+    # GA-FIX (1.3): Use background thread to enforce timeout
+    shutdown_complete = threading.Event()
+
+    def do_shutdown():
+        try:
+            executor.shutdown(wait=True, cancel_futures=False)
+            shutdown_complete.set()
+        except Exception as e:
+            logger.warning(f"Error during executor shutdown: {e}")
+
+    shutdown_thread = threading.Thread(target=do_shutdown, daemon=True)
+    shutdown_thread.start()
+
+    # Wait for graceful shutdown with timeout
+    if shutdown_complete.wait(timeout=_SHUTDOWN_TIMEOUT):
+        logger.debug("Detection executor shutdown complete")
+    else:
+        # Timeout - force shutdown
+        logger.warning(
+            f"Executor shutdown timed out after {_SHUTDOWN_TIMEOUT}s, forcing cancellation"
+        )
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
 
 
 # Export all public symbols

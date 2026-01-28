@@ -1,6 +1,9 @@
 """PatternDetector class for Tier 2 pattern-based detection."""
 
+import logging
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 from ...types import Span, Tier
 from ..base import BaseDetector
@@ -63,8 +66,9 @@ class PatternDetector(BaseDetector):
                                 m, d, y = int(g1), int(g2), int(g3)
                             if not validate_date(m, d, y):
                                 continue
-                    except (ValueError, IndexError):
-                        pass
+                    except (ValueError, IndexError) as e:
+                        # GA-FIX (1.2): Log date parsing failures at DEBUG level
+                        logger.debug(f"Could not parse date groups for validation: {value}: {e}")
 
                 if entity_type == 'AGE' and not validate_age(value):
                     continue

@@ -6,6 +6,7 @@ Handles file and directory scanning operations.
 
 import fnmatch
 import logging
+import stat as stat_module
 import time
 from datetime import datetime
 from pathlib import Path
@@ -83,13 +84,28 @@ class Scanner:
         """
         path = Path(path)
 
-        if not path.exists():
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists()/is_file()
+        # to eliminate TOCTOU race condition between check and operation.
+        try:
+            st = path.lstat()
+            is_regular_file = stat_module.S_ISREG(st.st_mode)
+            is_directory = stat_module.S_ISDIR(st.st_mode)
+            is_symlink = stat_module.S_ISLNK(st.st_mode)
+        except FileNotFoundError:
             raise FileNotFoundError(f"Path not found: {path}")
+
+        # SECURITY: Reject symlinks to prevent symlink attacks
+        if is_symlink:
+            raise ValueError(f"Symlinks not allowed for security: {path}")
+
+        # Must be either a file or directory
+        if not is_regular_file and not is_directory:
+            raise ValueError(f"Not a file or directory: {path}")
 
         filter_obj = parse_filter(filter_expr) if filter_expr else None
 
         # Single file
-        if path.is_file():
+        if is_regular_file:
             result = self._scan_single_file(path)
             if self._matches_filter(result, filter_criteria, filter_obj):
                 yield result
@@ -171,12 +187,27 @@ class Scanner:
         max_files: Optional[int] = None,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> Iterator[Path]:
-        """Iterate over files in a directory."""
+        """
+        Iterate over regular files in a directory.
+
+        SECURITY FIX (TOCTOU-001): Uses stat() directly instead of is_dir()
+        to eliminate TOCTOU race condition. Symlinks are skipped to prevent
+        symlink attacks.
+        """
         walker = path.rglob("*") if recursive else path.glob("*")
         files_yielded = 0
 
         for file_path in walker:
-            if file_path.is_dir():
+            # SECURITY FIX (TOCTOU-001): Use stat() directly instead of is_dir()
+            # to eliminate TOCTOU race window where path could change between
+            # type check and actual file access.
+            try:
+                st = file_path.stat(follow_symlinks=False)
+                # Skip non-regular files (directories, symlinks, devices, etc.)
+                if not stat_module.S_ISREG(st.st_mode):
+                    continue
+            except OSError:
+                # File doesn't exist, permission denied, or other issue - skip
                 continue
 
             if not include_hidden and any(part.startswith('.') for part in file_path.parts):
@@ -305,10 +336,38 @@ class Scanner:
         current_depth: int,
         max_depth: Optional[int],
     ) -> TreeNode:
-        """Recursively build tree node."""
+        """
+        Recursively build tree node.
+
+        SECURITY FIX (TOCTOU-001): Uses stat() directly instead of is_file()
+        to eliminate TOCTOU race condition.
+        """
         name = path.name or str(path)
 
-        if path.is_file():
+        # SECURITY FIX (TOCTOU-001): Use stat() directly instead of is_file()
+        try:
+            st = path.stat(follow_symlinks=False)
+            is_regular_file = stat_module.S_ISREG(st.st_mode)
+            is_directory = stat_module.S_ISDIR(st.st_mode)
+        except OSError:
+            # Can't stat - treat as empty directory node
+            return TreeNode(
+                name=name,
+                path=str(path),
+                is_directory=True,
+            )
+
+        # Skip symlinks and special files
+        if not is_regular_file and not is_directory:
+            return TreeNode(
+                name=name,
+                path=str(path),
+                is_directory=False,
+                score=0,
+                tier="MINIMAL",
+            )
+
+        if is_regular_file:
             result = self._scan_single_file(path)
             return TreeNode(
                 name=name,

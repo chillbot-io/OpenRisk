@@ -7,6 +7,7 @@ Part of OpenLabels - where labels are the primitive, risk is derived.
 Phase 4 fix: Detector now accepts optional Context for resource isolation.
 """
 
+import stat as stat_module
 import time
 from pathlib import Path
 from typing import List, Optional, Union, TYPE_CHECKING
@@ -171,11 +172,23 @@ class Detector:
         start_time = time.perf_counter()
         path = Path(path)
 
-        if not path.exists():
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists() then stat()
+        # to eliminate TOCTOU race condition. Single atomic call for file info.
+        try:
+            st = path.lstat()
+        except FileNotFoundError:
             raise FileNotFoundError(f"File not found: {path}")
 
+        # SECURITY: Reject symlinks to prevent symlink attacks
+        if stat_module.S_ISLNK(st.st_mode):
+            raise ValueError(f"Symlinks not allowed for security: {path}")
+
+        # SECURITY: Only process regular files
+        if not stat_module.S_ISREG(st.st_mode):
+            raise ValueError(f"Not a regular file: {path}")
+
         # Check file size BEFORE reading to prevent OOM
-        file_size = path.stat().st_size
+        file_size = st.st_size
         if file_size > self.config.max_file_size:
             raise ValueError(
                 f"File size ({file_size:,} bytes) exceeds maximum "
