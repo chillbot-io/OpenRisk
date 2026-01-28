@@ -172,19 +172,15 @@ class Detector:
         start_time = time.perf_counter()
         path = Path(path)
 
-        # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists() then stat()
-        # to eliminate TOCTOU race condition. Single atomic call for file info.
         try:
-            st = path.lstat()
+            st = path.lstat()  # TOCTOU-001: atomic stat
         except FileNotFoundError:
             raise FileNotFoundError(f"File not found: {path}")
 
-        # SECURITY: Reject symlinks to prevent symlink attacks
-        if stat_module.S_ISLNK(st.st_mode):
+        if stat_module.S_ISLNK(st.st_mode):  # Reject symlinks
             raise ValueError(f"Symlinks not allowed for security: {path}")
 
-        # SECURITY: Only process regular files
-        if not stat_module.S_ISREG(st.st_mode):
+        if not stat_module.S_ISREG(st.st_mode):  # Regular files only
             raise ValueError(f"Not a regular file: {path}")
 
         # Check file size BEFORE reading to prevent OOM
@@ -225,8 +221,7 @@ def _make_config(**kwargs) -> Config:
     for key, value in kwargs.items():
         if hasattr(config, key):
             setattr(config, key, value)
-    # SECURITY FIX (HIGH-006): Re-validate config after dynamic attribute assignment
-    config.__post_init__()
+    config.__post_init__()  # HIGH-006: re-validate after setattr
     return config
 
 

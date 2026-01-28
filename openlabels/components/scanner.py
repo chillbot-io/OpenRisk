@@ -84,18 +84,15 @@ class Scanner:
         """
         path = Path(path)
 
-        # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists()/is_file()
-        # to eliminate TOCTOU race condition between check and operation.
         try:
-            st = path.lstat()
+            st = path.lstat()  # TOCTOU-001: atomic stat
             is_regular_file = stat_module.S_ISREG(st.st_mode)
             is_directory = stat_module.S_ISDIR(st.st_mode)
             is_symlink = stat_module.S_ISLNK(st.st_mode)
         except FileNotFoundError:
             raise FileNotFoundError(f"Path not found: {path}")
 
-        # SECURITY: Reject symlinks to prevent symlink attacks
-        if is_symlink:
+        if is_symlink:  # Reject symlinks
             raise ValueError(f"Symlinks not allowed for security: {path}")
 
         # Must be either a file or directory
@@ -187,22 +184,13 @@ class Scanner:
         max_files: Optional[int] = None,
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> Iterator[Path]:
-        """
-        Iterate over regular files in a directory.
-
-        SECURITY FIX (TOCTOU-001): Uses stat() directly instead of is_dir()
-        to eliminate TOCTOU race condition. Symlinks are skipped to prevent
-        symlink attacks.
-        """
+        """Iterate over regular files in a directory. See SECURITY.md for TOCTOU-001."""
         walker = path.rglob("*") if recursive else path.glob("*")
         files_yielded = 0
 
         for file_path in walker:
-            # SECURITY FIX (TOCTOU-001): Use stat() directly instead of is_dir()
-            # to eliminate TOCTOU race window where path could change between
-            # type check and actual file access.
             try:
-                st = file_path.stat(follow_symlinks=False)
+                st = file_path.stat(follow_symlinks=False)  # TOCTOU-001
                 # Skip non-regular files (directories, symlinks, devices, etc.)
                 if not stat_module.S_ISREG(st.st_mode):
                     continue
@@ -336,17 +324,11 @@ class Scanner:
         current_depth: int,
         max_depth: Optional[int],
     ) -> TreeNode:
-        """
-        Recursively build tree node.
-
-        SECURITY FIX (TOCTOU-001): Uses stat() directly instead of is_file()
-        to eliminate TOCTOU race condition.
-        """
+        """Recursively build tree node. See SECURITY.md for TOCTOU-001."""
         name = path.name or str(path)
 
-        # SECURITY FIX (TOCTOU-001): Use stat() directly instead of is_file()
         try:
-            st = path.stat(follow_symlinks=False)
+            st = path.stat(follow_symlinks=False)  # TOCTOU-001
             is_regular_file = stat_module.S_ISREG(st.st_mode)
             is_directory = stat_module.S_ISDIR(st.st_mode)
         except OSError:

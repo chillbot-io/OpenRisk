@@ -386,22 +386,14 @@ class FileOps:
             Error is a string for backward compatibility, but metadata
             contains structured error info (Phase 3, Issue 3.5).
 
-        Security notes:
-            - SECURITY FIX (CVE-READY-002): Removed TOCTOU race condition by
-              eliminating exists() check before move. Errors are caught instead.
-            - SECURITY FIX (HIGH-002): Rejects symlinks to prevent symlink attacks.
-            - SECURITY FIX (TOCTOU-001): Uses lstat() instead of is_symlink() to
-              eliminate TOCTOU race window.
+        Security: See SECURITY.md for TOCTOU-001, HIGH-002, CVE-READY-002.
         """
         source = Path(source)
         destination = Path(destination)
 
         try:
-            # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_symlink()
-            # to eliminate TOCTOU race window. lstat() is atomic and doesn't
-            # follow symlinks.
             try:
-                st = source.lstat()
+                st = source.lstat()  # TOCTOU-001: atomic, no symlink follow
             except FileNotFoundError:
                 return OperationResult(
                     success=False,
@@ -414,8 +406,7 @@ class FileOps:
                     },
                 )
 
-            # SECURITY FIX (HIGH-002): Reject symlinks to prevent symlink attacks
-            if stat_module.S_ISLNK(st.st_mode):
+            if stat_module.S_ISLNK(st.st_mode):  # HIGH-002: reject symlinks
                 return OperationResult(
                     success=False,
                     operation="move",
@@ -427,8 +418,7 @@ class FileOps:
                     },
                 )
 
-            # SECURITY: Only allow regular files
-            if not stat_module.S_ISREG(st.st_mode):
+            if not stat_module.S_ISREG(st.st_mode):  # Regular files only
                 return OperationResult(
                     success=False,
                     operation="move",
@@ -440,9 +430,7 @@ class FileOps:
                     },
                 )
 
-            # SECURITY FIX (CVE-READY-002): Don't check exists() - catch errors instead
-            # This eliminates the TOCTOU race window between check and operation
-            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.parent.mkdir(parents=True, exist_ok=True)  # CVE-READY-002: no exists() check
             shutil.move(str(source), str(destination))
 
             return OperationResult(
@@ -502,10 +490,8 @@ class FileOps:
         deleted_files: List[str] = []
         errors: List[Dict[str, Any]] = []
 
-        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file() to detect
-        # if path is a single file vs directory. This eliminates TOCTOU window.
         try:
-            st = path.lstat()
+            st = path.lstat()  # TOCTOU-001: atomic stat
             is_single_file = stat_module.S_ISREG(st.st_mode)
             is_symlink = stat_module.S_ISLNK(st.st_mode)
         except FileNotFoundError:
@@ -524,8 +510,7 @@ class FileOps:
                 errors=[file_error.to_dict()],
             )
 
-        # SECURITY: Reject symlinks in single-file delete
-        if is_symlink:
+        if is_symlink:  # Reject symlinks
             return DeleteResult(
                 deleted_count=0,
                 error_count=1,

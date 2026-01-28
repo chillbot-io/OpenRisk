@@ -30,10 +30,6 @@ def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, bas
     """
     Move a file to the destination directory.
 
-    SECURITY: Uses lstat() to eliminate TOCTOU race conditions.
-    Symlinks are rejected to prevent symlink attacks where an attacker
-    could replace a file with a symlink between check and move.
-
     Args:
         source: Source file path
         dest_dir: Destination directory
@@ -47,23 +43,20 @@ def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, bas
         ValueError: If source is a symlink or not a regular file
         FileNotFoundError: If source doesn't exist
         PermissionError: If source cannot be accessed
+
+    Security: See SECURITY.md for TOCTOU-001.
     """
-    # SECURITY FIX (TOCTOU-001): Use lstat() directly instead of is_symlink()/exists()
-    # to eliminate TOCTOU race window. lstat() doesn't follow symlinks and returns
-    # the file's actual type in a single atomic syscall.
     try:
-        st = source.lstat()  # lstat = stat(follow_symlinks=False)
+        st = source.lstat()  # TOCTOU-001: atomic, no symlink follow
     except FileNotFoundError:
         raise FileNotFoundError(f"Source file not found: {source}")
     except OSError as e:
         raise PermissionError(f"Cannot access source file: {e}")
 
-    # SECURITY: Reject symlinks to prevent symlink attacks
-    if stat_module.S_ISLNK(st.st_mode):
+    if stat_module.S_ISLNK(st.st_mode):  # Reject symlinks
         raise ValueError(f"Refusing to move symlink (security): {source}")
 
-    # SECURITY: Only move regular files
-    if not stat_module.S_ISREG(st.st_mode):
+    if not stat_module.S_ISREG(st.st_mode):  # Regular files only
         raise ValueError(f"Not a regular file (security): {source}")
 
     if preserve_structure and base_path:
@@ -80,10 +73,7 @@ def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, bas
     # Create parent directories
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # SECURITY FIX (TOCTOU-001): Perform atomic move.
-    # os.rename() is atomic on the same filesystem.
-    # For cross-filesystem, we must re-verify the source hasn't changed.
-    try:
+    try:  # Atomic move; cross-fs requires re-verify
         os.rename(str(source), str(dest_path))
     except OSError as rename_error:
         # Cross-filesystem move required - need to copy then delete

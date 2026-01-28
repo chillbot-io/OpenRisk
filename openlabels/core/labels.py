@@ -197,13 +197,8 @@ class Label:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> 'Label':
-        """Deserialize from compact JSON format.
-
-        Security Note (MED-004): Validates types before use to prevent
-        type confusion attacks via malformed JSON input.
-        """
-        # SECURITY FIX (MED-004): Validate types before use
-        if not isinstance(d.get('t'), str):
+        """Deserialize from compact JSON format. See SECURITY.md for MED-004."""
+        if not isinstance(d.get('t'), str):  # MED-004: validate types
             raise ValueError(f"Label type must be string, got {type(d.get('t'))}")
         if not isinstance(d.get('c'), (int, float)):
             raise ValueError(f"Label confidence must be numeric, got {type(d.get('c'))}")
@@ -278,13 +273,8 @@ class LabelSet:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> 'LabelSet':
-        """Deserialize from JSON dict.
-
-        Security Note (MED-004): Validates types before use to prevent
-        type confusion attacks via malformed JSON input.
-        """
-        # SECURITY FIX (MED-004): Validate types before use
-        if not isinstance(d.get('v'), int):
+        """Deserialize from JSON dict. See SECURITY.md for MED-004."""
+        if not isinstance(d.get('v'), int):  # MED-004: validate types
             raise ValueError(f"LabelSet version must be integer, got {type(d.get('v'))}")
         if not isinstance(d.get('id'), str):
             raise ValueError(f"LabelSet label_id must be string, got {type(d.get('id'))}")

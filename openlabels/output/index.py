@@ -844,9 +844,7 @@ class LabelIndex:
         Returns:
             Dict with export stats: {"success": bool, "count": int, "error": str|None}
 
-        Security notes:
-            SECURITY FIX (HIGH-004): Uses cursor iteration instead of fetchall()
-            to prevent loading entire result set into memory for large datasets.
+        Security: See SECURITY.md for HIGH-004 (cursor iteration for memory bounds).
         """
         count = 0
         try:
@@ -874,9 +872,7 @@ class LabelIndex:
 
                 query += " ORDER BY v.scanned_at DESC"
 
-                # SECURITY FIX (HIGH-004): Use cursor iteration instead of fetchall()
-                # This streams results instead of loading all into memory
-                cursor = conn.execute(query, params)
+                cursor = conn.execute(query, params)  # HIGH-004: stream results
 
                 with open(output_path, 'w') as f:
                     batch = []

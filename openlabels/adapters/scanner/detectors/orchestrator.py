@@ -257,8 +257,7 @@ class DetectorOrchestrator:
             return self._context.track_runaway_detection(detector_name)
         return track_runaway_detection(detector_name)
 
-    # SECURITY FIX (HIGH-009): Maximum matches per search term to prevent memory exhaustion
-    MAX_MATCHES_PER_TERM = 100
+    MAX_MATCHES_PER_TERM = 100  # HIGH-009: prevent memory exhaustion
 
     def _detect_known_entities(
         self,
@@ -301,8 +300,7 @@ class DetectorOrchestrator:
                     if idx == -1:
                         break
 
-                    # SECURITY FIX (HIGH-009): Limit matches per term to prevent OOM
-                    if match_count >= self.MAX_MATCHES_PER_TERM:
+                    if match_count >= self.MAX_MATCHES_PER_TERM:  # HIGH-009
                         logger.debug(f"Reached max matches ({self.MAX_MATCHES_PER_TERM}) for known entity")
                         break
 
@@ -412,8 +410,7 @@ class DetectorOrchestrator:
             spans = self._detect_impl_with_metadata(text, timeout, known_entities, metadata)
             metadata.finalize()
 
-            # SECURITY FIX (LOW-004): Strict mode fails if any detector failed
-            if strict_mode and (metadata.detectors_failed or metadata.detectors_timed_out):
+            if strict_mode and (metadata.detectors_failed or metadata.detectors_timed_out):  # LOW-004
                 all_failed = metadata.detectors_failed + metadata.detectors_timed_out
                 raise DetectorFailureError(all_failed, metadata)
 

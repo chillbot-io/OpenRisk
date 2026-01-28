@@ -104,11 +104,9 @@ def scan_directory(
     else:
         files = list(path.glob("*"))
 
-    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
-    def is_regular_file(p):
+    def is_regular_file(p):  # TOCTOU-001: use lstat
         try:
-            st = p.lstat()
-            return stat_module.S_ISREG(st.st_mode)
+            return stat_module.S_ISREG(p.lstat().st_mode)
         except OSError:
             return False
 
@@ -166,11 +164,9 @@ def cmd_scan(args) -> int:
     files_with_risk = 0
     max_score = 0
 
-    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
-    def is_regular_file_check(p):
+    def is_regular_file_check(p):  # TOCTOU-001: use lstat
         try:
-            st = p.lstat()
-            return stat_module.S_ISREG(st.st_mode)
+            return stat_module.S_ISREG(p.lstat().st_mode)
         except OSError:
             return False
 
@@ -192,7 +188,6 @@ def cmd_scan(args) -> int:
             all_files = list(path.rglob("*"))
         else:
             all_files = list(path.glob("*"))
-        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
         all_files = [f for f in all_files if is_regular_file_check(f)]
         if extensions:
             exts = {e.lower().lstrip(".") for e in extensions}

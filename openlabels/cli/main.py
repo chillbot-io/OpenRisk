@@ -81,8 +81,7 @@ def cmd_detect(args):
 
     text = args.text
     if text == "-":
-        # SECURITY FIX (CVE-READY-001): Limit stdin read to prevent OOM
-        text = sys.stdin.read(MAX_STDIN_SIZE + 1)
+        text = sys.stdin.read(MAX_STDIN_SIZE + 1)  # CVE-READY-001: bound stdin
         if len(text) > MAX_STDIN_SIZE:
             error(f"stdin input exceeds maximum size ({MAX_STDIN_SIZE // (1024*1024)}MB)")
             sys.exit(1)
@@ -135,9 +134,8 @@ def cmd_detect_dir(args):
 
     base_path = Path(args.directory)
 
-    # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists()/is_dir()/is_file()
     try:
-        st = base_path.lstat()
+        st = base_path.lstat()  # TOCTOU-001: atomic stat
     except FileNotFoundError:
         error(f"Directory not found: {base_path}")
         sys.exit(1)
@@ -146,11 +144,9 @@ def cmd_detect_dir(args):
         error(f"Not a directory: {base_path}")
         sys.exit(1)
 
-    # SECURITY FIX (TOCTOU-001): Helper to check for regular files
-    def is_regular_file(p):
+    def is_regular_file(p):  # TOCTOU-001: use lstat
         try:
-            s = p.lstat()
-            return stat_module.S_ISREG(s.st_mode)
+            return stat_module.S_ISREG(p.lstat().st_mode)
         except OSError:
             return False
 

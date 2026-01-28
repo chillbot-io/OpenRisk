@@ -173,8 +173,7 @@ class FileWatcher:
         self._observer: Optional[Observer] = None
         self._handler: Optional[_WatchdogHandler] = None
 
-        # State - SECURITY FIX (HIGH-001): Use threading.Event for thread-safe state
-        self._running_event = threading.Event()
+        self._running_event = threading.Event()  # HIGH-001: thread-safe state
         self._processor_thread: Optional[threading.Thread] = None
 
     @property
@@ -489,16 +488,12 @@ def watch_directory(
         >>> for event in watch_directory("/data", timeout=60):
         ...     print(f"{event.event_type}: {event.path}")
     """
-    # SECURITY FIX (CVE-READY-004): Add maxsize to prevent memory exhaustion
-    # from rapid file system changes
-    max_queue_size = kwargs.pop("max_queue_size", MAX_QUEUE_SIZE)
+    max_queue_size = kwargs.pop("max_queue_size", MAX_QUEUE_SIZE)  # CVE-READY-004: bound queue
     event_queue: queue.Queue = queue.Queue(maxsize=max_queue_size)
 
     def on_change(event: WatchEvent):
         try:
-            # Non-blocking put - if queue is full, we drop the event
-            # This prevents memory exhaustion from rapid file changes
-            event_queue.put_nowait(event)
+            event_queue.put_nowait(event)  # Non-blocking; drops if full
         except queue.Full:
             logger.warning("Event queue full - dropping event (consider increasing max_queue_size)")
             pass
@@ -567,11 +562,8 @@ class PollingWatcher:
         self.hash_threshold = hash_threshold if hash_threshold is not None else self.DEFAULT_HASH_THRESHOLD
         self.on_queue_full = on_queue_full
 
-        # SECURITY FIX (HIGH-001): Use threading.Event for thread-safe state
-        self._running_event = threading.Event()
-        # SECURITY FIX (LOW-007): Separate stop event for interruptible sleep
-        # _stop_event is SET when we want to stop, allowing wait() to return early
-        self._stop_event = threading.Event()
+        self._running_event = threading.Event()  # HIGH-001: thread-safe state
+        self._stop_event = threading.Event()  # LOW-007: interruptible sleep
         self._thread: Optional[threading.Thread] = None
         self._known_files: dict = {}  # path -> (mtime, size, content_hash)
 
@@ -597,10 +589,8 @@ class PollingWatcher:
         if self._running:
             return
 
-        # Initial scan
         self._known_files = self._scan_directory()
-        # SECURITY FIX (LOW-007): Clear stop event on start
-        self._stop_event.clear()
+        self._stop_event.clear()  # LOW-007
         self._running = True
 
         self._thread = threading.Thread(target=self._poll_loop, daemon=True)
@@ -611,8 +601,7 @@ class PollingWatcher:
     def stop(self) -> None:
         """Stop polling."""
         self._running = False
-        # SECURITY FIX (LOW-007): Set stop event to wake up sleeping thread immediately
-        self._stop_event.set()
+        self._stop_event.set()  # LOW-007: wake sleeping thread
         if self._thread:
             self._thread.join(timeout=self.interval + 1)
             self._thread = None
@@ -624,16 +613,11 @@ class PollingWatcher:
         Phase 6.2: Uses content hashing for small files to detect changes
         that occur within the same second (same mtime/size).
 
-        SECURITY FIX (LOW-007): Uses _stop_event.wait() for interruptible sleep.
-        When stop() is called, it sets the stop event, causing wait() to return
-        immediately instead of waiting for the full interval.
+        Security: See SECURITY.md for LOW-007.
         """
         while self._running:
             try:
-                # SECURITY FIX (LOW-007): Use stop event for interruptible sleep
-                # wait() returns True if event is set (stop requested), False on timeout
-                if self._stop_event.wait(self.interval):
-                    # Stop event was set, exit loop immediately
+                if self._stop_event.wait(self.interval):  # LOW-007: interruptible sleep
                     break
 
                 current_files = self._scan_directory()
@@ -672,9 +656,7 @@ class PollingWatcher:
         Phase 6.2: Includes content hash for small files to detect
         changes that occur within the same second.
 
-        SECURITY FIX (CVE-READY-003): Eliminated TOCTOU race condition.
-        Previously called is_file() then stat(), allowing file to change
-        between checks. Now uses stat() directly and checks st_mode.
+        Security: See SECURITY.md for CVE-READY-003, TOCTOU-001.
 
         Returns:
             Dict mapping path to (mtime, size, content_hash) tuple.
@@ -684,15 +666,9 @@ class PollingWatcher:
         walker = self.path.rglob("*") if self.recursive else self.path.glob("*")
 
         for file_path in walker:
-            # SECURITY FIX (CVE-READY-003): Use stat() directly instead of
-            # is_file() then stat() to eliminate TOCTOU race window.
-            # SECURITY FIX (TOCTOU-001): Use follow_symlinks=False to prevent
-            # symlink attacks - symlinks will show S_ISLNK mode and be skipped.
             try:
-                st = file_path.stat(follow_symlinks=False)
-                # Check if it's a regular file using stat result
-                # This skips directories, symlinks, devices, etc.
-                if not stat_module.S_ISREG(st.st_mode):
+                st = file_path.stat(follow_symlinks=False)  # TOCTOU-001, CVE-READY-003
+                if not stat_module.S_ISREG(st.st_mode):  # Skip non-regular files
                     continue
                 # Phase 6.2: Include content hash for small files
                 if self.hash_threshold > 0 and st.st_size < self.hash_threshold:

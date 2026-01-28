@@ -68,9 +68,8 @@ def build_tree(
     extensions: Optional[List[str]] = None,
 ) -> TreeNode:
     """Build a tree structure with risk scores."""
-    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()/is_dir()
     try:
-        st = path.lstat()
+        st = path.lstat()  # TOCTOU-001: atomic stat
         is_regular_file = stat_module.S_ISREG(st.st_mode)
         is_directory = stat_module.S_ISDIR(st.st_mode)
     except OSError:
@@ -99,9 +98,8 @@ def build_tree(
         all_entities: Dict[str, int] = {}
 
         for file_path in path.rglob("*"):
-            # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
             try:
-                child_st = file_path.lstat()
+                child_st = file_path.lstat()  # TOCTOU-001
                 if not stat_module.S_ISREG(child_st.st_mode):
                     continue
             except OSError as e:
@@ -127,8 +125,7 @@ def build_tree(
 
     # Recurse into children
     try:
-        # SECURITY FIX (TOCTOU-001): Use lstat() for sorting instead of is_dir()
-        def sort_key(p):
+        def sort_key(p):  # TOCTOU-001: use lstat
             try:
                 s = p.lstat()
                 return (not stat_module.S_ISDIR(s.st_mode), p.name.lower())
@@ -146,9 +143,8 @@ def build_tree(
         if child_path.name.startswith("."):
             continue
 
-        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
         try:
-            child_st = child_path.lstat()
+            child_st = child_path.lstat()  # TOCTOU-001
             child_is_file = stat_module.S_ISREG(child_st.st_mode)
         except OSError as e:
             # GA-FIX (1.2): Log file access errors at DEBUG level

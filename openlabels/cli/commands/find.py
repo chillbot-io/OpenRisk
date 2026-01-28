@@ -50,11 +50,9 @@ def find_matching(
     # Parse filter if provided
     filter_obj = parse_filter(filter_expr) if filter_expr else None
 
-    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
-    def is_regular_file(p):
+    def is_regular_file(p):  # TOCTOU-001: use lstat
         try:
-            st = p.lstat()
-            return stat_module.S_ISREG(st.st_mode)
+            return stat_module.S_ISREG(p.lstat().st_mode)
         except OSError:
             return False
 
