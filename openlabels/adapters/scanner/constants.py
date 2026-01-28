@@ -49,6 +49,17 @@ __all__ = [
     "ADDRESS_GAP_THRESHOLD",
     "TRACKING_CONTEXT_WINDOW",
     "INTERVALTREE_THRESHOLD",
+    # Context analysis
+    "CONTEXT_WINDOW_DEFAULT",
+    # Queue/batch processing
+    "DEFAULT_BATCH_SIZE",
+    "DEFAULT_QUERY_LIMIT",
+    "MAX_QUEUE_SIZE",
+    # Regex safety
+    "REGEX_TIMEOUT_MS",
+    # Extended attributes (collector)
+    "MAX_XATTR_NAME_LENGTH",
+    "MAX_XATTR_COUNT",
 ]
 
 # --- TIMEOUTS (seconds) ---
@@ -140,3 +151,18 @@ NAME_CONTEXT_WINDOW = 50
 ADDRESS_GAP_THRESHOLD = 20
 TRACKING_CONTEXT_WINDOW = 30
 INTERVALTREE_THRESHOLD = 100
+
+# --- CONTEXT ANALYSIS ---
+CONTEXT_WINDOW_DEFAULT = 30  # Characters to look before/after entity
+
+# --- QUEUE/BATCH PROCESSING ---
+DEFAULT_BATCH_SIZE = 1000  # Batch size for bulk operations
+DEFAULT_QUERY_LIMIT = 100  # Default limit for database queries
+MAX_QUEUE_SIZE = 10000  # Maximum size for job queues
+
+# --- REGEX SAFETY ---
+REGEX_TIMEOUT_MS = 100  # Timeout for regex operations in milliseconds
+
+# --- EXTENDED ATTRIBUTES (COLLECTOR) ---
+MAX_XATTR_NAME_LENGTH = 256  # Linux limit is 255, macOS is similar
+MAX_XATTR_COUNT = 100  # Prevent collecting excessive attributes

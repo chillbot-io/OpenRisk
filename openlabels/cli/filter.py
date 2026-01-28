@@ -33,6 +33,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Any, Dict, Set
 from enum import Enum
 
+from openlabels.adapters.scanner.constants import REGEX_TIMEOUT_MS
+
 logger = logging.getLogger(__name__)
 
 # Module-level flag to only warn once about missing regex module
@@ -178,7 +180,7 @@ class Condition:
         unit = match.group(2)
         return num * DURATION_MULTIPLIERS.get(unit, 0)
 
-    def _safe_regex_match(self, pattern: str, text: str, timeout_ms: int = 100) -> bool:
+    def _safe_regex_match(self, pattern: str, text: str, timeout_ms: int = REGEX_TIMEOUT_MS) -> bool:
         """
         Safely execute regex match with protection against ReDoS.
 

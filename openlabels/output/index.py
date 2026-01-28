@@ -27,6 +27,7 @@ from datetime import datetime
 from contextlib import contextmanager
 
 from ..core.labels import LabelSet, VirtualLabelPointer
+from ..adapters.scanner.constants import DEFAULT_QUERY_LIMIT, DEFAULT_BATCH_SIZE
 from ..core.exceptions import (
     DatabaseError,
     CorruptedDataError,
@@ -635,7 +636,7 @@ class LabelIndex:
         risk_tier: Optional[str] = None,
         entity_type: Optional[str] = None,
         since: Optional[str] = None,
-        limit: int = 100,
+        limit: int = DEFAULT_QUERY_LIMIT,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """
@@ -825,7 +826,7 @@ class LabelIndex:
     def export(
         self,
         output_path: str,
-        batch_size: int = 1000,
+        batch_size: int = DEFAULT_BATCH_SIZE,
         min_score: Optional[int] = None,
         max_score: Optional[int] = None,
         risk_tier: Optional[str] = None,

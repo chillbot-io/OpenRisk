@@ -50,6 +50,7 @@ from enum import Enum
 from typing import Optional, List, Callable, Any, Dict
 
 from ...core.triggers import ScanTrigger
+from .constants import MAX_QUEUE_SIZE, DEFAULT_MAX_RETRIES
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +132,8 @@ class OCRPriorityQueue:
 
     def __init__(
         self,
-        max_size: int = 10000,
-        max_retries: int = 3,
+        max_size: int = MAX_QUEUE_SIZE,
+        max_retries: int = DEFAULT_MAX_RETRIES,
     ):
         """
         Initialize the priority queue.
