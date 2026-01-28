@@ -17,9 +17,29 @@ Weight Scale:
 - 1: Minimal - Very low risk information
 
 Note: Weights are used by the scorer to calculate overall file risk.
+
+Override Mechanism:
+    Organizations can customize weights by creating a YAML file at one of:
+    - /etc/openlabels/weights.yaml (system-wide)
+    - ~/.openlabels/weights.yaml (user-specific)
+    - OPENLABELS_WEIGHTS_FILE environment variable (explicit path)
+
+    Override file format:
+        SSN: 10
+        EMAIL: 3
+        # Only include types you want to override
+
+    On rescan, labels are recalculated with the effective weights
+    (standard + overrides) for the current environment.
 """
 
-from typing import Dict
+import logging
+import os
+from functools import lru_cache
+from pathlib import Path
+from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # DIRECT IDENTIFIERS (8-10)
@@ -528,3 +548,109 @@ ENTITY_WEIGHTS: Dict[str, int] = _build_entity_weights()
 
 # Default weight for unknown entity types
 DEFAULT_WEIGHT = 5
+
+
+# =============================================================================
+# WEIGHT OVERRIDES (Local Customization)
+# =============================================================================
+
+def _find_override_file() -> Optional[Path]:
+    """
+    Find the weight override file, checking in order:
+    1. OPENLABELS_WEIGHTS_FILE environment variable
+    2. ~/.openlabels/weights.yaml (user-specific)
+    3. /etc/openlabels/weights.yaml (system-wide)
+
+    Returns:
+        Path to override file if found, None otherwise
+    """
+    # Check environment variable first
+    env_path = os.environ.get("OPENLABELS_WEIGHTS_FILE")
+    if env_path:
+        path = Path(env_path)
+        if path.exists():
+            return path
+
+    # Check user-specific config
+    user_path = Path.home() / ".openlabels" / "weights.yaml"
+    if user_path.exists():
+        return user_path
+
+    # Check system-wide config
+    system_path = Path("/etc/openlabels/weights.yaml")
+    if system_path.exists():
+        return system_path
+
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_overrides() -> Dict[str, int]:
+    """
+    Load weight overrides from YAML file.
+
+    Cached to avoid repeated file I/O. Cache is cleared on reload_overrides().
+
+    Returns:
+        Dict of entity_type -> weight overrides (empty if no override file)
+    """
+    override_file = _find_override_file()
+    if override_file is None:
+        return {}
+
+    try:
+        import yaml
+    except ImportError:
+        logger.debug("PyYAML not installed, weight overrides disabled")
+        return {}
+
+    try:
+        with open(override_file) as f:
+            overrides = yaml.safe_load(f) or {}
+
+        # Validate overrides
+        valid_overrides = {}
+        for entity_type, weight in overrides.items():
+            if not isinstance(entity_type, str):
+                logger.warning(f"Invalid override key (not string): {entity_type}")
+                continue
+            if not isinstance(weight, int) or not 1 <= weight <= 10:
+                logger.warning(f"Invalid weight for {entity_type}: {weight} (must be int 1-10)")
+                continue
+            valid_overrides[entity_type.upper()] = weight
+
+        if valid_overrides:
+            logger.info(f"Loaded {len(valid_overrides)} weight overrides from {override_file}")
+
+        return valid_overrides
+
+    except Exception as e:
+        logger.warning(f"Failed to load weight overrides from {override_file}: {e}")
+        return {}
+
+
+def get_effective_weights() -> Dict[str, int]:
+    """
+    Get effective weights (standard + overrides).
+
+    Returns:
+        Combined dict with overrides taking precedence over standard weights
+    """
+    effective = ENTITY_WEIGHTS.copy()
+    effective.update(_load_overrides())
+    return effective
+
+
+def reload_overrides() -> None:
+    """
+    Reload weight overrides from disk.
+
+    Call this after modifying the override file to pick up changes
+    without restarting the process.
+    """
+    _load_overrides.cache_clear()
+    overrides = _load_overrides()
+    if overrides:
+        logger.info(f"Reloaded {len(overrides)} weight overrides")
+    else:
+        logger.info("No weight overrides loaded")

@@ -22,6 +22,9 @@ from typing import Optional
 from .weights import (
     ENTITY_WEIGHTS,
     DEFAULT_WEIGHT,
+    # Override mechanism
+    get_effective_weights,
+    reload_overrides,
     # Category-specific exports for advanced use
     DIRECT_IDENTIFIER_WEIGHTS,
     HEALTHCARE_WEIGHTS,
@@ -57,13 +60,20 @@ def get_weight(entity_type: str) -> int:
     """
     Get weight for an entity type.
 
+    Uses effective weights (standard + local overrides) to support
+    organization-specific risk scoring. Override weights by creating
+    a weights.yaml file at:
+    - /etc/openlabels/weights.yaml (system-wide)
+    - ~/.openlabels/weights.yaml (user-specific)
+    - OPENLABELS_WEIGHTS_FILE environment variable
+
     Args:
         entity_type: Canonical entity type (e.g., "SSN", "CREDIT_CARD")
 
     Returns:
         Weight from 1-10, or DEFAULT_WEIGHT if unknown
     """
-    return ENTITY_WEIGHTS.get(entity_type, DEFAULT_WEIGHT)
+    return get_effective_weights().get(entity_type, DEFAULT_WEIGHT)
 
 
 def get_category(entity_type: str) -> str:
@@ -162,6 +172,9 @@ __all__ = [
     "get_category",
     "normalize_type",
     "is_known_type",
+    # Override mechanism
+    "get_effective_weights",
+    "reload_overrides",
     # Additional utilities
     "get_types_by_category",
     "get_high_risk_types",
