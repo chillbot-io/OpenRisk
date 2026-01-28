@@ -105,11 +105,31 @@ def _safe_move(source: Path, dest: Path) -> Tuple[bool, Optional[FileError]]:
 - [x] Add test: race condition simulation with threading (test_toctou_security.py)
 
 #### Status: COMPLETE (2026-01-28)
-All TOCTOU vulnerabilities fixed:
-- `collector.py`: Uses `lstat()` before `resolve()` to detect symlinks
-- `quarantine.py`: Uses `lstat()` and verifies inode on cross-filesystem moves
-- `scanner.py`: Uses `stat(follow_symlinks=False)` in `_iter_files()` and `_build_tree_node()`
-- `watcher.py`: Uses `stat(follow_symlinks=False)` in `_scan_directory()`
+
+**Comprehensive codebase audit completed. 17 files fixed:**
+
+Core Components:
+- `agent/collector.py`: Uses `lstat()` before `resolve()` to detect symlinks
+- `agent/watcher.py`: Uses `stat(follow_symlinks=False)` in `_scan_directory()`
+- `agent/posix.py`: Uses `lstat()` instead of `exists()` + `stat()`
+- `cli/commands/quarantine.py`: Uses `lstat()` and verifies inode on cross-filesystem moves
+- `components/scanner.py`: Uses `stat(follow_symlinks=False)` in `scan()`, `_iter_files()`, `_build_tree_node()`
+- `components/fileops.py`: Uses `lstat()` in `move()` and `delete()`
+
+Detection Pipeline:
+- `adapters/scanner/adapter.py`: Uses `lstat()` in `detect_file()`
+- `adapters/scanner/validators.py`: Uses `lstat()` in all validation functions
+
+Output & CLI:
+- `output/reader.py`: Uses `lstat()` in `find_unlabeled_files()` and `find_stale_labels()`
+- `cli/main.py`: Uses `lstat()` in `run_detect_dir()`
+- `cli/commands/scan.py`: Uses `lstat()` helper throughout
+- `cli/commands/find.py`: Uses `lstat()` helper
+- `cli/commands/report.py`: Uses `lstat()` helper
+- `cli/commands/heatmap.py`: Uses `lstat()` in `build_tree()`
+- `cli/commands/encrypt.py`: Uses `lstat()` in `validate_file_path()`
+
+**33 TOCTOU-specific tests added in `tests/test_toctou_security.py`**
 
 ---
 
