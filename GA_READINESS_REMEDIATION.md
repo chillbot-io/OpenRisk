@@ -359,8 +359,19 @@ except Exception as e:
 
 **Shutdown coordinator integration:**
 - Detection executor now registers with `ShutdownCoordinator` for SIGINT/SIGTERM handling
+- Temp storage cleanup also registers with coordinator (priority 5, runs after executors)
 - Falls back to `atexit` if coordinator unavailable
-- Priority 10 (runs early in shutdown sequence)
+- Priority 10 for executors (runs early), priority 5 for temp cleanup (runs after)
+
+**Timeout enforcement:**
+- Uses background thread to enforce 5-second timeout (ThreadPoolExecutor.shutdown() has no built-in timeout)
+- If graceful shutdown times out, forces cancellation with `cancel_futures=True`
+- Prevents process hanging on long-running detection tasks
+
+**Additional files fixed:**
+| File | Fix Applied |
+|------|-------------|
+| `adapters/scanner/temp_storage.py` | Register cleanup with shutdown coordinator |
 
 ---
 

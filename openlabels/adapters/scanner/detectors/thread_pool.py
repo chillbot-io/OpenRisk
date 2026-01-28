@@ -276,23 +276,44 @@ def _shutdown_executor():
     GA-FIX (1.3): Changed from wait=False to wait=True with timeout.
     This ensures in-flight detection tasks complete before exit,
     preventing data loss or incomplete results.
+
+    Uses a background thread to enforce timeout since ThreadPoolExecutor.shutdown()
+    doesn't have a built-in timeout parameter.
     """
     global _SHARED_EXECUTOR
-    if _SHARED_EXECUTOR is not None:
-        logger.info("Shutting down detection executor, waiting for in-flight tasks...")
+    if _SHARED_EXECUTOR is None:
+        return
+
+    executor = _SHARED_EXECUTOR
+    _SHARED_EXECUTOR = None  # Clear early to prevent double-shutdown
+
+    logger.info(f"Shutting down detection executor (timeout: {_SHUTDOWN_TIMEOUT}s)...")
+
+    # GA-FIX (1.3): Use background thread to enforce timeout
+    shutdown_complete = threading.Event()
+
+    def do_shutdown():
         try:
-            # GA-FIX (1.3): Wait for tasks to complete with timeout
-            _SHARED_EXECUTOR.shutdown(wait=True, cancel_futures=False)
-            logger.debug("Detection executor shutdown complete")
+            executor.shutdown(wait=True, cancel_futures=False)
+            shutdown_complete.set()
         except Exception as e:
             logger.warning(f"Error during executor shutdown: {e}")
-            # Force shutdown if graceful fails
-            try:
-                _SHARED_EXECUTOR.shutdown(wait=False, cancel_futures=True)
-            except Exception:
-                pass
-        finally:
-            _SHARED_EXECUTOR = None
+
+    shutdown_thread = threading.Thread(target=do_shutdown, daemon=True)
+    shutdown_thread.start()
+
+    # Wait for graceful shutdown with timeout
+    if shutdown_complete.wait(timeout=_SHUTDOWN_TIMEOUT):
+        logger.debug("Detection executor shutdown complete")
+    else:
+        # Timeout - force shutdown
+        logger.warning(
+            f"Executor shutdown timed out after {_SHUTDOWN_TIMEOUT}s, forcing cancellation"
+        )
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
 
 
 # Export all public symbols

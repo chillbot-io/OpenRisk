@@ -79,6 +79,9 @@ from .adapters.base import normalize_exposure_level
 
 logger = logging.getLogger(__name__)
 
+# GA-FIX (1.3): Timeout for executor shutdown to prevent hanging
+_EXECUTOR_SHUTDOWN_TIMEOUT = 5.0
+
 
 def _get_shutdown_coordinator():
     """Lazy import to avoid circular dependency."""
@@ -452,6 +455,8 @@ class Context:
 
         GA-FIX (1.3): Changed executor shutdown from wait=False to wait=True
         with timeout to ensure in-flight tasks complete before exit.
+        Uses background thread to enforce timeout since ThreadPoolExecutor.shutdown()
+        doesn't have a built-in timeout parameter.
         """
         if self._shutdown:
             return
@@ -460,20 +465,38 @@ class Context:
 
         with self._executor_lock:
             if self._executor is not None:
-                # GA-FIX (1.3): Wait for tasks to complete with graceful fallback
-                try:
-                    logger.debug("Shutting down context executor, waiting for in-flight tasks...")
-                    self._executor.shutdown(wait=True, cancel_futures=False)
-                    logger.debug("Context executor shutdown complete")
-                except Exception as e:
-                    logger.warning(f"Error during context executor shutdown: {e}")
-                    # Force shutdown if graceful fails
+                executor = self._executor
+                self._executor = None  # Clear early to prevent double-shutdown
+
+                # GA-FIX (1.3): Use background thread to enforce timeout
+                logger.debug(
+                    f"Shutting down context executor (timeout: {_EXECUTOR_SHUTDOWN_TIMEOUT}s)..."
+                )
+                shutdown_complete = threading.Event()
+
+                def do_shutdown():
                     try:
-                        self._executor.shutdown(wait=False, cancel_futures=True)
+                        executor.shutdown(wait=True, cancel_futures=False)
+                        shutdown_complete.set()
+                    except Exception as e:
+                        logger.warning(f"Error during context executor shutdown: {e}")
+
+                shutdown_thread = threading.Thread(target=do_shutdown, daemon=True)
+                shutdown_thread.start()
+
+                # Wait for graceful shutdown with timeout
+                if shutdown_complete.wait(timeout=_EXECUTOR_SHUTDOWN_TIMEOUT):
+                    logger.debug("Context executor shutdown complete")
+                else:
+                    # Timeout - force shutdown
+                    logger.warning(
+                        f"Context executor shutdown timed out after "
+                        f"{_EXECUTOR_SHUTDOWN_TIMEOUT}s, forcing cancellation"
+                    )
+                    try:
+                        executor.shutdown(wait=False, cancel_futures=True)
                     except Exception:
                         pass
-                finally:
-                    self._executor = None
 
         with self._index_lock:
             if self._label_index is not None:
