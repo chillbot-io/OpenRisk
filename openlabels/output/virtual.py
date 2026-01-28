@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 from ..core.labels import LabelSet, VirtualLabelPointer
+from ..utils.retry import with_retry, CircuitBreaker
 from ..utils.validation import (
     validate_path_for_subprocess,
     validate_xattr_value,
@@ -579,9 +580,6 @@ def has_virtual_label(path: Union[str, Path]) -> bool:
 # CLOUD STORAGE HANDLERS
 # =============================================================================
 
-# GA-FIX (1.4): Import retry utilities for cloud resilience
-from ..utils.retry import with_retry, CircuitBreaker, get_cloud_transient_exceptions
-
 # Module-level circuit breakers for each cloud provider
 # These prevent overwhelming failing services with retries
 _s3_circuit_breaker = CircuitBreaker(
@@ -607,13 +605,7 @@ class S3MetadataHandler:
     METADATA_KEY = "openlabels"  # Becomes x-amz-meta-openlabels
 
     def write(self, bucket: str, key: str, value: str, s3_client=None) -> bool:
-        """
-        Write OpenLabels metadata to S3 object.
-
-        GA-FIX (1.4): Includes retry with exponential backoff and circuit breaker.
-
-        Note: This requires copying the object to update metadata.
-        """
+        """Write OpenLabels metadata to S3 object (copies object to update)."""
         try:
             import boto3
         except ImportError:
@@ -622,7 +614,6 @@ class S3MetadataHandler:
 
         client = s3_client or boto3.client('s3')
 
-        # GA-FIX (1.4): Use circuit breaker and retry
         try:
             with _s3_circuit_breaker:
                 return self._write_with_retry(client, bucket, key, value)
@@ -651,11 +642,7 @@ class S3MetadataHandler:
         return True
 
     def read(self, bucket: str, key: str, s3_client=None) -> Optional[str]:
-        """
-        Read OpenLabels metadata from S3 object.
-
-        GA-FIX (1.4): Includes retry with exponential backoff and circuit breaker.
-        """
+        """Read OpenLabels metadata from S3 object."""
         try:
             import boto3
         except ImportError:
@@ -663,7 +650,6 @@ class S3MetadataHandler:
 
         client = s3_client or boto3.client('s3')
 
-        # GA-FIX (1.4): Use circuit breaker and retry
         try:
             with _s3_circuit_breaker:
                 return self._read_with_retry(client, bucket, key)
@@ -685,11 +671,7 @@ class GCSMetadataHandler:
     METADATA_KEY = "openlabels"
 
     def write(self, bucket: str, blob_name: str, value: str, client=None) -> bool:
-        """
-        Write OpenLabels metadata to GCS object.
-
-        GA-FIX (1.4): Includes retry with exponential backoff and circuit breaker.
-        """
+        """Write OpenLabels metadata to GCS object."""
         try:
             from google.cloud import storage
         except ImportError:
@@ -698,7 +680,6 @@ class GCSMetadataHandler:
 
         gcs_client = client or storage.Client()
 
-        # GA-FIX (1.4): Use circuit breaker and retry
         try:
             with _gcs_circuit_breaker:
                 return self._write_with_retry(gcs_client, bucket, blob_name, value)
@@ -721,11 +702,7 @@ class GCSMetadataHandler:
         return True
 
     def read(self, bucket: str, blob_name: str, client=None) -> Optional[str]:
-        """
-        Read OpenLabels metadata from GCS object.
-
-        GA-FIX (1.4): Includes retry with exponential backoff and circuit breaker.
-        """
+        """Read OpenLabels metadata from GCS object."""
         try:
             from google.cloud import storage
         except ImportError:
@@ -733,7 +710,6 @@ class GCSMetadataHandler:
 
         gcs_client = client or storage.Client()
 
-        # GA-FIX (1.4): Use circuit breaker and retry
         try:
             with _gcs_circuit_breaker:
                 return self._read_with_retry(gcs_client, bucket, blob_name)
@@ -763,11 +739,7 @@ class AzureBlobMetadataHandler:
         value: str,
         connection_string: Optional[str] = None,
     ) -> bool:
-        """
-        Write OpenLabels metadata to Azure Blob.
-
-        GA-FIX (1.4): Includes retry with exponential backoff and circuit breaker.
-        """
+        """Write OpenLabels metadata to Azure Blob."""
         try:
             from azure.storage.blob import BlobServiceClient
         except ImportError:
@@ -779,7 +751,6 @@ class AzureBlobMetadataHandler:
             logger.error("Azure connection string not provided")
             return False
 
-        # GA-FIX (1.4): Use circuit breaker and retry
         try:
             with _azure_circuit_breaker:
                 return self._write_with_retry(conn_str, container, blob_name, value)
@@ -810,11 +781,7 @@ class AzureBlobMetadataHandler:
         blob_name: str,
         connection_string: Optional[str] = None,
     ) -> Optional[str]:
-        """
-        Read OpenLabels metadata from Azure Blob.
-
-        GA-FIX (1.4): Includes retry with exponential backoff and circuit breaker.
-        """
+        """Read OpenLabels metadata from Azure Blob."""
         try:
             from azure.storage.blob import BlobServiceClient
         except ImportError:
@@ -824,7 +791,6 @@ class AzureBlobMetadataHandler:
         if not conn_str:
             return None
 
-        # GA-FIX (1.4): Use circuit breaker and retry
         try:
             with _azure_circuit_breaker:
                 return self._read_with_retry(conn_str, container, blob_name)

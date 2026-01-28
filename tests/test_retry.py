@@ -6,7 +6,7 @@ Tests the retry decorator, circuit breaker, and combined resilience patterns.
 
 import threading
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

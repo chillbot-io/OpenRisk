@@ -18,7 +18,7 @@ import logging
 import threading
 import time
 from functools import wraps
-from typing import Callable, Optional, Tuple, Type, TypeVar, Union
+from typing import Callable, Optional, Tuple, Type, TypeVar
 
 logger = logging.getLogger(__name__)
 
