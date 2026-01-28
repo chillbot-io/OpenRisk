@@ -11,6 +11,7 @@ Per the spec, transport priority is:
 """
 
 import logging
+import stat as stat_module
 from pathlib import Path
 from typing import Optional, Union, Tuple
 from dataclasses import dataclass
@@ -347,8 +348,13 @@ def find_unlabeled(directory: Union[str, Path], recursive: bool = True) -> list:
         files = directory.glob("*")
 
     for path in files:
-        if path.is_file() and not has_label(path):
-            unlabeled.append(path)
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+        try:
+            st = path.lstat()
+            if stat_module.S_ISREG(st.st_mode) and not has_label(path):
+                unlabeled.append(path)
+        except OSError:
+            continue  # Skip inaccessible files
 
     return unlabeled
 
@@ -376,9 +382,14 @@ def find_stale_labels(
         files = directory.glob("*")
 
     for path in files:
-        if path.is_file():
-            is_valid, reason = verify_label(path)
-            if reason == "hash_mismatch":
-                stale.append(path)
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
+        try:
+            st = path.lstat()
+            if stat_module.S_ISREG(st.st_mode):
+                is_valid, reason = verify_label(path)
+                if reason == "hash_mismatch":
+                    stale.append(path)
+        except OSError:
+            continue  # Skip inaccessible files
 
     return stale
