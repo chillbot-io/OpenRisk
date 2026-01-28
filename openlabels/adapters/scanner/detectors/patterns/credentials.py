@@ -18,9 +18,7 @@ CREDENTIALS_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
 add_pattern = create_pattern_adder(CREDENTIALS_PATTERNS)
 
 
-# =============================================================================
-# IP ADDRESSES
-# =============================================================================
+# IP Addresses
 
 add_pattern(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', 'IP_ADDRESS', CONFIDENCE_LOW)
 # IPv6 - full or compressed format
@@ -28,23 +26,17 @@ add_pattern(r'\b([0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){7})\b', 'IP_ADDRESS', CON
 add_pattern(r'\b([0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){2,7})\b', 'IP_ADDRESS', CONFIDENCE_WEAK)  # Compressed
 
 
-# =============================================================================
-# MAC ADDRESS
-# =============================================================================
+# MAC Address
 
 add_pattern(r'\b([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b', 'MAC_ADDRESS', CONFIDENCE_MEDIUM)
 
 
-# =============================================================================
 # IMEI
-# =============================================================================
 
 add_pattern(r'(?:IMEI)[:\s]+(\d{15})', 'IMEI', CONFIDENCE_HIGH_MEDIUM, 1, re.I)
 
 
-# =============================================================================
-# DEVICE SERIAL NUMBERS (medical devices)
-# =============================================================================
+# Device Serial Numbers (medical devices)
 
 # Labeled patterns for pacemakers, insulin pumps, hearing aids, etc.
 add_pattern(r'(?:Serial(?:\s*(?:Number|No|#))?|S/N|SN)[:\s]+([A-Z0-9]{6,20})', 'DEVICE_ID', CONFIDENCE_MEDIUM, 1, re.I)
@@ -52,32 +44,24 @@ add_pattern(r'(?:Device\s*(?:ID|Identifier|Serial))[:\s]+([A-Z0-9]{6,20})', 'DEV
 add_pattern(r'(?:Pacemaker|ICD|Defibrillator|Pump|Implant)\s+(?:ID|Serial|S/N)[:\s]+([A-Z0-9]{6,20})', 'DEVICE_ID', CONFIDENCE_HIGH_MEDIUM, 1, re.I)
 
 
-# =============================================================================
 # URLs
-# =============================================================================
 
 add_pattern(r'https?://[^\s<>"{}|\\^`\[\]]+', 'URL', CONFIDENCE_MEDIUM)
 
 
-# =============================================================================
-# BIOMETRIC IDENTIFIERS (Safe Harbor #16)
-# =============================================================================
+# Biometric Identifiers (Safe Harbor #16)
 
 add_pattern(r'(?:Fingerprint|Biometric|Retinal?|Iris|Voice(?:print)?|DNA)\s+(?:ID|Sample|Scan|Record|Data)[:\s#]+([A-Z0-9]{6,30})', 'BIOMETRIC_ID', CONFIDENCE_MEDIUM, 1, re.I)
 add_pattern(r'(?:Genetic|Genomic|DNA)\s+(?:Test|Sample|Analysis)\s+(?:ID|#|Number)[:\s]+([A-Z0-9]{6,20})', 'BIOMETRIC_ID', CONFIDENCE_MEDIUM_LOW, 1, re.I)
 
 
-# =============================================================================
-# PHOTOGRAPHIC IMAGE IDENTIFIERS (Safe Harbor #17)
-# =============================================================================
+# Photographic Image Identifiers (Safe Harbor #17)
 
 add_pattern(r'(?:Photo|Image|Picture|Photograph)\s+(?:ID|File|#)[:\s]+([A-Z0-9_-]{6,30})', 'IMAGE_ID', CONFIDENCE_LOW, 1, re.I)
 add_pattern(r'(?:DICOM|Study|Series|Image)\s+(?:UID|ID)[:\s]+([0-9.]{10,64})', 'IMAGE_ID', CONFIDENCE_RELIABLE, 1, re.I)
 
 
-# =============================================================================
-# USERNAME
-# =============================================================================
+# Username
 
 add_pattern(r'(?:username|user|login|userid)[:\s]+([A-Za-z0-9_.-]{3,30})', 'USERNAME', CONFIDENCE_LOW, 1, re.I)
 # International username labels (FR: nom d'utilisateur, DE: Benutzername, ES: usuario, NL: gebruikersnaam, IT: nome utente, PT: usuario)
@@ -88,9 +72,7 @@ add_pattern(r"(?:nom d'utilisateur|benutzername|usuario|gebruikersnaam|nome uten
 add_pattern(r'(?:logged\s+in\s+as|signed\s+in\s+as|profile)[:\s]+([A-Za-z0-9_.-]{3,30})', 'USERNAME', CONFIDENCE_MARGINAL, 1, re.I)
 
 
-# =============================================================================
-# PASSWORD
-# =============================================================================
+# Password
 
 # English password labels - require colon/equals separator (not just whitespace) to avoid FPs
 add_pattern(r'(?:password|passwd|pwd|passcode|pin)\s*[=:]\s*([^\s]{4,50})', 'PASSWORD', CONFIDENCE_MEDIUM, 1, re.I)
