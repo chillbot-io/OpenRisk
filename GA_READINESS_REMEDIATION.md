@@ -11,8 +11,17 @@
 
 | Category | Issue Count | Status |
 |----------|-------------|--------|
-| **Tier 1: MUST FIX** | 4 | Blocking GA |
+| **Tier 1: MUST FIX** | 4 (1 complete) | Blocking GA |
 | **Tier 2: SHOULD FIX** | 3 | Required before GA |
+
+### Progress
+- [x] **1.1 TOCTOU Race Conditions** - COMPLETE (2026-01-28)
+- [ ] 1.2 Silent Exception Handlers
+- [ ] 1.3 Incomplete Shutdown
+- [ ] 1.4 No Cloud Adapter Retry
+- [ ] 2.1 Long Functions
+- [ ] 2.2 Missing Logging
+- [ ] 2.3 Hardcoded Configuration
 
 ---
 
@@ -91,9 +100,16 @@ def _safe_move(source: Path, dest: Path) -> Tuple[bool, Optional[FileError]]:
 ```
 
 #### Verification
-- [ ] Add test: create symlink, attempt to scan, verify rejection
-- [ ] Add test: create symlink, attempt to quarantine, verify rejection
-- [ ] Add test: race condition simulation with threading
+- [x] Add test: create symlink, attempt to scan, verify rejection (test_toctou_security.py)
+- [x] Add test: create symlink, attempt to quarantine, verify rejection (test_toctou_security.py)
+- [x] Add test: race condition simulation with threading (test_toctou_security.py)
+
+#### Status: COMPLETE (2026-01-28)
+All TOCTOU vulnerabilities fixed:
+- `collector.py`: Uses `lstat()` before `resolve()` to detect symlinks
+- `quarantine.py`: Uses `lstat()` and verifies inode on cross-filesystem moves
+- `scanner.py`: Uses `stat(follow_symlinks=False)` in `_iter_files()` and `_build_tree_node()`
+- `watcher.py`: Uses `stat(follow_symlinks=False)` in `_scan_directory()`
 
 ---
 

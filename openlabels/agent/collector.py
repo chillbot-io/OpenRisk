@@ -176,18 +176,36 @@ class FileCollector:
 
         Returns:
             FileMetadata with all collected information
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            PermissionError: If file cannot be accessed
+            ValueError: If path is a symlink (security protection)
         """
-        path = Path(path).resolve()
+        original_path = Path(path)
         errors = []
 
-        if not path.exists():
-            raise FileNotFoundError(f"File not found: {path}")
-
-        # Get basic stat info
+        # SECURITY FIX (TOCTOU-001): Check the ORIGINAL path for symlinks BEFORE
+        # resolving. Path.resolve() follows symlinks, so checking after resolve()
+        # would miss symlink attacks. We use lstat() which doesn't follow symlinks.
         try:
-            st = path.stat()
+            st = original_path.lstat()  # lstat = stat(follow_symlinks=False)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File not found: {path}")
         except OSError as e:
             raise PermissionError(f"Cannot access file: {e}")
+
+        # SECURITY: Reject symlinks to prevent symlink attacks
+        # An attacker could create a symlink to a sensitive file to bypass access controls
+        if stat.S_ISLNK(st.st_mode):
+            raise ValueError(f"Refusing to collect metadata for symlink (security): {path}")
+
+        # SECURITY: Only process regular files
+        if not stat.S_ISREG(st.st_mode):
+            raise ValueError(f"Not a regular file: {path}")
+
+        # Now safe to resolve the path for consistent path representation
+        path = original_path.resolve()
 
         # Basic metadata
         metadata = FileMetadata(
@@ -538,7 +556,16 @@ def collect_directory(
     count = 0
 
     for file_path in walker:
-        if not file_path.is_file():
+        # SECURITY FIX (TOCTOU-001): Use stat() directly instead of is_file()
+        # to eliminate race condition window where file could be replaced
+        # with symlink between check and collect operation.
+        try:
+            st = file_path.stat(follow_symlinks=False)
+            if not stat.S_ISREG(st.st_mode):
+                # Skip non-regular files (directories, symlinks, devices, etc.)
+                continue
+        except OSError:
+            # File doesn't exist, permission denied, or other issue - skip
             continue
 
         if not include_hidden and any(p.startswith('.') for p in file_path.parts):

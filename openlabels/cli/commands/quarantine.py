@@ -11,6 +11,7 @@ Usage:
 import json
 import shutil
 import os
+import stat as stat_module
 from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
@@ -29,6 +30,10 @@ def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, bas
     """
     Move a file to the destination directory.
 
+    SECURITY: Uses lstat() to eliminate TOCTOU race conditions.
+    Symlinks are rejected to prevent symlink attacks where an attacker
+    could replace a file with a symlink between check and move.
+
     Args:
         source: Source file path
         dest_dir: Destination directory
@@ -39,41 +44,65 @@ def move_file(source: Path, dest_dir: Path, preserve_structure: bool = True, bas
         New file path
 
     Raises:
-        ValueError: If source is a symlink (security: prevents symlink attacks)
+        ValueError: If source is a symlink or not a regular file
         FileNotFoundError: If source doesn't exist
+        PermissionError: If source cannot be accessed
     """
-    # SECURITY FIX (CVE-READY-002): Check for symlinks before move to prevent
-    # TOCTOU race conditions where an attacker replaces the file with a symlink
-    # between existence check and move operation
-    if source.is_symlink():
+    # SECURITY FIX (TOCTOU-001): Use lstat() directly instead of is_symlink()/exists()
+    # to eliminate TOCTOU race window. lstat() doesn't follow symlinks and returns
+    # the file's actual type in a single atomic syscall.
+    try:
+        st = source.lstat()  # lstat = stat(follow_symlinks=False)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Source file not found: {source}")
+    except OSError as e:
+        raise PermissionError(f"Cannot access source file: {e}")
+
+    # SECURITY: Reject symlinks to prevent symlink attacks
+    if stat_module.S_ISLNK(st.st_mode):
         raise ValueError(f"Refusing to move symlink (security): {source}")
 
-    if not source.exists():
-        raise FileNotFoundError(f"Source file not found: {source}")
+    # SECURITY: Only move regular files
+    if not stat_module.S_ISREG(st.st_mode):
+        raise ValueError(f"Not a regular file (security): {source}")
 
     if preserve_structure and base_path:
         # Compute relative path from base
         try:
             rel_path = source.relative_to(base_path)
         except ValueError:
-            rel_path = source.name
+            rel_path = Path(source.name)
     else:
-        rel_path = source.name
+        rel_path = Path(source.name)
 
     dest_path = dest_dir / rel_path
 
     # Create parent directories
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # SECURITY FIX (CVE-READY-002): Use os.rename for atomic same-filesystem moves
-    # when possible, falling back to shutil.move for cross-filesystem moves
+    # SECURITY FIX (TOCTOU-001): Perform atomic move.
+    # os.rename() is atomic on the same filesystem.
+    # For cross-filesystem, we must re-verify the source hasn't changed.
     try:
         os.rename(str(source), str(dest_path))
-    except OSError:
-        # Cross-filesystem move, use shutil but re-verify source isn't symlink
-        if source.is_symlink():
-            raise ValueError(f"Refusing to move symlink (security): {source}")
-        shutil.move(str(source), str(dest_path))
+    except OSError as rename_error:
+        # Cross-filesystem move required - need to copy then delete
+        # Re-verify source file type hasn't changed (minimize TOCTOU window)
+        try:
+            st2 = source.lstat()
+            if stat_module.S_ISLNK(st2.st_mode):
+                raise ValueError(f"Source became symlink during move (security): {source}")
+            if not stat_module.S_ISREG(st2.st_mode):
+                raise ValueError(f"Source is no longer a regular file (security): {source}")
+            # Verify it's the same file by checking inode
+            if st.st_ino != st2.st_ino or st.st_dev != st2.st_dev:
+                raise ValueError(f"Source file changed during move (security): {source}")
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Source file disappeared during move: {source}")
+
+        # Perform copy + delete
+        shutil.copy2(str(source), str(dest_path))
+        os.unlink(str(source))
 
     return dest_path
 
