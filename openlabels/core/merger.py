@@ -129,7 +129,7 @@ def merge_inputs_full(
         return MergeResult(
             entities=[],
             entity_counts={},
-            average_confidence=CONFIDENCE_WHEN_NO_SPANS,  # Phase 5.6: Use constant
+            average_confidence=CONFIDENCE_WHEN_NO_SPANS,
             exposure="PRIVATE",
             sources=set(),
             input_count=0,
@@ -182,7 +182,6 @@ def merge_inputs_full(
         for etype, data in merged.items()
     ]
 
-    # Build entity counts dict (Phase 5.1: UPPERCASE for consistency)
     entity_counts = {
         normalize_entity_type(etype): data["count"]
         for etype, data in merged.items()
@@ -194,7 +193,7 @@ def merge_inputs_full(
             data["confidence"] for data in merged.values()
         ) / len(merged)
     else:
-        avg_confidence = CONFIDENCE_WHEN_NO_SPANS  # Phase 5.6: Use constant
+        avg_confidence = CONFIDENCE_WHEN_NO_SPANS
 
     # Get highest exposure
     exposure = get_highest_exposure(inputs)
@@ -432,7 +431,7 @@ def entities_to_counts(entities: List[Entity]) -> Dict[str, int]:
     """
     counts: Dict[str, int] = {}
     for e in entities:
-        etype = normalize_entity_type(e.type)  # Phase 5.1: UPPERCASE
+        etype = normalize_entity_type(e.type)
         counts[etype] = counts.get(etype, 0) + e.count
     return counts
 
@@ -440,7 +439,7 @@ def entities_to_counts(entities: List[Entity]) -> Dict[str, int]:
 def counts_to_entities(
     counts: Dict[str, int],
     source: str = "merged",
-    confidence: float = DEFAULT_CONFIDENCE_THRESHOLD,  # Phase 5.6: Use constant
+    confidence: float = DEFAULT_CONFIDENCE_THRESHOLD,
 ) -> List[Entity]:
     """
     Convert type->count dict back to Entity list.

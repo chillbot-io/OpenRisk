@@ -960,7 +960,7 @@ def write_cloud_label(
     )
     value = pointer.to_string()
 
-    # Phase 4.4: Use context-aware handler if context provided
+    # Use context-aware handler if provided
     handler = _get_cloud_handler_for_provider(parsed.provider, context)
     if handler is None:
         logger.error(f"Unknown cloud provider: {parsed.provider}")
@@ -1001,7 +1001,7 @@ def read_cloud_label(uri: str, context=None, **kwargs) -> Optional[VirtualLabelP
     # Validate URI before processing
     parsed = parse_cloud_uri(uri)
 
-    # Phase 4.4: Use context-aware handler if context provided
+    # Use context-aware handler if provided
     handler = _get_cloud_handler_for_provider(parsed.provider, context)
     if handler is None:
         return None

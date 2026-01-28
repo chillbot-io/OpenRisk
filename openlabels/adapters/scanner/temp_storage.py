@@ -42,8 +42,7 @@ def _cleanup_on_exit() -> None:
             logger.warning(f"Failed to clean up temp dir {temp_dir}: {e}")
 
 
-# GA-FIX (1.3): Register cleanup with shutdown coordinator for signal handling
-# Falls back to atexit if coordinator is unavailable
+# Register cleanup with shutdown coordinator (falls back to atexit if unavailable)
 def _register_temp_cleanup():
     """Register temp cleanup with shutdown coordinator."""
     try:

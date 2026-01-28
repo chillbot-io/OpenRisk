@@ -291,7 +291,6 @@ class Scanner:
             return False
 
         if criteria:
-            # Phase 5.3: Handle Optional score/tier fields
             if criteria.min_score is not None:
                 if result.score is None or result.score < criteria.min_score:
                     return False

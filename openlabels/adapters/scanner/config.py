@@ -87,17 +87,9 @@ def default_data_dir() -> Path:
 
 @dataclass
 class Config:
-    """
-    OpenLabels Scanner configuration.
+    """OpenLabels Scanner configuration with schema versioning support."""
 
-    Phase 5.5: Schema versioning support.
-    - schema_version tracks the config format version
-    - _migrate_config() upgrades old configs to current format
-    - Warnings issued for outdated configs
-    """
-
-    # Phase 5.5: Schema version for migration support
-    schema_version: int = CURRENT_SCHEMA_VERSION
+    schema_version: int = CURRENT_SCHEMA_VERSION  # For config migration
 
     # Paths
     data_dir: Path = field(default_factory=default_data_dir)
@@ -149,7 +141,6 @@ class Config:
 
     def __post_init__(self):
         """Validate configuration values and migrate if needed."""
-        # Phase 5.5: Check schema version and migrate if needed
         if self.schema_version != CURRENT_SCHEMA_VERSION:
             self._migrate_config()
 

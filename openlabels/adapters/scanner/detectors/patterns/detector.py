@@ -67,7 +67,6 @@ class PatternDetector(BaseDetector):
                             if not validate_date(m, d, y):
                                 continue
                     except (ValueError, IndexError) as e:
-                        # GA-FIX (1.2): Log date parsing failures at DEBUG level
                         logger.debug(f"Could not parse date groups for validation: {value}: {e}")
 
                 if entity_type == 'AGE' and not validate_age(value):

@@ -103,7 +103,7 @@ def build_tree(
                 if not stat_module.S_ISREG(child_st.st_mode):
                     continue
             except OSError as e:
-                # GA-FIX (1.2): Log file access errors at DEBUG level
+                # Log file access errors at DEBUG level
                 logger.debug(f"Could not stat file in heatmap scan: {file_path}: {e}")
                 continue
 
@@ -130,7 +130,6 @@ def build_tree(
                 s = p.lstat()
                 return (not stat_module.S_ISDIR(s.st_mode), p.name.lower())
             except OSError as e:
-                # GA-FIX (1.2): Log at DEBUG - file may have been deleted during scan
                 logger.debug(f"Could not stat path during sort: {p}: {e}")
                 return (True, p.name.lower())
         children = sorted(path.iterdir(), key=sort_key)
@@ -147,7 +146,6 @@ def build_tree(
             child_st = child_path.lstat()  # TOCTOU-001
             child_is_file = stat_module.S_ISREG(child_st.st_mode)
         except OSError as e:
-            # GA-FIX (1.2): Log file access errors at DEBUG level
             logger.debug(f"Could not stat child path in heatmap: {child_path}: {e}")
             continue
 

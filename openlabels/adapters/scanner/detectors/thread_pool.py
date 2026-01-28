@@ -201,8 +201,7 @@ def detection_slot_legacy():
         _QUEUE_DEPTH += 1
         current_depth = _QUEUE_DEPTH
 
-    # Phase 4.5: Safer ordering - track acquired state
-    acquired = False
+    acquired = False  # Track acquired state for safe cleanup
     try:
         _DETECTION_SEMAPHORE.acquire()
         acquired = True
@@ -234,18 +233,12 @@ def get_executor_legacy() -> ThreadPoolExecutor:
             max_workers=MAX_DETECTOR_WORKERS,
             thread_name_prefix="detector_"
         )
-        # GA-FIX (1.3): Register with shutdown coordinator for graceful shutdown
-        _register_shutdown_handler()
+        _register_shutdown_handler()  # For graceful shutdown
     return _SHARED_EXECUTOR
 
 
 def _register_shutdown_handler():
-    """
-    Register executor shutdown with the shutdown coordinator.
-
-    GA-FIX (1.3): Enables graceful shutdown on SIGINT/SIGTERM.
-    Falls back to atexit if coordinator is unavailable.
-    """
+    """Register executor shutdown with coordinator (falls back to atexit)."""
     try:
         from ....shutdown import get_shutdown_coordinator
         coordinator = get_shutdown_coordinator()
@@ -270,16 +263,7 @@ _get_executor = get_executor_legacy
 
 
 def _shutdown_executor():
-    """
-    Shutdown the shared executor on process exit.
-
-    GA-FIX (1.3): Changed from wait=False to wait=True with timeout.
-    This ensures in-flight detection tasks complete before exit,
-    preventing data loss or incomplete results.
-
-    Uses a background thread to enforce timeout since ThreadPoolExecutor.shutdown()
-    doesn't have a built-in timeout parameter.
-    """
+    """Shutdown executor with timeout-enforced graceful completion."""
     global _SHARED_EXECUTOR
     if _SHARED_EXECUTOR is None:
         return
@@ -288,8 +272,6 @@ def _shutdown_executor():
     _SHARED_EXECUTOR = None  # Clear early to prevent double-shutdown
 
     logger.info(f"Shutting down detection executor (timeout: {THREAD_JOIN_TIMEOUT}s)...")
-
-    # GA-FIX (1.3): Use background thread to enforce timeout
     shutdown_complete = threading.Event()
 
     def do_shutdown():

@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 # Module-level flag to only warn once about missing regex module
 _regex_import_warning_issued = False
 
-# Phase 5.4: Track unknown fields we've already warned about (per process)
+# Track unknown fields we've already warned about (once per process)
 _unknown_field_warnings_issued: Set[str] = set()
 
 # Exposure level ordinal values for comparison
@@ -457,18 +457,13 @@ class FilterParser:
 
         field = self.expression[start:self.pos].lower()
 
-        # Phase 5.4: Validate field and warn on unknown fields
         if field not in self.FIELDS:
             self._warn_unknown_field(field)
 
         return field
 
     def _warn_unknown_field(self, field: str) -> None:
-        """
-        Warn about unknown filter field (Phase 5.4).
-
-        Only warns once per unique field name per process to avoid spam.
-        """
+        """Warn about unknown filter field (once per process to avoid spam)."""
         global _unknown_field_warnings_issued
 
         if field not in _unknown_field_warnings_issued:

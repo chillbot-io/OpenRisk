@@ -260,12 +260,10 @@ class LabelIndex:
         try:
             conn.close()
         except sqlite3.Error as e:
-            # GA-FIX (1.2): Log instead of silently ignoring
             logger.warning(f"Error closing stale database connection: {e}")
         try:
             delattr(self._thread_local, conn_key)
         except AttributeError:
-            # GA-FIX (1.2): Log at DEBUG - expected when connection already removed
             logger.debug(f"Connection key {conn_key} already removed from thread-local storage")
 
     @contextmanager
@@ -321,7 +319,6 @@ class LabelIndex:
             try:
                 delattr(self._thread_local, conn_key)
             except AttributeError:
-                # GA-FIX (1.2): Log at DEBUG - expected when connection already removed
                 logger.debug(f"Connection key {conn_key} already removed during close()")
 
     def __del__(self):
@@ -985,7 +982,7 @@ def get_default_index(warn: bool = True) -> LabelIndex:
     global _default_index, _default_index_warning_issued
 
     with _default_index_lock:
-        # Phase 4.2: Warn about shared state (once per process)
+        # Warn about shared state (once per process)
         # NOTE: Both warning check AND creation must be inside same lock
         # to prevent race conditions
         if warn and not _default_index_warning_issued:

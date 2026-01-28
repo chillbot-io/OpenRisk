@@ -353,7 +353,7 @@ def find_unlabeled(directory: Union[str, Path], recursive: bool = True) -> list:
             if stat_module.S_ISREG(st.st_mode) and not has_label(path):
                 unlabeled.append(path)
         except OSError as e:
-            # GA-FIX (1.2): Log inaccessible files at DEBUG level
+            # Log inaccessible files at DEBUG level
             logger.debug(f"Could not access file during unlabeled scan: {path}: {e}")
             continue
 
@@ -390,7 +390,7 @@ def find_stale_labels(
                 if reason == "hash_mismatch":
                     stale.append(path)
         except OSError as e:
-            # GA-FIX (1.2): Log inaccessible files at DEBUG level
+            # Log inaccessible files at DEBUG level
             logger.debug(f"Could not access file during stale label scan: {path}: {e}")
             continue
 

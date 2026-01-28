@@ -77,7 +77,7 @@ class QuarantineResult:
     errors: List[Dict[str, Any]]  # Changed from List[Dict[str, str]] for structured errors
     destination: str
 
-    # Phase 3: Error classification summary
+    # Error classification
     retryable_errors: int = 0
     permanent_errors: int = 0
 
@@ -97,7 +97,7 @@ class DeleteResult:
     deleted_files: List[str]
     errors: List[Dict[str, Any]]  # Changed from List[Dict[str, str]] for structured errors
 
-    # Phase 3: Error classification summary
+    # Error classification
     retryable_errors: int = 0
     permanent_errors: int = 0
 
@@ -166,7 +166,6 @@ class FileOps:
                 try:
                     os.unlink(tmp_path)
                 except OSError as cleanup_err:
-                    # GA-FIX (1.2): Log cleanup failures at DEBUG level
                     logger.debug(f"Failed to clean up temp manifest file {tmp_path}: {cleanup_err}")
                 raise
         except OSError as e:

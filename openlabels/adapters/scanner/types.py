@@ -288,7 +288,7 @@ class DetectionResult:
     processing_time_ms: float
     detectors_used: List[str] = field(default_factory=list)
 
-    # Phase 3 additions: Error visibility and observability
+    # Error visibility and observability
     detectors_failed: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     degraded: bool = False

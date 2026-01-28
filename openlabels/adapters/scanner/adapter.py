@@ -67,7 +67,7 @@ class Detector:
             from .detectors.orchestrator import DetectorOrchestrator
             self._orchestrator = DetectorOrchestrator(
                 config=self.config,
-                context=self._context,  # Phase 4: Pass context for resource isolation
+                context=self._context,
             )
         return self._orchestrator
 
