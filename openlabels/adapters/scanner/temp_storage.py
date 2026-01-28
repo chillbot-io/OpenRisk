@@ -23,8 +23,7 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-# SECURITY FIX (HIGH-012): Track all active temp dirs with thread-safe access
-_active_temp_dirs: List[Path] = []
+_active_temp_dirs: List[Path] = []  # HIGH-012: thread-safe tracking
 _active_temp_dirs_lock = threading.Lock()
 
 

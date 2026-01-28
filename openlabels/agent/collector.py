@@ -386,8 +386,6 @@ class FileCollector:
                 h.update(chunk)
         return h.hexdigest()
 
-    # SECURITY FIX (LOW-006): Use central constants for xattr limits
-
     def _validate_xattr_name(self, attr_name: str) -> bool:
         """
         Validate xattr attribute name (LOW-006).
@@ -474,8 +472,7 @@ class FileCollector:
                             key = key.strip()
                             value = value.strip().strip('"')
 
-                            # SECURITY FIX (LOW-006): Validate from getfattr output too
-                            if not self._validate_xattr_name(key):
+                            if not self._validate_xattr_name(key):  # LOW-006
                                 logger.warning(f"Skipping invalid xattr name: {key!r}")
                                 continue
                             if len(value) > MAX_XATTR_VALUE_SIZE:
