@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# PHASE 5.5: CONFIGURATION SCHEMA VERSIONING
 # =============================================================================
 # Increment this when making breaking changes to Config fields.
 # The migration system will help upgrade old configs to new format.
@@ -181,7 +180,7 @@ class Config:
 
     def _migrate_config(self) -> None:
         """
-        Migrate config from older schema version to current (Phase 5.5).
+        Migrate config from older schema version to current.
 
         This method handles upgrades when loading configs from older versions.
         Add migration steps here as schema evolves.

@@ -44,11 +44,6 @@ XATTR_MACOS = "com.openlabels.label"
 XATTR_WINDOWS_ADS = "openlabels"  # Stored as file.txt:openlabels
 
 
-# Keep private aliases for backward compatibility within this module
-_validate_path_for_subprocess = validate_path_for_subprocess
-_validate_xattr_value = validate_xattr_value
-
-
 # S3 bucket naming rules:
 # - 3-63 characters
 # - Lowercase letters, numbers, hyphens, periods
@@ -262,10 +257,10 @@ class LinuxXattrHandler:
 
     def write(self, path: str, value: str) -> bool:
         """Write xattr value."""
-        if not _validate_path_for_subprocess(path):
+        if not validate_path_for_subprocess(path):
             logger.error(f"Invalid path for xattr write: {path[:100]}")
             return False
-        if not _validate_xattr_value(value):
+        if not validate_xattr_value(value):
             logger.error("Invalid value for xattr write")
             return False
 
@@ -296,7 +291,7 @@ class LinuxXattrHandler:
 
     def read(self, path: str) -> Optional[str]:
         """Read xattr value."""
-        if not _validate_path_for_subprocess(path):
+        if not validate_path_for_subprocess(path):
             logger.debug(f"Invalid path for xattr read: {path[:100]}")
             return None
 
@@ -328,7 +323,7 @@ class LinuxXattrHandler:
 
     def remove(self, path: str) -> bool:
         """Remove xattr."""
-        if not _validate_path_for_subprocess(path):
+        if not validate_path_for_subprocess(path):
             logger.debug(f"Invalid path for xattr remove: {path[:100]}")
             return False
 
@@ -359,10 +354,10 @@ class MacOSXattrHandler:
 
     def write(self, path: str, value: str) -> bool:
         """Write xattr value using macOS xattr command."""
-        if not _validate_path_for_subprocess(path):
+        if not validate_path_for_subprocess(path):
             logger.error(f"Invalid path for xattr write: {path[:100]}")
             return False
-        if not _validate_xattr_value(value):
+        if not validate_xattr_value(value):
             logger.error("Invalid value for xattr write")
             return False
 
@@ -379,7 +374,7 @@ class MacOSXattrHandler:
 
     def read(self, path: str) -> Optional[str]:
         """Read xattr value using macOS xattr command."""
-        if not _validate_path_for_subprocess(path):
+        if not validate_path_for_subprocess(path):
             logger.debug(f"Invalid path for xattr read: {path[:100]}")
             return None
 
@@ -397,7 +392,7 @@ class MacOSXattrHandler:
 
     def remove(self, path: str) -> bool:
         """Remove xattr using macOS xattr command."""
-        if not _validate_path_for_subprocess(path):
+        if not validate_path_for_subprocess(path):
             logger.debug(f"Invalid path for xattr remove: {path[:100]}")
             return False
 

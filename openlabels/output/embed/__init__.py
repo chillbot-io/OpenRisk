@@ -34,9 +34,9 @@ from .office import OfficeLabelWriter
 from .image import ImageLabelWriter
 
 
-# =============================================================================
-# UNIFIED INTERFACE
-# =============================================================================
+
+# --- Unified Interface ---
+
 
 # Registry of writers by file type
 _WRITERS = [

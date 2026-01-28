@@ -20,9 +20,9 @@ ADDRESS_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
 add_pattern = create_pattern_adder(ADDRESS_PATTERNS)
 
 
-# =============================================================================
-# SHARED COMPONENTS
-# =============================================================================
+
+# --- Shared Components ---
+
 
 # === Street Suffixes (shared) ===
 _STREET_SUFFIXES = (
@@ -49,9 +49,9 @@ _STATE_FULL = r'(?:Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connectic
 _CITY_NAME = r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*"  # Capitalized words
 
 
-# =============================================================================
-# MULTI-LINE ADDRESS PATTERNS
-# =============================================================================
+
+# --- Multi-Line Address Patterns ---
+
 
 # === Multi-line Address (discharge summary format) ===
 # Matches:
@@ -81,7 +81,6 @@ add_pattern(
 
 # =============================================================================
 # FULL ADDRESS PATTERNS (industry standard - single span)
-# =============================================================================
 
 # Full address: street, optional apt, city, state, zip
 # "5734 Mill Highway, Apt 773, Springfield, IL 62701"
@@ -124,7 +123,6 @@ add_pattern(
 
 # =============================================================================
 # CITY, STATE PATTERNS
-# =============================================================================
 
 # City, State ZIP: "Springfield, IL 62701"
 add_pattern(
@@ -139,9 +137,9 @@ add_pattern(
 )
 
 
-# =============================================================================
-# STREET ADDRESS PATTERNS
-# =============================================================================
+
+# --- Street Address Patterns ---
+
 
 # Street address only (no city/state): "123 Main St" or "5734 Mill Highway, Apt 773"
 add_pattern(
@@ -181,9 +179,9 @@ add_pattern(r'P\.?O\.?\s*Box\s+\d+', 'ADDRESS', CONFIDENCE_MEDIUM_LOW, 0, re.I)
 add_pattern(rf'(?:[Ll]ives?\s+in|[Ff]rom|[Rr]esident\s+of|[Ll]ocated\s+in|[Bb]ased\s+in|[Bb]orn\s+in)\s+({_CITY_NAME})', 'ADDRESS', CONFIDENCE_WEAK, 1)
 
 
-# =============================================================================
-# ZIP CODE PATTERNS
-# =============================================================================
+
+# --- Zip Code Patterns ---
+
 
 # === ZIP Code (standalone, labeled only) ===
 add_pattern(r'(?:ZIP|Postal|Zip\s*Code)[:\s]+(\d{5}(?:-\d{4})?)', 'ZIP', CONFIDENCE_HIGH, 1, re.I)
@@ -234,9 +232,9 @@ add_pattern(r'\b(893\d{2}(?:-\d{4})?)\b', 'ZIP', CONFIDENCE_MEDIUM_LOW, 1)
 # They only run on non-English text to avoid false positives.
 
 
-# =============================================================================
-# GPS COORDINATES
-# =============================================================================
+
+# --- Gps Coordinates ---
+
 
 # Decimal degrees: 41.8781, -87.6298 or 41.8781 N, 87.6298 W
 add_pattern(r'(-?\d{1,3}\.\d{4,8})[,\s]+(-?\d{1,3}\.\d{4,8})', 'GPS_COORDINATES', CONFIDENCE_MEDIUM_LOW, 0)

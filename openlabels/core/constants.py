@@ -1,5 +1,5 @@
 """
-OpenLabels Core Constants (Phase 5.6).
+OpenLabels Core Constants.
 
 Centralized constants used across the OpenLabels system.
 These were previously magic numbers scattered throughout the codebase.
@@ -13,7 +13,7 @@ Usage:
 
 
 # =============================================================================
-# CONFIDENCE THRESHOLDS (Phase 5.6)
+# CONFIDENCE THRESHOLDS
 # =============================================================================
 # Previously hardcoded as 0.90 in multiple places
 
@@ -43,9 +43,9 @@ assumption explicit and reviewable.
 """
 
 
-# =============================================================================
-# SCORING CONSTANTS
-# =============================================================================
+
+# --- Scoring Constants ---
+
 
 MIN_CONFIDENCE = 0.0
 """Minimum allowed confidence value (0%)."""

@@ -8,9 +8,9 @@ Categories group entity types by their nature, enabling:
 
 from typing import Dict
 
-# =============================================================================
-# ENTITY CATEGORIES
-# =============================================================================
+
+# --- Entity Categories ---
+
 
 ENTITY_CATEGORIES: Dict[str, str] = {
     # Direct identifiers

@@ -12,7 +12,6 @@ from typing import Dict
 # =============================================================================
 # VENDOR TYPE MAPPINGS
 # All vendor-specific types map to canonical OpenLabels types
-# =============================================================================
 
 VENDOR_ALIASES: Dict[str, str] = {
     # ----- AWS Macie -----

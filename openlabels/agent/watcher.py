@@ -298,7 +298,7 @@ class FileWatcher:
     @property
     def dropped_events(self) -> int:
         """
-        Number of events dropped due to callback failures (Phase 6.1).
+        Number of events dropped due to callback failures .
 
         Use this for monitoring. If this number is growing, the event
         callback may be failing and events are being lost.
@@ -428,9 +428,9 @@ class _WatchdogHandler(FileSystemEventHandler):
         ))
 
 
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
+
+# --- Convenience Functions ---
+
 
 def start_watcher(
     path: str,
@@ -515,9 +515,9 @@ def watch_directory(
         watcher.stop()
 
 
-# =============================================================================
-# POLLING FALLBACK
-# =============================================================================
+
+# --- Polling Fallback ---
+
 
 class PollingWatcher:
     """
@@ -707,7 +707,7 @@ class PollingWatcher:
     @property
     def dropped_events(self) -> int:
         """
-        Number of events dropped due to callback failures (Phase 6.1).
+        Number of events dropped due to callback failures .
 
         Use this for monitoring. If this number is growing, there may be
         issues with your callback implementation.

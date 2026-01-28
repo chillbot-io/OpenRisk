@@ -463,9 +463,9 @@ class Context:
         return False
 
 
-# =============================================================================
-# DEFAULT CONTEXT SINGLETON
-# =============================================================================
+
+# --- Default Context Singleton ---
+
 
 # Default context for simple usage
 _default_context: Optional[Context] = None

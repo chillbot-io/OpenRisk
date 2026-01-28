@@ -52,9 +52,9 @@ from .categories import ENTITY_CATEGORIES
 from .vendor_aliases import VENDOR_ALIASES
 
 
-# =============================================================================
-# PUBLIC API
-# =============================================================================
+
+# --- Public Api ---
+
 
 def get_weight(entity_type: str) -> int:
     """
@@ -117,9 +117,9 @@ def is_known_type(entity_type: str) -> bool:
     return entity_type in ENTITY_WEIGHTS or entity_type in VENDOR_ALIASES
 
 
-# =============================================================================
-# ADDITIONAL UTILITIES
-# =============================================================================
+
+# --- Additional Utilities ---
+
 
 def get_types_by_category(category: str) -> list:
     """

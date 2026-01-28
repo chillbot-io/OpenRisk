@@ -259,7 +259,7 @@ class FileOps:
 
             return True, None
         except OSError as e:
-            # Classify the OS error             return False, FileError.from_exception(e, str(source))
+            return False, FileError.from_exception(e, str(source))
 
     def quarantine(
         self,
@@ -340,7 +340,7 @@ class FileOps:
                         "tier": result.tier,
                     })
                 else:
-                    # Use structured error                     if file_error:
+                    if file_error:
                         errors.append(file_error.to_dict())
                     else:
                         errors.append({
@@ -373,7 +373,7 @@ class FileOps:
         Returns:
             OperationResult indicating success or failure.
             Error is a string for backward compatibility, but metadata
-            contains structured error info (Phase 3, Issue 3.5).
+            contains structured error info.
 
         Security: See SECURITY.md for TOCTOU-001, HIGH-002, CVE-READY-002.
         """
@@ -561,7 +561,7 @@ class FileOps:
                     Path(result.path).unlink()
                     deleted_files.append(result.path)
                 except OSError as e:
-                    # Classify the error                     file_error = FileError.from_exception(e, result.path)
+                    file_error = FileError.from_exception(e, result.path)
                     errors.append(file_error.to_dict())
 
         return DeleteResult(

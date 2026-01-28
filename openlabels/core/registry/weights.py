@@ -260,9 +260,9 @@ def reload_overrides() -> None:
         logger.info("No weight overrides loaded")
 
 
-# =============================================================================
-# BACKWARD COMPATIBILITY
-# =============================================================================
+
+# --- Backward Compatibility ---
+
 
 class _LazyWeights(dict):
     """
@@ -319,9 +319,9 @@ class _LazyWeights(dict):
 ENTITY_WEIGHTS = _LazyWeights()
 
 
-# =============================================================================
-# BUILTIN FALLBACK WEIGHTS
-# =============================================================================
+
+# --- Builtin Fallback Weights ---
+
 # Minimal set of weights used when YAML loading fails (e.g., PyYAML not installed)
 # This ensures the system works even without the full weights.yaml
 
@@ -359,9 +359,9 @@ _BUILTIN_WEIGHTS: Dict[str, int] = {
 }
 
 
-# =============================================================================
-# BACKWARD COMPATIBILITY: CATEGORY EXPORTS
-# =============================================================================
+
+# --- Backward Compatibility: Category Exports ---
+
 # These provide the old category-level dictionaries for code that imports them.
 # They are dynamically generated from the YAML on first access.
 

@@ -24,9 +24,9 @@ GOVERNMENT_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
 add_pattern = create_pattern_adder(GOVERNMENT_PATTERNS)
 
 
-# =============================================================================
-# SOCIAL SECURITY NUMBERS (SSN)
-# =============================================================================
+
+# --- Social Security Numbers (Ssn) ---
+
 
 # === SSN (labeled) - higher confidence than unlabeled ===
 add_pattern(r'(?:SSN|Social\s*Security(?:\s*(?:Number|No|#))?)[:\s#]+(\d{3}[-\s]?\d{2}[-\s]?\d{4})', 'SSN', CONFIDENCE_NEAR_CERTAIN, 1, re.I)
@@ -41,7 +41,6 @@ add_pattern(r'(?:SSN|Social\s*Security)[:\s#]+(\d{3}\s*-\s*\d{2}\s*-\s*\d{4})', 
 
 # =============================================================================
 # DRIVER'S LICENSE
-# =============================================================================
 
 # === Driver's License - Labeled ===
 add_pattern(r'(?:Driver\'?s?\s*License|DL|DLN)[:\s#]+([A-Z0-9]{5,15})', 'DRIVER_LICENSE', CONFIDENCE_MEDIUM_LOW, 1, re.I)
@@ -165,9 +164,9 @@ add_pattern(r'(?:DL|DLN)[:\s#]+(\d{2}\s+\d{6})', 'DRIVER_LICENSE', CONFIDENCE_ME
 add_pattern(r'(?:DL|DLN)[:\s#]+([A-Z]?\d{2,4}[-\s]\d{2,4}[-\s]\d{2,4}[-\s]?\d{0,4})', 'DRIVER_LICENSE', CONFIDENCE_RELIABLE, 1, re.I)
 
 
-# =============================================================================
-# STATE ID (NON-DRIVER)
-# =============================================================================
+
+# --- State Id (Non-Driver) ---
+
 
 add_pattern(r'(?:State\s*ID|ID\s*Card)[:\s#]+([A-Z0-9]{5,15})', 'STATE_ID', CONFIDENCE_MEDIUM_LOW, 1, re.I)
 
@@ -178,25 +177,25 @@ add_pattern(r'(?:ORGAN\s*DONOR|VETERAN)\s+(\d{10,15})\s*$', 'UNIQUE_ID', CONFIDE
 add_pattern(r'(?:DD[:\s]+\d{10,15}\s+)(\d{10,15})\s*$', 'UNIQUE_ID', CONFIDENCE_WEAK, 1)
 
 
-# =============================================================================
-# PASSPORT
-# =============================================================================
+
+# --- Passport ---
+
 
 add_pattern(r'(?:Passport)[:\s#]+([A-Z0-9]{6,12})', 'PASSPORT', CONFIDENCE_MEDIUM_LOW, 1, re.I)
 # US passport format: 9 digits or alphanumeric
 add_pattern(r'\b([A-Z]?\d{8,9})\b(?=.*[Pp]assport)', 'PASSPORT', CONFIDENCE_MINIMAL, 1)
 
 
-# =============================================================================
-# MEDICAL LICENSE
-# =============================================================================
+
+# --- Medical License ---
+
 
 add_pattern(r'(?:Medical\s+License|License\s+#)[:\s]+([A-Z0-9]{5,15})', 'MEDICAL_LICENSE', CONFIDENCE_MEDIUM_LOW, 1, re.I)
 
 
-# =============================================================================
-# MILITARY IDS
-# =============================================================================
+
+# --- Military Ids ---
+
 
 # EDIPI (Electronic Data Interchange Personal Identifier) - 10 digits
 add_pattern(r'(?:EDIPI|DoD\s*ID|Military\s*ID)[:\s#]+(\d{10})\b', 'MILITARY_ID', CONFIDENCE_RELIABLE, 1, re.I)
@@ -204,7 +203,6 @@ add_pattern(r'(?:EDIPI|DoD\s*ID|Military\s*ID)[:\s#]+(\d{10})\b', 'MILITARY_ID',
 
 # =============================================================================
 # INTERNATIONAL IDENTIFIERS (with context/checksums)
-# =============================================================================
 
 # === UK NHS Number (10 digits with checksum) ===
 add_pattern(r'(?:NHS|National\s+Health)[:\s#]+(\d{3}\s?\d{3}\s?\d{4})', 'NHS_NUMBER', CONFIDENCE_RELIABLE, 1, re.I)

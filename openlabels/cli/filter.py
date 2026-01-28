@@ -574,10 +574,6 @@ class FilterParser:
         ) else value
 
 
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
-
 def parse_filter(expression: str) -> Filter:
     """Parse a filter expression string."""
     return Filter.parse(expression)

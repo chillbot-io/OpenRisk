@@ -160,9 +160,9 @@ class Adapter(Protocol):
         ...
 
 
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
+
+# --- Helper Functions ---
+
 
 def calculate_staleness_days(last_modified: Optional[str]) -> int:
     """Calculate days since last modification."""

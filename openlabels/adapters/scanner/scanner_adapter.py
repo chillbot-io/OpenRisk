@@ -240,9 +240,9 @@ class ScannerAdapter:
         )
 
 
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
+
+# --- Convenience Functions ---
+
 
 def create_scanner_adapter(**kwargs) -> ScannerAdapter:
     """

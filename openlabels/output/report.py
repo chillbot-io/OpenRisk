@@ -576,9 +576,9 @@ class ReportGenerator:
             f.write(content)
 
 
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
+
+# --- Convenience Functions ---
+
 
 def results_to_json(
     results: List[Union[ScanResult, Dict]],

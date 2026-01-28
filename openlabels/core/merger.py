@@ -79,9 +79,9 @@ class MergeResult:
         return self.get_entity(entity_type) is not None
 
 
-# =============================================================================
-# MERGE FUNCTIONS
-# =============================================================================
+
+# --- Merge Functions ---
+
 
 def merge_inputs(
     inputs: List[NormalizedInput],
@@ -267,9 +267,9 @@ def merge_entities(
     ]
 
 
-# =============================================================================
-# EXPOSURE HELPERS
-# =============================================================================
+
+# --- Exposure Helpers ---
+
 
 EXPOSURE_ORDER = ["PRIVATE", "INTERNAL", "ORG_WIDE", "PUBLIC"]
 
@@ -387,9 +387,9 @@ def merge_contexts(contexts: List[NormalizedContext]) -> NormalizedContext:
     return merged
 
 
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
+
+# --- Utility Functions ---
+
 
 def deduplicate_positions(positions: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
     """
@@ -463,9 +463,9 @@ def counts_to_entities(
     ]
 
 
-# =============================================================================
-# EXPORTS
-# =============================================================================
+
+# --- Exports ---
+
 
 __all__ = [
     "MergeStrategy",

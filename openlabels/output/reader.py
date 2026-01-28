@@ -302,9 +302,9 @@ def rescan_if_stale(
     return result.label_set
 
 
-# =============================================================================
-# BATCH OPERATIONS
-# =============================================================================
+
+# --- Batch Operations ---
+
 
 def read_labels_batch(
     paths: list,

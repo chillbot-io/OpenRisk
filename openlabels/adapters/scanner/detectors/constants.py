@@ -15,7 +15,6 @@ Confidence Score Guide:
 
 # =============================================================================
 # PRIMARY CONFIDENCE LEVELS (most commonly used)
-# =============================================================================
 
 # Top tier - cryptographic/format-based certainty
 CONFIDENCE_PERFECT = 0.99      # Unique prefixes (AWS keys, GitHub tokens)
@@ -47,7 +46,6 @@ CONFIDENCE_TENTATIVE = 0.65    # Nearly unacceptable ambiguity
 
 # =============================================================================
 # CONFIDENCE ADJUSTMENTS (deltas applied based on context)
-# =============================================================================
 
 # Positive boosts (when context increases confidence)
 CONFIDENCE_BOOST_HIGH = 0.30
@@ -62,9 +60,9 @@ CONFIDENCE_PENALTY_LOW = -0.20
 CONFIDENCE_PENALTY_MINIMAL = -0.15
 
 
-# =============================================================================
-# THRESHOLDS
-# =============================================================================
+
+# --- Thresholds ---
+
 
 # Below this threshold, matches are considered too unreliable
 LOW_CONFIDENCE_THRESHOLD = 0.35
@@ -75,7 +73,6 @@ CONFIDENCE_FLOOR = 0.02
 
 # =============================================================================
 # SPECIAL VALUES (for specific use cases)
-# =============================================================================
 
 # Luhn-invalid credit card (typo detection)
 CONFIDENCE_LUHN_INVALID = 0.87
