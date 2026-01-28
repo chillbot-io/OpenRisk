@@ -29,6 +29,7 @@ from typing import Optional, List, Tuple
 from pathlib import Path
 
 from ..adapters.base import ExposureLevel
+from ..adapters.scanner.constants import SUBPROCESS_TIMEOUT
 from ..utils.validation import validate_path_for_subprocess
 
 logger = logging.getLogger(__name__)
@@ -277,7 +278,7 @@ def _get_acl_entries(path: str) -> Tuple[bool, List[str]]:
                 ["getfacl", "-p", path],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=SUBPROCESS_TIMEOUT,
             )
             if result.returncode == 0:
                 # Parse getfacl output
@@ -297,7 +298,7 @@ def _get_acl_entries(path: str) -> Tuple[bool, List[str]]:
                 ["ls", "-le", path],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=SUBPROCESS_TIMEOUT,
             )
             if result.returncode == 0:
                 output = result.stdout
@@ -308,7 +309,7 @@ def _get_acl_entries(path: str) -> Tuple[bool, List[str]]:
                         ["/bin/chmod", "-vv", "+a", "", path],
                         capture_output=True,
                         text=True,
-                        timeout=5,
+                        timeout=SUBPROCESS_TIMEOUT,
                     )
                     if "ACL" in (acl_result.stdout + acl_result.stderr):
                         entries = [line for line in acl_result.stderr.splitlines()

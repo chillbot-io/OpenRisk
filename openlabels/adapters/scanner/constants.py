@@ -10,6 +10,14 @@ __all__ = [
     "MODEL_LOAD_TIMEOUT",
     "DETECTOR_TIMEOUT",
     "OCR_READY_TIMEOUT",
+    "THREAD_JOIN_TIMEOUT",
+    "SUBPROCESS_TIMEOUT",
+    "DATABASE_LOCK_TIMEOUT",
+    # Retry/resilience
+    "DEFAULT_MAX_RETRIES",
+    "DEFAULT_RETRY_BASE_DELAY",
+    "CIRCUIT_BREAKER_FAILURE_THRESHOLD",
+    "CIRCUIT_BREAKER_RECOVERY_TIMEOUT",
     # Size limits
     "MAX_TEXT_LENGTH",
     "MAX_PATH_LENGTH",
@@ -17,6 +25,7 @@ __all__ = [
     # Chunk sizes for file I/O
     "FILE_READ_CHUNK_SIZE",
     "PARTIAL_HASH_SIZE",
+    "MAGIC_BYTES_HEADER_SIZE",
     # File processing
     "MAX_DOCUMENT_PAGES",
     "MAX_PAGE_WORKERS",
@@ -42,12 +51,32 @@ __all__ = [
     "ADDRESS_GAP_THRESHOLD",
     "TRACKING_CONTEXT_WINDOW",
     "INTERVALTREE_THRESHOLD",
+    # Context analysis
+    "CONTEXT_WINDOW_DEFAULT",
+    # Queue/batch processing
+    "DEFAULT_BATCH_SIZE",
+    "DEFAULT_QUERY_LIMIT",
+    "MAX_QUEUE_SIZE",
+    # Regex safety
+    "REGEX_TIMEOUT_MS",
+    # Extended attributes (collector)
+    "MAX_XATTR_NAME_LENGTH",
+    "MAX_XATTR_COUNT",
 ]
 
 # --- TIMEOUTS (seconds) ---
 MODEL_LOAD_TIMEOUT = 60.0
 DETECTOR_TIMEOUT = 120.0
 OCR_READY_TIMEOUT = 30.0
+THREAD_JOIN_TIMEOUT = 5.0  # For thread.join() calls
+SUBPROCESS_TIMEOUT = 5.0  # For subprocess calls
+DATABASE_LOCK_TIMEOUT = 30.0  # SQLite lock wait timeout
+
+# --- RETRY/RESILIENCE ---
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_BASE_DELAY = 1.0  # seconds
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
+CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60.0  # seconds
 
 # --- SIZE LIMITS ---
 MAX_TEXT_LENGTH = 1_000_000  # 1MB text input
@@ -57,6 +86,7 @@ MAX_XATTR_VALUE_SIZE = 65536  # Extended attribute value size limit
 # --- CHUNK SIZES FOR FILE I/O ---
 FILE_READ_CHUNK_SIZE = 8192  # Standard chunk size for reading files (8KB)
 PARTIAL_HASH_SIZE = 65536  # Bytes to read for partial hash (64KB)
+MAGIC_BYTES_HEADER_SIZE = 64  # Bytes to read for MIME type detection
 
 # --- FILE PROCESSING ---
 MAX_DOCUMENT_PAGES = 100  # Max pages to process per document
@@ -125,3 +155,18 @@ NAME_CONTEXT_WINDOW = 50
 ADDRESS_GAP_THRESHOLD = 20
 TRACKING_CONTEXT_WINDOW = 30
 INTERVALTREE_THRESHOLD = 100
+
+# --- CONTEXT ANALYSIS ---
+CONTEXT_WINDOW_DEFAULT = 30  # Characters to look before/after entity
+
+# --- QUEUE/BATCH PROCESSING ---
+DEFAULT_BATCH_SIZE = 1000  # Batch size for bulk operations
+DEFAULT_QUERY_LIMIT = 100  # Default limit for database queries
+MAX_QUEUE_SIZE = 10000  # Maximum size for job queues
+
+# --- REGEX SAFETY ---
+REGEX_TIMEOUT_MS = 100  # Timeout for regex operations in milliseconds
+
+# --- EXTENDED ATTRIBUTES (COLLECTOR) ---
+MAX_XATTR_NAME_LENGTH = 256  # Linux limit is 255, macOS is similar
+MAX_XATTR_COUNT = 100  # Prevent collecting excessive attributes

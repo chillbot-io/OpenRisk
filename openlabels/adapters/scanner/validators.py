@@ -15,7 +15,7 @@ import stat as stat_module
 from pathlib import Path
 from typing import Optional, Union
 
-from .constants import MAX_FILE_SIZE_BYTES, MAX_FILENAME_LENGTH
+from .constants import MAX_FILE_SIZE_BYTES, MAX_FILENAME_LENGTH, MAGIC_BYTES_HEADER_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +273,7 @@ def validate_magic_bytes(
             if not stat_module.S_ISREG(st.st_mode):
                 raise FileValidationError(f"Not a regular file: {file_path}")
             with open(file_path, "rb") as f:
-                header = f.read(64)
+                header = f.read(MAGIC_BYTES_HEADER_SIZE)
         except FileNotFoundError:
             raise FileValidationError(f"File not found: {file_path}")
         except IOError as e:
@@ -577,7 +577,7 @@ def validate_file(
                 if not stat_module.S_ISREG(st.st_mode):
                     raise FileValidationError(f"Not a regular file: {file_path}")
                 with open(file_path, "rb") as f:
-                    actual_mime = detect_mime_from_magic_bytes(f.read(64))
+                    actual_mime = detect_mime_from_magic_bytes(f.read(MAGIC_BYTES_HEADER_SIZE))
             except FileNotFoundError:
                 raise FileValidationError(f"File not found: {file_path}")
 

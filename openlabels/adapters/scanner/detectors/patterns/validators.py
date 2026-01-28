@@ -1,7 +1,8 @@
 """Validation functions for pattern-detected entities."""
 
 import re
-from ..constants import (CONFIDENCE_MINIMAL)
+from ..constants import CONFIDENCE_MINIMAL
+from ..checksum import luhn_check
 
 
 def validate_ip(ip: str) -> bool:
@@ -68,21 +69,9 @@ def validate_age(value: str) -> bool:
         return False
 
 
-def validate_luhn(number: str) -> bool:
-    """Validate a number using the Luhn algorithm (credit cards, NPIs)."""
-    digits = ''.join(c for c in number if c.isdigit())
-    if not digits:
-        return False
-
-    total = 0
-    for i, digit in enumerate(reversed(digits)):
-        d = int(digit)
-        if i % 2 == 1:
-            d *= 2
-            if d > 9:
-                d -= 9
-        total += d
-    return total % 10 == 0
+# validate_luhn is imported from checksum module as luhn_check
+# Alias for backward compatibility
+validate_luhn = luhn_check
 
 
 def validate_vin(vin: str) -> bool:

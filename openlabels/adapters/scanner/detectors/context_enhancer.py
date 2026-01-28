@@ -552,9 +552,10 @@ class ContextEnhancer:
                 # Log when filtering a high-tier span - this indicates a
                 # bad entry in the known entities store
                 if span.tier >= Tier.STRUCTURED:
+                    # Don't log actual PII values - log position and type only
                     logger.warning(
-                        f"ContextEnhancer: Rejecting high-tier span '{span.text}' "
-                        f"(tier={span.tier.name}) via deny list - "
+                        f"ContextEnhancer: Rejecting high-tier span {span.entity_type} "
+                        f"at pos {span.start}-{span.end} (tier={span.tier.name}) via deny list - "
                         f"this may indicate a bad known entity"
                     )
                 return EnhancementResult("reject", 0.0, [deny_reason])
@@ -622,14 +623,16 @@ class ContextEnhancer:
                 span.confidence = result.confidence
                 kept.append(span)
                 passed_through += 1
+                # Don't log actual PII values - log position and type only
                 logger.debug(
-                    f"ContextEnhancer: KEEP '{span.text}' ({span.entity_type}) "
+                    f"ContextEnhancer: KEEP {span.entity_type} at pos {span.start}-{span.end} "
                     f"conf={result.confidence:.2f} reasons={result.reasons}"
                 )
             elif result.action == "reject":
                 rejected += 1
+                # Don't log actual PII values - log position and type only
                 logger.info(
-                    f"ContextEnhancer: REJECT '{span.text}' ({span.entity_type}) "
+                    f"ContextEnhancer: REJECT {span.entity_type} at pos {span.start}-{span.end} "
                     f"reasons={result.reasons}"
                 )
             else:  # verify
@@ -638,8 +641,9 @@ class ContextEnhancer:
                 span.review_reason = "llm_verification"
                 kept.append(span)
                 needs_llm += 1
+                # Don't log actual PII values - log position and type only
                 logger.debug(
-                    f"ContextEnhancer: VERIFY '{span.text}' ({span.entity_type}) "
+                    f"ContextEnhancer: VERIFY {span.entity_type} at pos {span.start}-{span.end} "
                     f"conf={result.confidence:.2f} reasons={result.reasons}"
                 )
 

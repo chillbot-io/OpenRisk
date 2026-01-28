@@ -32,7 +32,15 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Iterator
 
 from ..adapters.base import NormalizedContext, ExposureLevel
-from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE, PARTIAL_HASH_SIZE
+from ..adapters.scanner.constants import (
+    FILE_READ_CHUNK_SIZE,
+    PARTIAL_HASH_SIZE,
+    SUBPROCESS_TIMEOUT,
+    MAX_XATTR_NAME_LENGTH,
+    MAX_XATTR_VALUE_SIZE,
+    MAX_XATTR_COUNT,
+    MAX_FILE_SIZE_BYTES,
+)
 from ..utils.validation import validate_path_for_subprocess
 
 logger = logging.getLogger(__name__)
@@ -149,7 +157,7 @@ class FileCollector:
         self,
         compute_hash: bool = False,
         compute_partial_hash: bool = True,
-        hash_size_limit: int = 100 * 1024 * 1024,  # 100MB
+        hash_size_limit: int = MAX_FILE_SIZE_BYTES,  # From central constants
         collect_xattrs: bool = True,
     ):
         """
@@ -384,10 +392,7 @@ class FileCollector:
                 h.update(chunk)
         return h.hexdigest()
 
-    # SECURITY FIX (LOW-006): Maximum xattr name length to prevent abuse
-    MAX_XATTR_NAME_LENGTH = 256  # Linux limit is 255, macOS is similar
-    MAX_XATTR_VALUE_LENGTH = 65536  # 64KB - reasonable limit for metadata
-    MAX_XATTR_COUNT = 100  # Prevent collecting excessive attributes
+    # SECURITY FIX (LOW-006): Use central constants for xattr limits
 
     def _validate_xattr_name(self, attr_name: str) -> bool:
         """
@@ -402,7 +407,7 @@ class FileCollector:
         if not attr_name or not isinstance(attr_name, str):
             return False
         # Check length
-        if len(attr_name) > self.MAX_XATTR_NAME_LENGTH:
+        if len(attr_name) > MAX_XATTR_NAME_LENGTH:
             return False
         # Check for null bytes and control characters
         if '\x00' in attr_name or any(ord(c) < 32 for c in attr_name):
@@ -440,18 +445,18 @@ class FileCollector:
                     continue
 
                 # SECURITY FIX (LOW-006): Limit number of attributes collected
-                if attr_count >= self.MAX_XATTR_COUNT:
-                    logger.warning(f"Reached max xattr count ({self.MAX_XATTR_COUNT}) for {path}")
+                if attr_count >= MAX_XATTR_COUNT:
+                    logger.warning(f"Reached max xattr count ({MAX_XATTR_COUNT}) for {path}")
                     break
 
                 try:
                     value = xattr_module.getxattr(str(path), attr_name)
 
                     # SECURITY FIX (LOW-006): Validate value length
-                    if len(value) > self.MAX_XATTR_VALUE_LENGTH:
+                    if len(value) > MAX_XATTR_VALUE_SIZE:
                         logger.warning(
                             f"Skipping oversized xattr '{attr_name}' on {path}: "
-                            f"{len(value)} bytes (max {self.MAX_XATTR_VALUE_LENGTH})"
+                            f"{len(value)} bytes (max {MAX_XATTR_VALUE_SIZE})"
                         )
                         continue
 
@@ -474,7 +479,7 @@ class FileCollector:
                     ["getfattr", "-d", path_str],
                     capture_output=True,
                     text=True,
-                    timeout=5,
+                    timeout=SUBPROCESS_TIMEOUT,
                 )
                 if result.returncode == 0:
                     attr_count = 0
@@ -488,10 +493,10 @@ class FileCollector:
                             if not self._validate_xattr_name(key):
                                 logger.warning(f"Skipping invalid xattr name: {key!r}")
                                 continue
-                            if len(value) > self.MAX_XATTR_VALUE_LENGTH:
+                            if len(value) > MAX_XATTR_VALUE_SIZE:
                                 logger.warning(f"Skipping oversized xattr value for {key}")
                                 continue
-                            if attr_count >= self.MAX_XATTR_COUNT:
+                            if attr_count >= MAX_XATTR_COUNT:
                                 logger.warning(f"Reached max xattr count for {path}")
                                 break
 

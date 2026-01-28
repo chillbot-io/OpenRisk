@@ -36,6 +36,12 @@ from pathlib import Path
 from typing import Optional, Callable, List, Tuple
 from datetime import datetime
 
+from openlabels.adapters.scanner.constants import (
+    MAX_QUEUE_SIZE,
+    THREAD_JOIN_TIMEOUT,
+    PARTIAL_HASH_SIZE,
+)
+
 logger = logging.getLogger(__name__)
 
 # Try to import watchdog
@@ -97,7 +103,7 @@ class WatcherConfig:
     debounce_seconds: float = 0.5
 
     # Queue settings
-    max_queue_size: int = 10000
+    max_queue_size: int = MAX_QUEUE_SIZE
 
     # Event types to watch
     watch_created: bool = True
@@ -224,11 +230,11 @@ class FileWatcher:
 
         if self._observer:
             self._observer.stop()
-            self._observer.join(timeout=5)
+            self._observer.join(timeout=THREAD_JOIN_TIMEOUT)
             self._observer = None
 
         if self._processor_thread:
-            self._processor_thread.join(timeout=2)
+            self._processor_thread.join(timeout=THREAD_JOIN_TIMEOUT)
             self._processor_thread = None
 
         logger.info(f"Watcher stopped for: {self.path}")
@@ -485,7 +491,7 @@ def watch_directory(
     """
     # SECURITY FIX (CVE-READY-004): Add maxsize to prevent memory exhaustion
     # from rapid file system changes
-    max_queue_size = kwargs.pop("max_queue_size", 10000)
+    max_queue_size = kwargs.pop("max_queue_size", MAX_QUEUE_SIZE)
     event_queue: queue.Queue = queue.Queue(maxsize=max_queue_size)
 
     def on_change(event: WatchEvent):
@@ -700,7 +706,7 @@ class PollingWatcher:
 
         return files
 
-    def _quick_hash(self, path: Path, block_size: int = 65536) -> str:
+    def _quick_hash(self, path: Path, block_size: int = PARTIAL_HASH_SIZE) -> str:
         """
         Calculate a fast hash of a file (Phase 6.2).
 

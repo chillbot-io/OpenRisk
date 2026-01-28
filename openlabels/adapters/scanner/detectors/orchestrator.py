@@ -329,8 +329,9 @@ class DetectorOrchestrator:
                             )
                             spans.append(span)
                             match_count += 1
+                            # Don't log actual PII values - log position and type only
                             logger.debug(
-                                f"Known entity match: '{original_text}' -> {token}"
+                                f"Known entity match: {entity_type} at pos {start}-{end} (len={len(original_text)})"
                             )
 
                     start = end
