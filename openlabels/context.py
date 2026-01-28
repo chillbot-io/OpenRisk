@@ -477,7 +477,7 @@ def get_default_context(warn: bool = True) -> Context:
     """
     Get the default shared context.
 
-    WARNING: Default context shares state across all callers (Phase 4.2).
+    WARNING: Default context shares state across all callers .
     For isolated operation, create explicit Context instances.
 
     Args:

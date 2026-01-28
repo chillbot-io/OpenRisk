@@ -30,10 +30,6 @@ from pathlib import Path
 from typing import Optional, Any, Generator
 
 
-# =============================================================================
-# CORRELATION ID SUPPORT
-# =============================================================================
-
 # Thread-safe correlation ID storage
 _correlation_id: ContextVar[Optional[str]] = ContextVar("correlation_id", default=None)
 
@@ -77,10 +73,6 @@ def correlation_id(cid: Optional[str] = None) -> Generator[str, None, None]:
     finally:
         _correlation_id.reset(token)
 
-
-# =============================================================================
-# JSON FORMATTER
-# =============================================================================
 
 class JSONFormatter(logging.Formatter):
     """
@@ -133,10 +125,6 @@ class JSONFormatter(logging.Formatter):
 
         return json.dumps(log_data, default=str)
 
-
-# =============================================================================
-# AUDIT LOGGER
-# =============================================================================
 
 # Default audit log location
 DEFAULT_AUDIT_LOG = Path.home() / ".openlabels" / "audit.log"
@@ -212,10 +200,6 @@ def get_audit_logger() -> AuditLogger:
         _audit_logger = AuditLogger(logger)
     return _audit_logger
 
-
-# =============================================================================
-# SETUP FUNCTIONS
-# =============================================================================
 
 def setup_logging(
     verbose: bool = False,

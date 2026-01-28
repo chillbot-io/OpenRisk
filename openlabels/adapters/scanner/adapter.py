@@ -3,8 +3,7 @@ OpenLabels Scanner - the core detection engine.
 
 This is the main entry point for detecting PII/PHI in text and files.
 Part of OpenLabels - where labels are the primitive, risk is derived.
-
-Phase 4 fix: Detector now accepts optional Context for resource isolation.
+Detector accepts optional Context for resource isolation.
 """
 
 import stat as stat_module
@@ -35,7 +34,7 @@ class Detector:
         NAME: John Smith
         SSN: 123-45-6789
 
-    For isolated operation (Phase 4):
+    For isolated operation:
         >>> from openlabels import Context
         >>> ctx = Context()
         >>> detector = Detector(context=ctx)
@@ -52,7 +51,7 @@ class Detector:
         Args:
             config: Optional configuration. If not provided, uses defaults
                    or loads from environment variables.
-            context: Optional Context for resource isolation (Phase 4).
+            context: Optional Context for resource isolation.
                     When provided, orchestrator uses context resources
                     instead of module-level globals.
         """

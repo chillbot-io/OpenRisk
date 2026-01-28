@@ -36,9 +36,7 @@ from openlabels.shutdown import install_signal_handlers, get_shutdown_coordinato
 logger = get_logger(__name__)
 
 
-# =============================================================================
-# LEGACY DETECT COMMANDS (for backwards compatibility)
-# =============================================================================
+# Legacy detect commands (for backwards compatibility)
 
 def format_result(result, output_format: str = "text") -> str:
     """Format detection result for output."""
@@ -222,10 +220,6 @@ def cmd_version(args):
     echo("Run 'openlabels <command> --help' for details.")
 
 
-# =============================================================================
-# MAIN ENTRY POINT
-# =============================================================================
-
 def main(argv: Optional[List[str]] = None):
     """Main CLI entry point."""
     # Install signal handlers for graceful shutdown (Ctrl+C, SIGTERM)
@@ -282,10 +276,7 @@ Examples:
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
-    # ==========================================================================
-    # NEW RISK SCORING COMMANDS
-    # ==========================================================================
-
+    # Risk scoring commands
     from openlabels.cli.commands import (
         add_scan_parser,
         add_find_parser,
@@ -310,10 +301,7 @@ Examples:
     add_shell_parser(subparsers)
     add_health_parser(subparsers)
 
-    # ==========================================================================
-    # LEGACY DETECT COMMANDS
-    # ==========================================================================
-
+    # Legacy detect commands
     # detect command
     detect_parser = subparsers.add_parser(
         "detect",

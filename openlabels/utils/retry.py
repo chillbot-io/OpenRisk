@@ -24,10 +24,6 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
 
-# =============================================================================
-# CONFIGURATION CONSTANTS
-# =============================================================================
-
 # Default retry configuration
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_BASE_DELAY = 1.0  # seconds
@@ -41,10 +37,6 @@ TRANSIENT_EXCEPTIONS: Tuple[Type[Exception], ...] = (
     OSError,  # Network-related OS errors
 )
 
-
-# =============================================================================
-# CLOUD-SPECIFIC TRANSIENT EXCEPTIONS
-# =============================================================================
 
 def _get_aws_transient_exceptions() -> Tuple[Type[Exception], ...]:
     """Get AWS-specific transient exceptions if boto3 is available."""
@@ -98,10 +90,6 @@ def get_cloud_transient_exceptions() -> Tuple[Type[Exception], ...]:
         _get_azure_transient_exceptions()
     )
 
-
-# =============================================================================
-# RETRY DECORATOR
-# =============================================================================
 
 def with_retry(
     max_retries: int = DEFAULT_MAX_RETRIES,
@@ -175,10 +163,6 @@ def with_retry(
         return wrapper
     return decorator
 
-
-# =============================================================================
-# CIRCUIT BREAKER
-# =============================================================================
 
 class CircuitBreakerOpenError(Exception):
     """Raised when circuit breaker is open and rejecting requests."""
@@ -338,10 +322,6 @@ class CircuitBreaker:
             self._failure_count = 0
             logger.info(f"{self.name}: Circuit breaker manually reset")
 
-
-# =============================================================================
-# COMBINED RETRY + CIRCUIT BREAKER
-# =============================================================================
 
 def with_resilience(
     max_retries: int = DEFAULT_MAX_RETRIES,

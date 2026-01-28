@@ -11,10 +11,8 @@ The index stores the full LabelSet data for files using virtual labels
 
 Per the spec, the index MUST NOT leave the user's tenant.
 
-Phase 3 additions:
-- Structured exception types from core/exceptions.py
-- Optional error propagation via raise_on_error parameter
-- Callers can now distinguish "not found" from "database error"
+Provides structured exception types and optional error propagation
+via raise_on_error parameter for distinguishing "not found" from "database error".
 """
 
 import json
@@ -481,7 +479,7 @@ class LabelIndex:
             content_hash: Optional specific version. If None, returns latest.
             raise_on_error: If True, raise exceptions instead of returning None.
                            Allows callers to distinguish "not found" from
-                           "database error" (Phase 3, Issue 3.1).
+                           "database error" .
 
         Returns:
             LabelSet if found, None otherwise (when raise_on_error=False)
@@ -544,7 +542,7 @@ class LabelIndex:
         Args:
             file_path: The file path to look up
             raise_on_error: If True, raise exceptions instead of returning None
-                           (Phase 3, Issue 3.1).
+                           .
 
         Returns:
             LabelSet if found, None otherwise (when raise_on_error=False)
@@ -969,7 +967,7 @@ def get_default_index(warn: bool = True) -> LabelIndex:
     """
     Get the default label index singleton (thread-safe).
 
-    WARNING: Default index shares state across all callers (Phase 4.2).
+    WARNING: Default index shares state across all callers .
     For isolated operation, create explicit LabelIndex instances.
 
     Args:

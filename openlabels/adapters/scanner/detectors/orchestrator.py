@@ -13,11 +13,8 @@ Concurrency Model:
     Uses ThreadPoolExecutor for parallel pattern matching across domains.
     Pattern matching is I/O-bound (regex on text) so GIL isn't a bottleneck.
 
-Phase 4 Changes:
-    - Issue 4.1: Orchestrator now accepts optional Context for resource isolation
-    - When Context is provided, uses context.detection_slot() instead of module globals
-    - Module-level globals are kept for backward compatibility but deprecated
-    - Issue 4.5: Uses context.detection_slot() for safe semaphore handling
+The orchestrator accepts optional Context for resource isolation.
+When Context is provided, uses context.detection_slot() instead of module globals.
 
 For thread timeout limitations and mitigations, see thread_pool.py.
 """
@@ -106,10 +103,8 @@ class DetectorOrchestrator:
     - Failures don't affect other detectors
     - Selective detector enablement via config
 
-    Phase 4 additions:
-    - Optional Context parameter for resource isolation (Issue 4.1)
-    - When Context is provided, uses context resources instead of module globals
-    - Safe detection slot with guaranteed cleanup (Issue 4.5)
+    Supports optional Context parameter for resource isolation.
+    When Context is provided, uses context resources instead of module globals.
     """
 
     def __init__(

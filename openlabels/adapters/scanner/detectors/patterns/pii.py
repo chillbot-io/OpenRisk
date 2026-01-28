@@ -25,9 +25,7 @@ PII_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
 add_pattern = create_pattern_adder(PII_PATTERNS)
 
 
-# =============================================================================
-# PHONE NUMBERS
-# =============================================================================
+# Phone Numbers
 
 add_pattern(r'\((\d{3})\)\s*(\d{3})[-.]?(\d{4})', 'PHONE', CONFIDENCE_MEDIUM)
 add_pattern(r'\b(\d{3})[-.](\d{3})[-.](\d{4})\b', 'PHONE', CONFIDENCE_LOW)
@@ -50,17 +48,13 @@ add_pattern(r'(?:phone|tel|call|contact)[:\s]+\((\d{3})\)\s*([lI1]\d{2})[-.]?(\d
 add_pattern(r'(?:phone|tel|call|contact)[:\s]+\((\d{3})\)\s*(\d{3})[-.]?(\d{3}[B8])', 'PHONE', CONFIDENCE_MEDIUM_LOW, 0, re.I)
 
 
-# =============================================================================
-# EMAIL
-# =============================================================================
+# Email
 
 add_pattern(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', 'EMAIL', CONFIDENCE_HIGH)
 add_pattern(r'(?:email|e-mail)[:\s]+([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})', 'EMAIL', CONFIDENCE_NEAR_CERTAIN, 1, re.I)
 
 
-# =============================================================================
-# DATES
-# =============================================================================
+# Dates
 
 add_pattern(r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b', 'DATE', CONFIDENCE_LOWEST)
 add_pattern(r'\b(\d{1,2})-(\d{1,2})-(\d{4})\b', 'DATE', CONFIDENCE_LOWEST)
@@ -106,9 +100,7 @@ add_pattern(r'\b((?:and|to|through)\s+(?:January|February|March|April|May|June|J
 add_pattern(r'\b((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\s*[-\u2013\u2014]\s*\d{1,2}\s*,?\s*\d{4})\b', 'DATE', CONFIDENCE_BORDERLINE, 0, re.I)
 
 
-# =============================================================================
-# TIME
-# =============================================================================
+# Time
 
 # Safe Harbor requires removal of time elements (they're part of date under HIPAA)
 # Standard 12-hour: "11:30 PM", "9:42 AM", "11:30PM"
@@ -141,9 +133,7 @@ add_pattern(r'\b(\d{2}:\d{2}:\d{2}Z)\b', 'TIME', CONFIDENCE_MEDIUM_LOW, 1)
 add_pattern(r'(?:began|started|ended|completed|performed)\s+(?:at\s+)?(\d{2}:\d{2})\b', 'TIME', CONFIDENCE_LOW, 1, re.I)
 
 
-# =============================================================================
-# AGE
-# =============================================================================
+# Age
 
 # Standard forms: "46 years old", "46 year old"
 add_pattern(r'\b(\d{1,3})\s*(?:year|yr)s?\s*old\b', 'AGE', CONFIDENCE_MEDIUM, 1, re.I)
@@ -155,9 +145,7 @@ add_pattern(r'\b(\d{1,3})\s*y/?o\b', 'AGE', CONFIDENCE_MEDIUM_LOW, 1, re.I)
 add_pattern(r'\b(?:age|aged)[:\s]+(\d{1,3})\b', 'AGE', CONFIDENCE_RELIABLE, 1, re.I)  # \b prevents matching "Page 123"
 
 
-# =============================================================================
-# ROOM/BED NUMBERS (facility location identifiers)
-# =============================================================================
+# Room/Bed Numbers (facility location identifiers)
 
 # "Room: 625", "Rm: 302A", "Room 101"
 add_pattern(r'(?:Room|Rm)[:\s#]+(\d{1,4}[A-Z]?)', 'ROOM', CONFIDENCE_MEDIUM_LOW, 1, re.I)
@@ -167,9 +155,7 @@ add_pattern(r'(?:Bed)[:\s#]+(\d{1,2}[A-Z]?)', 'ROOM', CONFIDENCE_LOW, 1, re.I)
 add_pattern(r'(?:Room|Rm)[:\s#]+(\d{1,4}[A-Z]?)\s*,?\s*(?:Bed)[:\s#]*(\d{1,2}[A-Z]?)', 'ROOM', CONFIDENCE_MEDIUM, 0, re.I)
 
 
-# =============================================================================
-# NAME PATTERNS
-# =============================================================================
+# Name Patterns
 
 # === Name Components ===
 # Name part: MUST start with capital letter (proper noun)

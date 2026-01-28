@@ -37,10 +37,6 @@ from rich.panel import Panel
 from rich.text import Text
 
 
-# =============================================================================
-# CONSOLE SETUP
-# =============================================================================
-
 # Main console for stdout (user output)
 console = Console()
 
@@ -61,10 +57,6 @@ def is_progress_enabled() -> bool:
     """Check if progress bars are enabled."""
     return _progress_enabled and console.is_terminal
 
-
-# =============================================================================
-# OUTPUT FUNCTIONS
-# =============================================================================
 
 def echo(message: str, style: Optional[str] = None, nl: bool = True) -> None:
     """
@@ -128,10 +120,6 @@ def dim(message: str) -> None:
     console.print(f"[dim]{message}[/dim]")
 
 
-# =============================================================================
-# TABLE OUTPUT
-# =============================================================================
-
 def table(
     headers: List[str],
     rows: List[Tuple[Any, ...]],
@@ -192,10 +180,6 @@ def results_table(
     if max_rows and len(results) > max_rows:
         dim(f"  ... and {len(results) - max_rows} more")
 
-
-# =============================================================================
-# PROGRESS BARS
-# =============================================================================
 
 class ProgressContext:
     """Context wrapper for progress bar operations."""
@@ -275,10 +259,6 @@ def progress(
         yield ProgressContext(p, task_id)
 
 
-# =============================================================================
-# SUMMARY OUTPUT
-# =============================================================================
-
 def summary_box(title: str, items: List[Tuple[str, Any]]) -> None:
     """
     Print a summary box with key-value pairs.
@@ -296,10 +276,6 @@ def divider(char: str = "─", style: str = "dim") -> None:
     width = console.width or 60
     console.print(char * width, style=style)
 
-
-# =============================================================================
-# CONFIRMATION
-# =============================================================================
 
 def confirm(message: str, default: bool = False) -> bool:
     """

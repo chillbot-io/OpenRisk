@@ -49,10 +49,6 @@ _validate_path_for_subprocess = validate_path_for_subprocess
 _validate_xattr_value = validate_xattr_value
 
 
-# =============================================================================
-# CLOUD URI VALIDATION
-# =============================================================================
-
 # S3 bucket naming rules:
 # - 3-63 characters
 # - Lowercase letters, numbers, hyphens, periods
@@ -259,10 +255,6 @@ def _get_platform() -> str:
     return "unknown"
 
 
-# =============================================================================
-# LINUX IMPLEMENTATION
-# =============================================================================
-
 class LinuxXattrHandler:
     """Handle extended attributes on Linux using xattr module or setfattr."""
 
@@ -360,10 +352,6 @@ class LinuxXattrHandler:
             return False
 
 
-# =============================================================================
-# MACOS IMPLEMENTATION
-# =============================================================================
-
 class MacOSXattrHandler:
     """Handle extended attributes on macOS using xattr command."""
 
@@ -424,10 +412,6 @@ class MacOSXattrHandler:
             return False
 
 
-# =============================================================================
-# WINDOWS IMPLEMENTATION
-# =============================================================================
-
 class WindowsADSHandler:
     """Handle NTFS Alternate Data Streams on Windows."""
 
@@ -466,10 +450,6 @@ class WindowsADSHandler:
             logger.debug(f"Windows ADS remove failed for {path}: {e}")
             return False
 
-
-# =============================================================================
-# UNIFIED INTERFACE
-# =============================================================================
 
 def _get_handler():
     """Get the appropriate xattr handler for the current platform."""
@@ -581,10 +561,6 @@ def has_virtual_label(path: Union[str, Path]) -> bool:
     """Check if a file has a virtual label."""
     return read_virtual_label(path) is not None
 
-
-# =============================================================================
-# CLOUD STORAGE HANDLERS
-# =============================================================================
 
 # Module-level circuit breakers for each cloud provider
 # These prevent overwhelming failing services with retries
@@ -846,64 +822,9 @@ class AzureBlobMetadataHandler:
         return metadata.get(self.METADATA_KEY)
 
 
-# =============================================================================
-# CLOUD HANDLER SINGLETONS (DEPRECATED - Phase 4.4)
-# =============================================================================
-# These module-level singletons are kept for backward compatibility but are
-# deprecated. For isolated operation, use Context.get_cloud_handler() instead.
-
-import warnings
-
-_s3_handler = None
-_gcs_handler = None
-_azure_handler = None
-_cloud_handler_warning_issued = False
-
-
-def _warn_deprecated_cloud_handlers():
-    """Emit warning about using deprecated module-level cloud handlers."""
-    global _cloud_handler_warning_issued
-    if not _cloud_handler_warning_issued:
-        _cloud_handler_warning_issued = True
-        warnings.warn(
-            "Using deprecated module-level cloud handlers. "
-            "For isolated operation, use Context.get_cloud_handler() instead. "
-            "This will become an error in a future version.",
-            DeprecationWarning,
-            stacklevel=4,
-        )
-
-
-def _get_s3_handler():
-    """DEPRECATED: Use Context.get_cloud_handler('s3') instead."""
-    global _s3_handler
-    _warn_deprecated_cloud_handlers()
-    if _s3_handler is None:
-        _s3_handler = S3MetadataHandler()
-    return _s3_handler
-
-
-def _get_gcs_handler():
-    """DEPRECATED: Use Context.get_cloud_handler('gcs') instead."""
-    global _gcs_handler
-    _warn_deprecated_cloud_handlers()
-    if _gcs_handler is None:
-        _gcs_handler = GCSMetadataHandler()
-    return _gcs_handler
-
-
-def _get_azure_handler():
-    """DEPRECATED: Use Context.get_cloud_handler('azure') instead."""
-    global _azure_handler
-    _warn_deprecated_cloud_handlers()
-    if _azure_handler is None:
-        _azure_handler = AzureBlobMetadataHandler()
-    return _azure_handler
-
-
 def _get_cloud_handler_for_provider(provider: str, context=None):
     """
-    Get cloud handler, using Context if provided (Phase 4.4).
+    Get cloud handler for a provider.
 
     Args:
         provider: Cloud provider ('s3', 'gcs', 'azure')
@@ -915,13 +836,13 @@ def _get_cloud_handler_for_provider(provider: str, context=None):
     if context is not None:
         return context.get_cloud_handler(provider)
 
-    # Fall back to deprecated module-level singletons
+    # Create handler directly
     if provider == 's3':
-        return _get_s3_handler()
+        return S3MetadataHandler()
     elif provider == 'gcs':
-        return _get_gcs_handler()
+        return GCSMetadataHandler()
     elif provider == 'azure':
-        return _get_azure_handler()
+        return AzureBlobMetadataHandler()
     return None
 
 
@@ -942,7 +863,7 @@ def write_cloud_label(
     Args:
         uri: Cloud storage URI
         label_set: The LabelSet to write
-        context: Optional Context for handler isolation (Phase 4.4)
+        context: Optional Context for handler isolation
         **kwargs: Additional arguments for the cloud client
 
     Returns:
@@ -989,7 +910,7 @@ def read_cloud_label(uri: str, context=None, **kwargs) -> Optional[VirtualLabelP
 
     Args:
         uri: Cloud storage URI
-        context: Optional Context for handler isolation (Phase 4.4)
+        context: Optional Context for handler isolation
         **kwargs: Additional arguments for the cloud client
 
     Returns:

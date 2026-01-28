@@ -22,9 +22,7 @@ HEALTHCARE_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
 add_pattern = create_pattern_adder(HEALTHCARE_PATTERNS)
 
 
-# =============================================================================
-# MEDICAL RECORD NUMBERS
-# =============================================================================
+# Medical Record Numbers
 
 add_pattern(r'(?:MRN|Medical\s+Record(?:\s+Number)?)[:\s#]+([A-Z]*-?\d{6,12}[A-Z]*)', 'MRN', CONFIDENCE_HIGH, 1, re.I)
 add_pattern(r'\b(MRN-\d{6,12})\b', 'MRN', CONFIDENCE_RELIABLE, 1, re.I)  # Bare MRN-1234567 format
@@ -33,9 +31,7 @@ add_pattern(r'(?:Encounter|Visit)[:\s#]+([A-Z]*\d{6,12}[A-Z]*)', 'ENCOUNTER_ID',
 add_pattern(r'(?:Accession|Lab)[:\s#]+([A-Z]*\d{6,12}[A-Z]*)', 'ACCESSION_ID', CONFIDENCE_MEDIUM, 1, re.I)
 
 
-# =============================================================================
-# NPI (NATIONAL PROVIDER IDENTIFIER)
-# =============================================================================
+# NPI (National Provider Identifier)
 
 # NPI is a 10-digit number with Luhn checksum (same algorithm as credit cards)
 # Labeled: "NPI: 1234567890", "NPI# 1234567890"
@@ -46,9 +42,7 @@ add_pattern(r'(?:provider|physician|prescriber|ordering)\s+NPI[:\s#]*(\d{10})\b'
 add_pattern(r'(?:DEA)[:\s#]+([A-Z]{2}\d{7})\b', 'DEA', CONFIDENCE_HIGH, 1, re.I)
 
 
-# =============================================================================
-# HEALTH PLAN IDS
-# =============================================================================
+# Health Plan IDs
 
 add_pattern(r'(?:Member\s*ID|Subscriber)[:\s#]+([A-Z0-9]{6,15})', 'MEMBER_ID', CONFIDENCE_MEDIUM_LOW, 1, re.I)
 add_pattern(r'(?:Medicaid)[:\s#]+([A-Z0-9]{8,12})', 'HEALTH_PLAN_ID', CONFIDENCE_MEDIUM_LOW, 1, re.I)
@@ -95,9 +89,7 @@ add_pattern(rf'(?:{_PAYER_PREFIXES})[- ]?([A-Z]*\d[A-Z0-9]{{5,14}})', 'HEALTH_PL
 add_pattern(rf'((?:{_PAYER_PREFIXES})[- ]?[A-Z]*\d[A-Z0-9]{{5,14}})', 'HEALTH_PLAN_ID', CONFIDENCE_MEDIUM_LOW, 0, re.I)
 
 
-# =============================================================================
-# FACILITY PATTERNS
-# =============================================================================
+# Facility Patterns
 
 _FACILITY_PREFIX = r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}"  # 1-4 capitalized words
 add_pattern(rf'({_FACILITY_PREFIX}\s+(?:Hospital|Medical\s+Center|Health\s+Center|Clinic|Health\s+System|Healthcare|Specialty\s+Clinic|Regional\s+Medical))\b', 'FACILITY', CONFIDENCE_LOW, 1)
@@ -158,9 +150,7 @@ add_pattern(rf'(?:Preferred\s+)?Pharmacy[:\s]+((?:{_PHARMACY_CHAINS})(?:\s+Pharm
 add_pattern(rf'\b((?:{_PHARMACY_CHAINS})\s+Pharmacy(?:\s*#\d{{3,6}})?)(?:\s|,|$)', 'FACILITY', CONFIDENCE_MEDIUM, 1, re.I)
 
 
-# =============================================================================
-# HEALTHCARE-SPECIFIC IDENTIFIERS
-# =============================================================================
+# Healthcare-Specific Identifiers
 
 # === NDC (National Drug Code) - 5-4-2 format with dashes ===
 # FDA standard drug identifier, reveals medication info
@@ -196,9 +186,7 @@ add_pattern(r'(?:Pre-?cert(?:ification)?)[:\s#]+([A-Z0-9]{6,20})', 'AUTH_NUMBER'
 add_pattern(r'(?:Workers?\s*Comp|WC)\s*(?:Claim)?[:\s#]+([A-Z0-9]{6,20})', 'CLAIM_NUMBER', CONFIDENCE_MEDIUM_LOW, 1, re.I)
 
 
-# =============================================================================
-# PHYSICAL IDENTIFIERS (with strong context to avoid FPs)
-# =============================================================================
+# Physical Identifiers (with strong context to avoid FPs)
 
 # === Blood Type ===
 add_pattern(r'(?:Blood\s*Type|Blood\s*Group|ABO)[:\s]+([ABO]{1,2}[+-])', 'BLOOD_TYPE', CONFIDENCE_RELIABLE, 1, re.I)
@@ -217,18 +205,14 @@ add_pattern(r'(?:Weight|Wt\.?)[:\s]+(\d{2,3}(?:\.\d)?)\s*(?:lbs?|kg)', 'WEIGHT',
 add_pattern(r'(?:BMI|Body\s*Mass\s*Index)[:\s]+(\d{2}(?:\.\d{1,2})?)', 'BMI', CONFIDENCE_MEDIUM, 1, re.I)
 
 
-# =============================================================================
-# PRESCRIPTION / RX NUMBERS
-# =============================================================================
+# Prescription / Rx Numbers
 
 add_pattern(r'(?:Rx|Rx\s*#|Prescription|Script)[:\s#]+(\d{6,12})', 'RX_NUMBER', CONFIDENCE_MEDIUM_LOW, 1, re.I)
 add_pattern(r'(?:Rx|Prescription)\s+(?:Number|No|#)[:\s]+([A-Z0-9]{6,15})', 'RX_NUMBER', CONFIDENCE_MEDIUM, 1, re.I)
 add_pattern(r'(?:Refill|Fill)\s+#[:\s]*(\d{1,3})\s+of\s+(\d{1,3})', 'RX_NUMBER', CONFIDENCE_MINIMAL, 0, re.I)  # "Refill #2 of 5"
 
 
-# =============================================================================
-# FAX NUMBERS (healthcare-specific communication)
-# =============================================================================
+# Fax Numbers (healthcare-specific communication)
 
 add_pattern(r'(?:fax|facsimile)[:\s]+([()\d\s+.-]{10,20})', 'FAX', CONFIDENCE_RELIABLE, 1, re.I)
 add_pattern(r'(?:f|fax)[:\s]*\((\d{3})\)\s*(\d{3})[-.]?(\d{4})', 'FAX', CONFIDENCE_MEDIUM)

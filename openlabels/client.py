@@ -132,10 +132,6 @@ class Client:
         self._fileops = FileOps(context, self._scanner)
         self._reporter = Reporter(context, self._scanner)
 
-    # =========================================================================
-    # COMPONENT ACCESS
-    # =========================================================================
-
     @property
     def context(self) -> Context:
         """Access the underlying context."""
@@ -165,10 +161,6 @@ class Client:
     def default_exposure(self) -> str:
         """Get the default exposure level."""
         return self._ctx.default_exposure
-
-    # =========================================================================
-    # SCORING (delegated to Scorer)
-    # =========================================================================
 
     def score_file(
         self,
@@ -224,10 +216,6 @@ class Client:
             ScoringResult with score, tier, and breakdown
         """
         return self._scorer.score_from_adapters(inputs, exposure=exposure)
-
-    # =========================================================================
-    # SCANNING (delegated to Scanner)
-    # =========================================================================
 
     def scan(
         self,
@@ -309,10 +297,6 @@ class Client:
             TreeNode representing the directory tree with risk data
         """
         return self._scanner.scan_tree(path, max_depth=max_depth)
-
-    # =========================================================================
-    # FILE OPERATIONS (delegated to FileOps)
-    # =========================================================================
 
     def quarantine(
         self,
@@ -402,10 +386,6 @@ class Client:
             confirm=confirm,
             dry_run=dry_run,
         )
-
-    # =========================================================================
-    # REPORTING (delegated to Reporter)
-    # =========================================================================
 
     def report(
         self,
