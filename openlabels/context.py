@@ -132,8 +132,10 @@ def _register_context(ctx: "Context") -> None:
                     name="context_cleanup",
                     priority=10,  # Run early in shutdown
                 )
-            except Exception:
-                pass  # Shutdown coordinator may not be available
+            except Exception as e:
+                # Shutdown coordinator may not be available in some environments
+                # (e.g., during testing, or when signal handlers can't be installed)
+                logger.debug(f"Could not register with shutdown coordinator: {e}")
             _atexit_registered = True
 
         # Add weak reference to this context

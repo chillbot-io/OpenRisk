@@ -440,135 +440,259 @@ class DetectorOrchestrator:
         Internal detection implementation with metadata tracking (Phase 3).
 
         This is the core detection logic that tracks all failures and degraded state.
+        Orchestrates the detection pipeline:
+        1. Known entity detection (entity persistence)
+        2. Structured extraction (OCR post-processing)
+        3. Pattern/ML detectors (parallel or sequential)
+        4. Coordinate mapping (processed -> original text)
+        5. Post-processing (filter, dedupe, normalize, enhance)
         """
         all_spans: List[Span] = []
-        processed_text = text
-        char_map: List[int] = []  # For mapping processed positions back to original
 
-        # Step 0: Detect known entities first (entity persistence)
-        # This ensures previously-identified entities are detected with high confidence
+        # Step 0: Known entity detection (entity persistence across messages)
         if known_entities:
-            known_spans = self._detect_known_entities(text, known_entities)
+            known_spans = self._run_known_entity_detection(text, known_entities)
             all_spans.extend(known_spans)
-            if known_spans:
-                logger.info(f"Known entity detection: {len(known_spans)} matches from entity memory")
 
-        # Step 1: Run structured extractor first (if enabled)
-        # This does OCR post-processing and label-based extraction
-        if self.enable_structured:
-            try:
-                # Get the char_map for position mapping
-                processed_text, char_map = post_process_ocr(text)
+        # Step 1: Structured extraction (OCR + label-based)
+        processed_text, char_map, structured_spans = self._run_structured_extraction(
+            text, metadata
+        )
+        all_spans.extend(structured_spans)
 
-                structured_result = extract_structured_phi(text)
-                all_spans.extend(structured_result.spans)
+        # Step 2: Run pattern/ML detectors
+        detector_spans = self._run_detectors(processed_text, timeout, metadata)
+        if detector_spans is None:
+            # No detectors available - return what we have
+            return all_spans
 
-                if structured_result.spans:
-                    logger.debug(
-                        f"Structured extractor: {structured_result.fields_extracted} fields, "
-                        f"{len(structured_result.spans)} spans"
-                    )
-            except (ValueError, RuntimeError) as e:
-                # Track structured extractor failure (Phase 3, Issue 3.2)
-                logger.error(f"Structured extractor failed: {e}")
-                metadata.structured_extractor_failed = True
-                metadata.degraded = True
-                metadata.warnings.append(f"Structured extraction failed: {type(e).__name__}: {e}")
-                # Continue with original text
-                processed_text = text
-                char_map = []
+        # Step 3: Map detector spans back to original text coordinates
+        mapped_spans = self._map_spans_to_original(
+            detector_spans, char_map, processed_text, text
+        )
+        all_spans.extend(mapped_spans)
 
-        # Step 2: Run all other detectors on (possibly processed) text
-        # Use cached available detectors (checked once at init, not every call)
+        # Step 4: Post-processing pipeline
+        return self._postprocess_spans(all_spans, text)
+
+    def _run_known_entity_detection(
+        self,
+        text: str,
+        known_entities: Dict[str, tuple],
+    ) -> List[Span]:
+        """
+        Step 0: Detect previously-identified entities.
+
+        Provides entity persistence across messages - if "John" was identified
+        as a name in message 1, it will be detected with high confidence in
+        message 2 even without contextual cues.
+        """
+        spans = self._detect_known_entities(text, known_entities)
+        if spans:
+            logger.info(f"Known entity detection: {len(spans)} matches from entity memory")
+        return spans
+
+    def _run_structured_extraction(
+        self,
+        text: str,
+        metadata: DetectionMetadata,
+    ) -> Tuple[str, List[int], List[Span]]:
+        """
+        Step 1: Run structured extractor with OCR post-processing.
+
+        Returns:
+            Tuple of (processed_text, char_map, structured_spans)
+            - processed_text: OCR-corrected text for pattern matching
+            - char_map: Position mapping from processed to original
+            - structured_spans: Spans from label-based extraction
+        """
+        if not self.enable_structured:
+            return text, [], []
+
+        try:
+            processed_text, char_map = post_process_ocr(text)
+            structured_result = extract_structured_phi(text)
+
+            if structured_result.spans:
+                logger.debug(
+                    f"Structured extractor: {structured_result.fields_extracted} fields, "
+                    f"{len(structured_result.spans)} spans"
+                )
+
+            return processed_text, char_map, structured_result.spans
+
+        except (ValueError, RuntimeError) as e:
+            logger.error(f"Structured extractor failed: {e}")
+            metadata.structured_extractor_failed = True
+            metadata.degraded = True
+            metadata.warnings.append(f"Structured extraction failed: {type(e).__name__}: {e}")
+            return text, [], []
+
+    def _run_detectors(
+        self,
+        text: str,
+        timeout: float,
+        metadata: DetectionMetadata,
+    ) -> Optional[List[Span]]:
+        """
+        Step 2: Run pattern/ML detectors on text.
+
+        Returns:
+            List of spans, or None if no detectors available
+        """
         available = self._available_detectors
 
         if not available:
             logger.warning("No traditional detectors available, using only structured extraction")
             metadata.warnings.append("No traditional detectors available")
-            return all_spans
+            return None
 
         if self.parallel and len(available) > 1:
-            other_spans = self._detect_parallel(processed_text, available, timeout, metadata)
+            return self._detect_parallel(text, available, timeout, metadata)
         else:
-            other_spans = self._detect_sequential(processed_text, available, timeout, metadata)
+            return self._detect_sequential(text, available, timeout, metadata)
 
-        # Step 3: Map pattern/ML spans back to original text coordinates
-        if char_map and processed_text != text:
-            mapped_spans = []
-            for span in other_spans:
-                orig_start, orig_end = map_span_to_original(
-                    span.start, span.end, span.text, char_map, text
-                )
-                # Get actual text at original position
-                orig_text = text[orig_start:orig_end] if orig_start < len(text) else span.text
+    def _map_spans_to_original(
+        self,
+        spans: List[Span],
+        char_map: List[int],
+        processed_text: str,
+        original_text: str,
+    ) -> List[Span]:
+        """
+        Step 3: Map span coordinates from processed text back to original.
 
-                mapped_spans.append(Span(
-                    start=orig_start,
-                    end=orig_end,
-                    text=orig_text,
-                    entity_type=span.entity_type,
-                    confidence=span.confidence,
-                    detector=span.detector,
-                    tier=span.tier,
-                ))
-            all_spans.extend(mapped_spans)
-        else:
-            all_spans.extend(other_spans)
+        When OCR post-processing modifies text (fixing common OCR errors),
+        span positions need to be mapped back to the original text.
+        """
+        if not char_map or processed_text == original_text:
+            return spans
 
-        # Filter clinical context types BEFORE deduplication
-        # This prevents clinical types from "winning" overlap resolution and hiding PHI
-        # Uses .upper() for case-insensitive matching (handles "medication" vs "MEDICATION")
-        pre_clinical_count = len(all_spans)
-        all_spans = [s for s in all_spans if s.entity_type.upper() not in CLINICAL_CONTEXT_TYPES]
-        clinical_filtered = pre_clinical_count - len(all_spans)
+        mapped_spans = []
+        for span in spans:
+            orig_start, orig_end = map_span_to_original(
+                span.start, span.end, span.text, char_map, original_text
+            )
+            orig_text = (
+                original_text[orig_start:orig_end]
+                if orig_start < len(original_text)
+                else span.text
+            )
+
+            mapped_spans.append(Span(
+                start=orig_start,
+                end=orig_end,
+                text=orig_text,
+                entity_type=span.entity_type,
+                confidence=span.confidence,
+                detector=span.detector,
+                tier=span.tier,
+            ))
+
+        return mapped_spans
+
+    def _postprocess_spans(
+        self,
+        spans: List[Span],
+        text: str,
+    ) -> List[Span]:
+        """
+        Step 4: Post-processing pipeline.
+
+        Applies filters, deduplication, normalization, and enhancement:
+        1. Filter clinical context types (non-PHI)
+        2. Deduplicate overlapping spans
+        3. Filter tracking number false positives
+        4. Normalize confidence scores
+        5. Context enhancement (rule-based FP filtering)
+        6. LLM verification (optional, for ambiguous cases)
+        """
+        # 1. Filter clinical context types BEFORE deduplication
+        pre_clinical_count = len(spans)
+        spans = [s for s in spans if s.entity_type.upper() not in CLINICAL_CONTEXT_TYPES]
+        clinical_filtered = pre_clinical_count - len(spans)
         if clinical_filtered > 0:
-            logger.info(f"Clinical context filter: Removed {clinical_filtered} non-PHI entities (LAB_TEST, DIAGNOSIS, etc.)")
+            logger.info(
+                f"Clinical context filter: Removed {clinical_filtered} "
+                "non-PHI entities (LAB_TEST, DIAGNOSIS, etc.)"
+            )
 
-        # Deduplicate spans (same position + text = duplicate)
-        deduped = self._dedupe_spans(all_spans)
+        # 2. Deduplicate spans (same position + text = duplicate)
+        spans = self._dedupe_spans(spans)
 
-        # Filter ML false positives: carrier names/tracking numbers detected as MRN
-        deduped = filter_tracking_numbers(deduped, text)
+        # 3. Filter ML false positives: carrier names/tracking numbers
+        spans = filter_tracking_numbers(spans, text)
 
-        # Normalize confidence scores across detectors (Phase 3)
-        # This applies detector-specific calibration (floors for checksum, structured, etc.)
-        deduped = normalize_spans_confidence(deduped)
+        # 4. Normalize confidence scores across detectors
+        spans = normalize_spans_confidence(spans)
 
-        # Context enhancement step (fast, rule-based filtering)
-        # Filters obvious FPs and adjusts confidence before LLM
-        if self._context_enhancer is not None and deduped:
-            pre_enhance_count = len(deduped)
-            deduped = self._context_enhancer.enhance(text, deduped)
-            enhanced_filtered = pre_enhance_count - len(deduped)
-            if enhanced_filtered > 0:
-                logger.info(f"Context Enhancer: Filtered {enhanced_filtered} obvious FPs")
+        # 5. Context enhancement (fast, rule-based filtering)
+        spans = self._apply_context_enhancement(spans, text)
 
-        # LLM verification step (optional, filters remaining ambiguous cases)
-        # Only processes spans marked needs_review=True by context enhancer
-        if self._llm_verifier is not None and deduped:
-            # Only send ambiguous spans to LLM (those with needs_review=True)
-            needs_llm = [s for s in deduped if getattr(s, 'needs_review', False)]
-            already_verified = [s for s in deduped if not getattr(s, 'needs_review', False)]
-
-            if needs_llm:
-                pre_verify_count = len(needs_llm)
-                verified = self._llm_verifier.verify(text, needs_llm)
-                filtered_count = pre_verify_count - len(verified)
-                if filtered_count > 0:
-                    logger.info(f"LLM Verifier: Filtered {filtered_count} false positives")
-                deduped = already_verified + verified
-            else:
-                logger.debug("LLM Verifier: No spans need verification")
+        # 6. LLM verification (optional)
+        spans = self._apply_llm_verification(spans, text)
 
         # Log final results (SECURITY: never log actual PHI text)
-        if deduped:
-            # Log only metadata, not the actual PHI values
-            final_summary = [(s.entity_type, s.detector, f"{s.confidence:.2f}") for s in deduped]
-            logger.info(f"Detection complete: {len(deduped)} final spans after dedup: {final_summary}")
+        self._log_detection_results(spans)
+
+        return spans
+
+    def _apply_context_enhancement(
+        self,
+        spans: List[Span],
+        text: str,
+    ) -> List[Span]:
+        """Apply context enhancement to filter obvious false positives."""
+        if self._context_enhancer is None or not spans:
+            return spans
+
+        pre_count = len(spans)
+        spans = self._context_enhancer.enhance(text, spans)
+        filtered = pre_count - len(spans)
+
+        if filtered > 0:
+            logger.info(f"Context Enhancer: Filtered {filtered} obvious FPs")
+
+        return spans
+
+    def _apply_llm_verification(
+        self,
+        spans: List[Span],
+        text: str,
+    ) -> List[Span]:
+        """Apply LLM verification to ambiguous spans."""
+        if self._llm_verifier is None or not spans:
+            return spans
+
+        # Only send ambiguous spans to LLM (those with needs_review=True)
+        needs_llm = [s for s in spans if getattr(s, 'needs_review', False)]
+        already_verified = [s for s in spans if not getattr(s, 'needs_review', False)]
+
+        if not needs_llm:
+            logger.debug("LLM Verifier: No spans need verification")
+            return spans
+
+        pre_count = len(needs_llm)
+        verified = self._llm_verifier.verify(text, needs_llm)
+        filtered = pre_count - len(verified)
+
+        if filtered > 0:
+            logger.info(f"LLM Verifier: Filtered {filtered} false positives")
+
+        return already_verified + verified
+
+    def _log_detection_results(self, spans: List[Span]) -> None:
+        """Log final detection results (metadata only, no PHI)."""
+        if spans:
+            final_summary = [
+                (s.entity_type, s.detector, f"{s.confidence:.2f}")
+                for s in spans
+            ]
+            logger.info(
+                f"Detection complete: {len(spans)} final spans after dedup: {final_summary}"
+            )
         else:
             logger.info("Detection complete: 0 spans detected")
-
-        return deduped
 
     def detect_with_processed_text(self, text: str, timeout: float = DETECTOR_TIMEOUT) -> Tuple[List[Span], str]:
         """

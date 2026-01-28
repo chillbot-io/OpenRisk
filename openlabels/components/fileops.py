@@ -138,8 +138,13 @@ class FileOps:
             try:
                 with open(manifest_path, 'r') as f:
                     return json.load(f)
-            except (json.JSONDecodeError, OSError):
-                pass
+            except (json.JSONDecodeError, OSError) as e:
+                # Log the error so we know the manifest couldn't be loaded
+                # This could indicate corruption or permissions issues
+                logger.warning(
+                    f"Could not load quarantine manifest {manifest_path}: {e}. "
+                    "Starting with empty manifest."
+                )
         return {"processed": {}}
 
     def _save_manifest(self, manifest_path: Path, manifest: Dict[str, Any]) -> None:

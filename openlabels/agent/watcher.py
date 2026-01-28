@@ -25,6 +25,7 @@ Example:
 """
 
 import logging
+import stat as stat_module
 import threading
 import queue
 import time
@@ -665,6 +666,10 @@ class PollingWatcher:
         Phase 6.2: Includes content hash for small files to detect
         changes that occur within the same second.
 
+        SECURITY FIX (CVE-READY-003): Eliminated TOCTOU race condition.
+        Previously called is_file() then stat(), allowing file to change
+        between checks. Now uses stat() directly and checks st_mode.
+
         Returns:
             Dict mapping path to (mtime, size, content_hash) tuple.
             content_hash is None for files larger than hash_threshold.
@@ -673,17 +678,22 @@ class PollingWatcher:
         walker = self.path.rglob("*") if self.recursive else self.path.glob("*")
 
         for file_path in walker:
-            if file_path.is_file():
-                try:
-                    st = file_path.stat()
-                    # Phase 6.2: Include content hash for small files
-                    if self.hash_threshold > 0 and st.st_size < self.hash_threshold:
-                        content_hash = self._quick_hash(file_path)
-                    else:
-                        content_hash = None
-                    files[str(file_path)] = (st.st_mtime, st.st_size, content_hash)
-                except OSError:
-                    pass
+            # SECURITY FIX (CVE-READY-003): Use stat() directly instead of
+            # is_file() then stat() to eliminate TOCTOU race window
+            try:
+                st = file_path.stat()
+                # Check if it's a regular file using stat result
+                if not stat_module.S_ISREG(st.st_mode):
+                    continue  # Skip directories, symlinks, etc.
+                # Phase 6.2: Include content hash for small files
+                if self.hash_threshold > 0 and st.st_size < self.hash_threshold:
+                    content_hash = self._quick_hash(file_path)
+                else:
+                    content_hash = None
+                files[str(file_path)] = (st.st_mtime, st.st_size, content_hash)
+            except OSError:
+                # File doesn't exist, permission denied, or other issue
+                pass
 
         return files
 
