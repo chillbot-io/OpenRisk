@@ -52,10 +52,6 @@ class OpenLabelsError(Exception):
         return self.message
 
 
-# =============================================================================
-# TRANSIENT ERRORS - May succeed on retry
-# =============================================================================
-
 class TransientError(OpenLabelsError):
     """
     Error that may succeed on retry.
@@ -104,10 +100,6 @@ class OperationTimeoutError(TransientError):
         self.timeout_seconds = timeout_seconds
         self.operation = operation
 
-
-# =============================================================================
-# PERMANENT ERRORS - Will not succeed on retry
-# =============================================================================
 
 class PermanentError(OpenLabelsError):
     """
@@ -221,10 +213,6 @@ class PermissionDeniedError(PermanentError):
         self.path = path
         self.required_permission = required_permission
 
-
-# =============================================================================
-# FILE OPERATION ERRORS
-# =============================================================================
 
 class FileErrorType(Enum):
     """Classification of file operation errors."""
@@ -340,10 +328,6 @@ class FileOperationError(OpenLabelsError):
             original_error=e,
         )
 
-
-# =============================================================================
-# EXPORTS
-# =============================================================================
 
 __all__ = [
     # Base

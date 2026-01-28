@@ -20,11 +20,7 @@ from enum import Enum
 from pathlib import Path
 
 
-# =============================================================================
-# RE-EXPORTS FROM SOURCE MODULES
-# =============================================================================
-
-# From adapters.base - Adapter protocol and data types
+# Re-exports from source modules
 from ..adapters.base import (
     Entity,
     NormalizedContext,
@@ -45,10 +41,6 @@ from .labels import Label, LabelSet, VirtualLabelPointer
 from .triggers import ScanTrigger
 
 
-# =============================================================================
-# ADDITIONAL TYPES
-# =============================================================================
-
 @dataclass
 class ScanResult:
     """
@@ -56,7 +48,7 @@ class ScanResult:
 
     Combines the scoring result with the source label set and metadata.
 
-    Phase 5.3: Clarified optional vs required fields:
+    Note: Clarified optional vs required fields:
     - score: Optional[int] - None means not scanned, 0 means minimal risk
     - Use was_scanned property to check if file was successfully scanned
     - Use has_error property to check if an error occurred
@@ -66,7 +58,7 @@ class ScanResult:
     size_bytes: int = 0
     file_type: str = ""
 
-    # Scoring (Phase 5.3: score is Optional - None means not scanned)
+    # Scoring (Note: score is Optional - None means not scanned)
     score: Optional[int] = None
     tier: Optional[str] = None
     scoring_result: Optional[ScoringResult] = None
@@ -93,7 +85,7 @@ class ScanResult:
     @property
     def was_scanned(self) -> bool:
         """
-        Check if file was successfully scanned (Phase 5.3).
+        Check if file was successfully scanned (Note).
 
         Returns True only if:
         - A score was computed (score is not None)
@@ -106,7 +98,7 @@ class ScanResult:
 
     @property
     def has_error(self) -> bool:
-        """Check if an error occurred during scanning (Phase 5.3)."""
+        """Check if an error occurred during scanning (Note)."""
         return self.error is not None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -280,11 +272,7 @@ class ReportConfig:
     title: str = "OpenLabels Risk Report"
 
 
-# =============================================================================
-# TYPE ALIASES
-# =============================================================================
-
-# Path types
+# Type aliases
 PathLike = Union[str, Path]
 
 # Entity list type
@@ -293,10 +281,6 @@ EntityList = List[Entity]
 # Score range tuple
 ScoreRange = Tuple[int, int]
 
-
-# =============================================================================
-# EXPORTS
-# =============================================================================
 
 __all__ = [
     # Re-exported from adapters.base

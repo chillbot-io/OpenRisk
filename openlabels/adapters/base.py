@@ -33,13 +33,13 @@ class ExposureLevel(Enum):
     PUBLIC = 3
 
 
-# Valid exposure level names (Phase 5.2)
+# Valid exposure level names
 VALID_EXPOSURE_LEVELS = frozenset({"PRIVATE", "INTERNAL", "ORG_WIDE", "PUBLIC"})
 
 
 def normalize_exposure_level(exposure) -> str:
     """
-    Normalize exposure level to canonical UPPERCASE string (Phase 5.2).
+    Normalize exposure level to canonical UPPERCASE string.
 
     Accepts:
         - ExposureLevel enum member
@@ -94,7 +94,7 @@ class NormalizedContext:
     Used by the scoring engine to apply exposure multipliers and
     additional context adjustments to the risk score.
 
-    Phase 5.2: exposure field is validated and normalized to uppercase.
+    Exposure field is validated and normalized to uppercase.
     Accepts ExposureLevel enum or case-insensitive string.
     """
     # Exposure factors
@@ -125,7 +125,7 @@ class NormalizedContext:
     is_archive: bool = False        # Whether this is a compressed archive
 
     def __post_init__(self):
-        """Phase 5.2: Validate and normalize exposure level."""
+        """Validate and normalize exposure level."""
         self.exposure = normalize_exposure_level(self.exposure)
 
 

@@ -141,7 +141,7 @@ class Scorer:
         self,
         entity_counts: Dict[str, int],
     ) -> Dict[str, int]:
-        """Normalize entity type names to UPPERCASE (Phase 5.1)."""
+        """Normalize entity type names to UPPERCASE."""
         return {
             normalize_entity_type(entity_type): count
             for entity_type, count in entity_counts.items()

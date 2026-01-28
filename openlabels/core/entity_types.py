@@ -1,5 +1,5 @@
 """
-OpenLabels Entity Type Normalization (Phase 5.1).
+OpenLabels Entity Type Normalization.
 
 Provides centralized entity type normalization to ensure consistency
 across all components. Entity types are ALWAYS normalized to UPPERCASE.

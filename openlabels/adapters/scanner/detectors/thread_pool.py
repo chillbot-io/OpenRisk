@@ -7,10 +7,8 @@ This module contains:
 - Queue depth tracking
 - Runaway detection tracking
 
-Phase 4 Changes:
-- These module-level globals are deprecated
-- For isolated operation, use Context instead
-- When Context is provided to DetectorOrchestrator, these globals are NOT used
+Module-level globals are deprecated for isolated operation.
+When Context is provided to DetectorOrchestrator, these globals are NOT used.
 
 SECURITY NOTE (LOW-005): Thread Timeout Limitations
     Python threads cannot be forcibly killed - only cancelled gracefully via
@@ -45,9 +43,7 @@ from .metadata import DetectionQueueFullError
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# CONFIGURATION CONSTANTS (DEPRECATED - Use Context instead)
-# =============================================================================
+# Configuration constants (deprecated - use Context instead)
 
 # Maximum concurrent detection requests (backpressure)
 # If exceeded, new requests will block until a slot is available
@@ -59,15 +55,12 @@ MAX_CONCURRENT_DETECTIONS = 10
 # DEPRECATED: Use Context.max_queue_depth instead
 MAX_QUEUE_DEPTH = 50
 
-# Maximum runaway detections before logging critical warning (Phase 3, Issue 3.4)
-# Runaway detections are threads that timed out but couldn't be cancelled
+# Maximum runaway detections before logging critical warning # Runaway detections are threads that timed out but couldn't be cancelled
 # DEPRECATED: Use Context.max_runaway_detections instead
 MAX_RUNAWAY_DETECTIONS = 5
 
 
-# =============================================================================
-# MODULE-LEVEL GLOBALS (DEPRECATED - Phase 4.1)
-# =============================================================================
+# Module-level globals (deprecated - use Context instead)
 # These globals are kept for backward compatibility but are deprecated.
 # For isolated operation, pass a Context to DetectorOrchestrator.
 # When a Context is provided, these globals are NOT used.
@@ -87,8 +80,7 @@ _DETECTION_SEMAPHORE = threading.BoundedSemaphore(MAX_CONCURRENT_DETECTIONS)
 _QUEUE_DEPTH = 0
 _QUEUE_LOCK = threading.Lock()
 
-# Track runaway detections (Phase 3, Issue 3.4)
-# Threads that timed out but couldn't be cancelled.
+# Track runaway detections # Threads that timed out but couldn't be cancelled.
 # NOTE: This counter only increases, never decreases. We cannot detect when
 # a runaway thread eventually terminates. The counter serves as a warning
 # signal - if it grows large, the process should be restarted.
@@ -100,9 +92,6 @@ _RUNAWAY_LOCK = threading.Lock()
 _DEPRECATED_GLOBALS_WARNING_ISSUED = False
 
 
-# =============================================================================
-# PUBLIC API FUNCTIONS
-# =============================================================================
 
 def get_detection_queue_depth() -> int:
     """Get current number of pending detection requests."""
@@ -122,9 +111,6 @@ def get_runaway_detection_count() -> int:
         return _RUNAWAY_DETECTIONS
 
 
-# =============================================================================
-# INTERNAL FUNCTIONS
-# =============================================================================
 
 def _warn_deprecated_globals():
     """Emit warning about using deprecated module-level globals."""

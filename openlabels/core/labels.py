@@ -18,10 +18,6 @@ from typing import List, Optional, Dict, Any
 from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE
 
 
-# =============================================================================
-# LABEL ID
-# =============================================================================
-
 def generate_label_id() -> str:
     """
     Generate a new immutable label ID.
@@ -41,10 +37,6 @@ def is_valid_label_id(label_id: str) -> bool:
     """Check if a string is a valid label ID format."""
     return bool(re.match(r'^ol_[a-f0-9]{12}$', label_id))
 
-
-# =============================================================================
-# CONTENT HASH
-# =============================================================================
 
 def compute_content_hash(content: bytes) -> str:
     """
@@ -87,10 +79,6 @@ def is_valid_content_hash(hash_str: str) -> bool:
     """Check if a string is a valid content hash format."""
     return bool(re.match(r'^[a-f0-9]{12}$', hash_str))
 
-
-# =============================================================================
-# VALUE HASH
-# =============================================================================
 
 # Normalization rules by entity type
 VALUE_NORMALIZERS = {
@@ -156,10 +144,6 @@ def is_valid_value_hash(hash_str: str) -> bool:
     """Check if a string is a valid value hash format."""
     return bool(re.match(r'^[a-f0-9]{6}$', hash_str))
 
-
-# =============================================================================
-# LABEL DATA MODEL
-# =============================================================================
 
 @dataclass
 class Label:
@@ -339,10 +323,6 @@ class LabelSet:
         )
 
 
-# =============================================================================
-# VIRTUAL LABEL POINTER
-# =============================================================================
-
 @dataclass
 class VirtualLabelPointer:
     """
@@ -369,10 +349,6 @@ class VirtualLabelPointer:
     def __str__(self) -> str:
         return self.to_string()
 
-
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
 
 def labels_from_detection(
     entity_counts: Dict[str, int],

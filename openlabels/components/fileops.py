@@ -2,11 +2,7 @@
 OpenLabels FileOps Component.
 
 Handles file operations: quarantine, move, delete.
-
-Phase 3 additions:
-- Structured error classification (FileErrorType)
-- Error retryability information
-- Detailed error reporting
+Provides structured error classification with retryability information.
 """
 
 import errno
@@ -37,11 +33,7 @@ QUARANTINE_MANIFEST = ".quarantine_manifest.json"
 
 @dataclass
 class FileError:
-    """
-    Structured file operation error (Phase 3, Issue 3.5).
-
-    Provides classification and retryability information for errors.
-    """
+    """Structured file operation error with classification and retryability info."""
     path: str
     error_type: FileErrorType
     message: str
@@ -189,7 +181,7 @@ class FileOps:
         Returns:
             Tuple of (success, FileError or None)
 
-        Phase 3 (Issue 3.5): Returns structured FileError instead of string.
+        (Issue 3.5): Returns structured FileError instead of string.
         """
         source_exists = source.exists()
         dest_exists = dest.exists()
@@ -267,8 +259,7 @@ class FileOps:
 
             return True, None
         except OSError as e:
-            # Classify the OS error (Phase 3, Issue 3.5)
-            return False, FileError.from_exception(e, str(source))
+            # Classify the OS error             return False, FileError.from_exception(e, str(source))
 
     def quarantine(
         self,
@@ -349,8 +340,7 @@ class FileOps:
                         "tier": result.tier,
                     })
                 else:
-                    # Use structured error (Phase 3, Issue 3.5)
-                    if file_error:
+                    # Use structured error                     if file_error:
                         errors.append(file_error.to_dict())
                     else:
                         errors.append({
@@ -440,8 +430,7 @@ class FileOps:
             )
 
         except OSError as e:
-            # Classify the error (Phase 3, Issue 3.5)
-            file_error = FileError.from_exception(e, str(source))
+            # Classify the error             file_error = FileError.from_exception(e, str(source))
             return OperationResult(
                 success=False,
                 operation="move",
@@ -540,8 +529,7 @@ class FileOps:
                     errors=[],
                 )
             except OSError as e:
-                # Classify the error (Phase 3, Issue 3.5)
-                file_error = FileError.from_exception(e, str(path))
+                # Classify the error                 file_error = FileError.from_exception(e, str(path))
                 return DeleteResult(
                     deleted_count=0,
                     error_count=1,
@@ -573,8 +561,7 @@ class FileOps:
                     Path(result.path).unlink()
                     deleted_files.append(result.path)
                 except OSError as e:
-                    # Classify the error (Phase 3, Issue 3.5)
-                    file_error = FileError.from_exception(e, result.path)
+                    # Classify the error                     file_error = FileError.from_exception(e, result.path)
                     errors.append(file_error.to_dict())
 
         return DeleteResult(
