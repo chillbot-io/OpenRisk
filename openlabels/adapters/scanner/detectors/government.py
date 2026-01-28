@@ -1,22 +1,4 @@
-"""Tier 2: Government and classification detectors.
-
-Detects security classification markings, government identifiers,
-and defense/intelligence related patterns.
-
-Entity Types:
-- CLASSIFICATION_LEVEL: Classification levels (TOP SECRET, SECRET, etc.)
-- CLASSIFICATION_MARKING: Full classification lines with caveats
-- SCI_MARKING: Sensitive Compartmented Information markers
-- DISSEMINATION_CONTROL: NOFORN, REL TO, ORCON, etc.
-- CAGE_CODE: Commercial and Government Entity Code (5 chars)
-- DUNS_NUMBER: Data Universal Numbering System (9 digits) - deprecated but still seen
-- UEI: Unique Entity Identifier (12 chars, replaced DUNS)
-- DOD_CONTRACT: DoD contract numbers (FA####-##-X-####, etc.)
-- GSA_CONTRACT: GSA schedule contract numbers
-- CLEARANCE_LEVEL: Security clearance references
-- ITAR_MARKING: International Traffic in Arms Regulations
-- EAR_MARKING: Export Administration Regulations
-"""
+"""Tier 2: Government and classification detectors (clearance markings, CAGE codes, contracts)."""
 
 import logging
 import re
@@ -37,13 +19,10 @@ from .constants import (
 
 logger = logging.getLogger(__name__)
 
+from .pattern_registry import create_pattern_adder
 
 GOVERNMENT_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
-
-
-def _add(pattern: str, entity_type: str, confidence: float, group: int = 0, flags: int = 0):
-    """Helper to add patterns."""
-    GOVERNMENT_PATTERNS.append((re.compile(pattern, flags), entity_type, confidence, group))
+_add = create_pattern_adder(GOVERNMENT_PATTERNS)
 
 
 # --- CLASSIFICATION LEVELS ---

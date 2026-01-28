@@ -265,7 +265,7 @@ class Orchestrator:
         if scanner_input.entities:
             avg_confidence = sum(e.confidence for e in scanner_input.entities) / len(scanner_input.entities)
         else:
-            avg_confidence = CONFIDENCE_WHEN_NO_SPANS  # Phase 5.6: Use constant
+            avg_confidence = CONFIDENCE_WHEN_NO_SPANS
 
         scoring_result = compute_score(
             entities=entity_counts,

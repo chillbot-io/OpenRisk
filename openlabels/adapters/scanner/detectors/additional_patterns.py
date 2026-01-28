@@ -1,15 +1,4 @@
-"""Additional pattern detectors for missing entity types.
-
-Registered in orchestrator.py.
-
-Covers entity types not handled by existing detectors:
-- EMPLOYER: Company/organization names (773 missed in corpus)
-- AGE: Age expressions (579 missed in corpus)
-- HEALTH_PLAN_ID: Insurance member IDs (873 missed in corpus)
-- MEMBER_ID: Alias for health plan IDs
-- NPI: National Provider Identifiers
-- BANK_ROUTING: ABA routing numbers
-"""
+"""Additional pattern detectors (EMPLOYER, AGE, HEALTH_PLAN_ID, NPI, BANK_ROUTING)."""
 
 import logging
 import re
@@ -30,14 +19,10 @@ from .constants import (
 
 logger = logging.getLogger(__name__)
 
+from .pattern_registry import create_pattern_adder
 
-# Pattern definitions: (regex_pattern, entity_type, confidence, capture_group, flags)
 ADDITIONAL_PATTERNS: List[Tuple[str, str, float, int, int]] = []
-
-
-def _add(pattern: str, entity_type: str, confidence: float, group: int = 0, flags: int = 0):
-    """Add a pattern to the list."""
-    ADDITIONAL_PATTERNS.append((pattern, entity_type, confidence, group, flags))
+_add = create_pattern_adder(ADDITIONAL_PATTERNS, compile_pattern=False)
 
 
 # --- EMPLOYER - Company/Organization Names (~773 missed) ---

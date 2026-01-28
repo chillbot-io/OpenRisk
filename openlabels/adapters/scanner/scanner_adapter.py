@@ -72,9 +72,7 @@ class ScannerAdapter:
                 if hasattr(config, key):
                     setattr(config, key, value)
 
-            # SECURITY FIX (HIGH-006): Re-validate config after dynamic attribute assignment
-            # This ensures setattr() values are properly validated
-            config.__post_init__()
+            config.__post_init__()  # HIGH-006: re-validate after setattr
 
         self._detector = Detector(config=config)
         self._config = config

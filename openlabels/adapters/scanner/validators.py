@@ -64,28 +64,21 @@ def sanitize_filename(filename: str) -> str:
     # Remove path components (handles both Unix and Windows paths)
     filename = os.path.basename(filename)
 
-    # SECURITY FIX (LOW-002): Decode percent-encoded sequences first
-    # This prevents %00 (null byte) or %2F (slash) from bypassing checks
-    try:
-        # Only decode if it looks like it has percent encoding
+    try:  # LOW-002: decode percent-encoded sequences
         if '%' in filename:
             import urllib.parse
             filename = urllib.parse.unquote(filename)
     except (ValueError, UnicodeDecodeError) as e:
-        # GA-FIX (1.2): Log decoding failures at DEBUG level
         logger.debug(f"Failed to decode percent-encoded filename '{filename}': {e}")
 
-    # SECURITY FIX (LOW-002): Replace non-ASCII characters to prevent homoglyph attacks
-    # e.g., Cyrillic 'а' (U+0430) looks like Latin 'a' but is different
-    filename = filename.encode('ascii', errors='replace').decode('ascii')
+    filename = filename.encode('ascii', errors='replace').decode('ascii')  # LOW-002: prevent homoglyphs
 
     # Remove null bytes and control characters (0x00-0x1f, 0x7f)
     # Also remove: < > : " / \ | ? * (dangerous for various systems)
     # Also remove: ' ` $ ; ! & ( ) # ~ { } [ ] @ (shell/HTML dangerous)
     filename = re.sub(r'[\x00-\x1f\x7f<>:"/\\|?*\'`$;!&()#~{}\[\]@]', '_', filename)
 
-    # SECURITY FIX (LOW-002): Remove leading dashes (confuses CLI tools like rm, ls)
-    filename = filename.lstrip('-')
+    filename = filename.lstrip('-')  # LOW-002: leading dashes confuse CLI tools
 
     # Collapse multiple underscores/dots
     filename = re.sub(r'_+', '_', filename)
@@ -94,8 +87,7 @@ def sanitize_filename(filename: str) -> str:
     # Remove leading/trailing underscores and dots
     filename = filename.strip('_. ')
 
-    # SECURITY FIX (LOW-002): Check for Windows reserved names
-    name_without_ext = os.path.splitext(filename)[0].upper()
+    name_without_ext = os.path.splitext(filename)[0].upper()  # LOW-002: Windows reserved names
     if name_without_ext in WINDOWS_RESERVED_NAMES:
         filename = f"file_{filename}"
 
@@ -262,15 +254,11 @@ def validate_magic_bytes(
         source_name = "<memory>"
     elif file_path is not None:
         file_path = Path(file_path)
-        # SECURITY FIX (TOCTOU-001): Don't use exists() then open() - just try to open.
-        # Also check for symlinks to prevent symlink attacks.
         try:
-            st = file_path.lstat()
-            # Reject symlinks
-            if stat_module.S_ISLNK(st.st_mode):
+            st = file_path.lstat()  # TOCTOU-001
+            if stat_module.S_ISLNK(st.st_mode):  # Reject symlinks
                 raise FileValidationError(f"Symlinks not allowed for security: {file_path}")
-            # Only validate regular files
-            if not stat_module.S_ISREG(st.st_mode):
+            if not stat_module.S_ISREG(st.st_mode):  # Regular files only
                 raise FileValidationError(f"Not a regular file: {file_path}")
             with open(file_path, "rb") as f:
                 header = f.read(MAGIC_BYTES_HEADER_SIZE)
@@ -567,24 +555,19 @@ def validate_file(
         if file_content is not None:
             actual_mime = detect_mime_from_magic_bytes(file_content)
         else:
-            # SECURITY FIX (TOCTOU-001): Don't use exists() then open()
-            # Just try to open and handle errors
             file_path_obj = Path(file_path)
             try:
-                st = file_path_obj.lstat()
-                if stat_module.S_ISLNK(st.st_mode):
+                st = file_path_obj.lstat()  # TOCTOU-001
+                if stat_module.S_ISLNK(st.st_mode):  # Reject symlinks
                     raise FileValidationError(f"Symlinks not allowed: {file_path}")
-                if not stat_module.S_ISREG(st.st_mode):
+                if not stat_module.S_ISREG(st.st_mode):  # Regular files only
                     raise FileValidationError(f"Not a regular file: {file_path}")
                 with open(file_path, "rb") as f:
                     actual_mime = detect_mime_from_magic_bytes(f.read(MAGIC_BYTES_HEADER_SIZE))
             except FileNotFoundError:
                 raise FileValidationError(f"File not found: {file_path}")
 
-        # SECURITY: If actual type differs from claimed type, reject as spoofing
-        # This prevents attackers from uploading malicious files by claiming
-        # a different extension/Content-Type
-        if actual_mime and actual_mime != claimed_mime:
+        if actual_mime and actual_mime != claimed_mime:  # Reject type spoofing
             raise FileValidationError(
                 f"File content does not match claimed type. "
                 f"Claimed: '{claimed_mime}', Actual: '{actual_mime}'. "
@@ -629,9 +612,8 @@ def validate_uploaded_file(
     """
     file_path = Path(file_path)
 
-    # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists() then stat()
     try:
-        st = file_path.lstat()
+        st = file_path.lstat()  # TOCTOU-001
     except FileNotFoundError:
         raise FileValidationError(f"File not found: {file_path}")
 

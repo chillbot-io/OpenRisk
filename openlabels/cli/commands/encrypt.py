@@ -74,8 +74,7 @@ def validate_file_path(file_path: Path) -> bool:
         return False
     try:
         resolved = file_path.resolve()
-        # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists() and is_file()
-        st = resolved.lstat()
+        st = resolved.lstat()  # TOCTOU-001: atomic stat
         # Reject symlinks and non-regular files
         if stat_module.S_ISLNK(st.st_mode):
             return False

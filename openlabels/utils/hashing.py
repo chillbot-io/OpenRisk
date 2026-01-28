@@ -32,10 +32,7 @@ def quick_hash(path: Path, block_size: int = 65536) -> Optional[str]:
         with open(path, 'rb') as f:
             hasher.update(f.read(block_size))
             if size > block_size * 2:
-                # SECURITY FIX (MED-010): Validate seek operation succeeded
-                # If file was truncated between stat() and seek(), this will
-                # either fail or return different position than expected
-                try:
+                try:  # MED-010: validate seek succeeded
                     new_pos = f.seek(-block_size, 2)  # Seek from end
                     # Verify we actually moved to expected position
                     expected_pos = max(0, size - block_size)

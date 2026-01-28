@@ -90,8 +90,7 @@ class ImageExtractor(BaseExtractor):
             if ext in (".tiff", ".tif"):
                 return self._extract_multipage_tiff(content, filename, save_pages)
 
-            # SECURITY FIX (MED-006): Use try/finally to ensure PIL image is closed
-            img = Image.open(io.BytesIO(content))
+            img = Image.open(io.BytesIO(content))  # MED-006: closed in finally
             try:
                 if img.mode not in ("RGB", "L"):
                     img = img.convert("RGB")
@@ -174,8 +173,7 @@ class ImageExtractor(BaseExtractor):
         from PIL import Image
         import numpy as np
 
-        # SECURITY FIX (MED-006): Use try/finally to ensure PIL image is closed
-        img = Image.open(io.BytesIO(content))
+        img = Image.open(io.BytesIO(content))  # MED-006: closed in finally
         try:
             pages_text = []
             page_infos = []

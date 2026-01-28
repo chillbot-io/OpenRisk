@@ -132,7 +132,7 @@ class DetectorOrchestrator:
             enable_secrets: Enable secrets detection (API keys, tokens)
             enable_financial: Enable financial identifier detection (CUSIP, crypto)
             enable_government: Enable government/classification detection
-            context: Optional Context for resource isolation (Phase 4.1).
+            context: Optional Context for resource isolation.
                     When provided, uses context.detection_slot() and
                     context.get_executor() instead of module-level globals.
         """
@@ -140,8 +140,7 @@ class DetectorOrchestrator:
         self.parallel = parallel
         self.enable_structured = enable_structured
 
-        # Phase 4.1: Store context for resource isolation
-        self._context = context
+        self._context = context  # For resource isolation
 
         # Get disabled detectors from config
         disabled = self.config.disabled_detectors if self.config else set()
@@ -210,10 +209,6 @@ class DetectorOrchestrator:
         """Get names of available detectors."""
         return [d.name for d in self._available_detectors]
 
-    # =========================================================================
-    # PHASE 4.1: CONTEXT-AWARE RESOURCE ACCESS
-    # =========================================================================
-
     def _get_executor(self) -> ThreadPoolExecutor:
         """
         Get the thread pool executor.
@@ -257,8 +252,7 @@ class DetectorOrchestrator:
             return self._context.track_runaway_detection(detector_name)
         return track_runaway_detection(detector_name)
 
-    # SECURITY FIX (HIGH-009): Maximum matches per search term to prevent memory exhaustion
-    MAX_MATCHES_PER_TERM = 100
+    MAX_MATCHES_PER_TERM = 100  # HIGH-009: prevent memory exhaustion
 
     def _detect_known_entities(
         self,
@@ -301,8 +295,7 @@ class DetectorOrchestrator:
                     if idx == -1:
                         break
 
-                    # SECURITY FIX (HIGH-009): Limit matches per term to prevent OOM
-                    if match_count >= self.MAX_MATCHES_PER_TERM:
+                    if match_count >= self.MAX_MATCHES_PER_TERM:  # HIGH-009
                         logger.debug(f"Reached max matches ({self.MAX_MATCHES_PER_TERM}) for known entity")
                         break
 
@@ -364,7 +357,7 @@ class DetectorOrchestrator:
         if not text:
             return []
 
-        # Phase 4.1: Use context-aware detection slot
+        # Context-aware detection slot
         with self._get_detection_slot() as queue_depth:
             logger.info(f"Detection starting on text ({len(text)} chars), queue depth: {queue_depth}")
             return self._detect_impl(text, timeout, known_entities)
@@ -379,8 +372,7 @@ class DetectorOrchestrator:
         """
         Run all detectors on text and return metadata about the detection process.
 
-        This method provides visibility into detector failures and degraded state
-        (Phase 3: Error Handling & Observability).
+        This method provides visibility into detector failures and degraded state.
 
         Args:
             text: Normalized input text
@@ -405,15 +397,14 @@ class DetectorOrchestrator:
         if not text:
             return [], DetectionMetadata()
 
-        # Phase 4.1: Use context-aware detection slot
+        # Context-aware detection slot
         with self._get_detection_slot() as queue_depth:
             logger.info(f"Detection starting on text ({len(text)} chars), queue depth: {queue_depth}")
             metadata = DetectionMetadata()
             spans = self._detect_impl_with_metadata(text, timeout, known_entities, metadata)
             metadata.finalize()
 
-            # SECURITY FIX (LOW-004): Strict mode fails if any detector failed
-            if strict_mode and (metadata.detectors_failed or metadata.detectors_timed_out):
+            if strict_mode and (metadata.detectors_failed or metadata.detectors_timed_out):  # LOW-004
                 all_failed = metadata.detectors_failed + metadata.detectors_timed_out
                 raise DetectorFailureError(all_failed, metadata)
 
@@ -438,7 +429,7 @@ class DetectorOrchestrator:
         metadata: DetectionMetadata,
     ) -> List[Span]:
         """
-        Internal detection implementation with metadata tracking (Phase 3).
+        Internal detection implementation with metadata tracking.
 
         This is the core detection logic that tracks all failures and degraded state.
         Orchestrates the detection pipeline:
@@ -796,10 +787,9 @@ class DetectorOrchestrator:
             text: Text to analyze
             detectors: List of detectors to run
             timeout: Total timeout budget
-            metadata: Optional metadata object to track failures (Phase 3)
+            metadata: Optional metadata object to track failures
         """
         all_spans = []
-        # Phase 4.1: Use context-aware executor
         executor = self._get_executor()
 
         # Per-detector timeout (divide total timeout among detectors)
@@ -812,7 +802,6 @@ class DetectorOrchestrator:
                 spans = future.result(timeout=per_detector_timeout)
                 all_spans.extend(spans)
 
-                # Track success (Phase 3, Issue 3.3)
                 if metadata:
                     metadata.add_success(detector.name)
 
@@ -824,12 +813,10 @@ class DetectorOrchestrator:
                     logger.info(f"  {detector.name}: 0 spans")
 
             except TimeoutError:
-                # Track timeout (Phase 3, Issue 3.3 & 3.4)
                 cancelled = future.cancel()
                 if metadata:
                     metadata.add_timeout(detector.name, per_detector_timeout, cancelled)
                     if not cancelled:
-                        # Phase 4.1: Use context-aware runaway tracking
                         metadata.runaway_threads = self._track_runaway(detector.name)
                 logger.warning(
                     f"Detector {detector.name} timed out after {per_detector_timeout:.1f}s "
@@ -837,7 +824,6 @@ class DetectorOrchestrator:
                 )
 
             except Exception as e:
-                # Track failure (Phase 3, Issue 3.3)
                 if metadata:
                     metadata.add_failure(detector.name, str(e))
                 logger.error(f"Detector {detector.name} failed: {e}")
@@ -858,10 +844,9 @@ class DetectorOrchestrator:
             text: Text to analyze
             detectors: List of detectors to run
             timeout: Timeout per detector
-            metadata: Optional metadata object to track failures (Phase 3)
+            metadata: Optional metadata object to track failures
         """
         all_spans = []
-        # Phase 4.1: Use context-aware executor
         executor = self._get_executor()
 
         logger.info(f"Running {len(detectors)} detectors in parallel...")
@@ -879,7 +864,6 @@ class DetectorOrchestrator:
                 spans = future.result(timeout=timeout)
                 all_spans.extend(spans)
 
-                # Track success (Phase 3, Issue 3.3)
                 if metadata:
                     metadata.add_success(detector.name)
 
@@ -891,18 +875,11 @@ class DetectorOrchestrator:
                     logger.info(f"  {detector.name}: 0 spans")
 
             except TimeoutError:
-                # Cancel the future (best effort - thread may still run)
-                # Python threads can't be forcibly killed, but we can:
-                # 1. Cancel if not yet started
-                # 2. Log the timeout for monitoring
-                # 3. Track runaway if couldn't cancel (Phase 3, Issue 3.4)
+                # Best effort cancel - Python threads can't be forcibly killed
                 cancelled = future.cancel()
-
-                # Track timeout (Phase 3, Issue 3.3 & 3.4)
                 if metadata:
                     metadata.add_timeout(detector.name, timeout, cancelled)
                     if not cancelled:
-                        # Phase 4.1: Use context-aware runaway tracking
                         metadata.runaway_threads = self._track_runaway(detector.name)
 
                 logger.warning(
@@ -911,7 +888,6 @@ class DetectorOrchestrator:
                 )
 
             except Exception as e:
-                # Track failure (Phase 3, Issue 3.3)
                 if metadata:
                     metadata.add_failure(detector.name, str(e))
                 logger.error(f"Detector {detector.name} failed: {e}")

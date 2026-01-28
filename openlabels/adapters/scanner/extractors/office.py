@@ -149,8 +149,7 @@ class XLSXExtractor(BaseExtractor):
         row_count = 0
         reader = csv.reader(io.StringIO(text_content), delimiter=delimiter)
         for row in reader:
-            # SECURITY FIX (HIGH-003): Apply same row limit as XLSX to prevent OOM
-            if row_count >= MAX_SPREADSHEET_ROWS:
+            if row_count >= MAX_SPREADSHEET_ROWS:  # HIGH-003: prevent OOM
                 warnings.append(f"CSV truncated at {MAX_SPREADSHEET_ROWS} rows")
                 break
             row_count += 1
@@ -209,9 +208,7 @@ class XLSXExtractor(BaseExtractor):
 
         if compressed_size > 0 and total_chars > 0:
             ratio = total_chars / compressed_size
-            if ratio > MAX_EXTRACTION_RATIO:
-                # SECURITY FIX (HIGH-005): Raise exception for suspected decompression bomb
-                # instead of just logging a warning and continuing
+            if ratio > MAX_EXTRACTION_RATIO:  # HIGH-005: decompression bomb
                 raise ValueError(
                     f"Suspected decompression bomb: extraction ratio {ratio:.1f}x exceeds "
                     f"maximum {MAX_EXTRACTION_RATIO}x for {filename} "

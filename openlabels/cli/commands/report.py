@@ -295,11 +295,9 @@ def cmd_report(args) -> int:
     results = []
     extensions = args.extensions.split(",") if args.extensions else None
 
-    # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
-    def is_regular_file(p):
+    def is_regular_file(p):  # TOCTOU-001: use lstat
         try:
-            st = p.lstat()
-            return stat_module.S_ISREG(st.st_mode)
+            return stat_module.S_ISREG(p.lstat().st_mode)
         except OSError:
             return False
 
@@ -315,7 +313,6 @@ def cmd_report(args) -> int:
             all_files = list(path.rglob("*"))
         else:
             all_files = list(path.glob("*"))
-        # SECURITY FIX (TOCTOU-001): Use lstat() instead of is_file()
         all_files = [f for f in all_files if is_regular_file(f)]
         if extensions:
             exts = {e.lower().lstrip(".") for e in extensions}

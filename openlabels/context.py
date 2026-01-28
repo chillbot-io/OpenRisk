@@ -4,13 +4,6 @@ OpenLabels Context.
 Thread-safe context for dependency injection. Holds shared resources
 like handlers, indices, and thread pools that would otherwise be globals.
 
-Phase 4 additions:
-- Issue 4.1: Detection resources moved from orchestrator globals
-- Issue 4.2: Warnings for default singleton usage
-- Issue 4.3: Weak reference-based atexit handling (no leaks)
-- Issue 4.4: Cloud handlers moved from virtual.py globals
-- Issue 4.5: Safe detection slot with guaranteed cleanup
-
 SECURITY NOTE (LOW-008): Default Context Singleton Leakage
 
     The default context (accessed via get_default_context() or implicitly via
@@ -79,8 +72,7 @@ from .adapters.base import normalize_exposure_level
 
 logger = logging.getLogger(__name__)
 
-# GA-FIX (1.3): Timeout for executor shutdown to prevent hanging
-_EXECUTOR_SHUTDOWN_TIMEOUT = 5.0
+_EXECUTOR_SHUTDOWN_TIMEOUT = 5.0  # Timeout for executor shutdown
 
 
 def _get_shutdown_coordinator():
@@ -89,12 +81,7 @@ def _get_shutdown_coordinator():
     return get_shutdown_coordinator()
 
 
-# =============================================================================
-# PHASE 4.3: WEAK REFERENCE-BASED ATEXIT HANDLING
-# =============================================================================
-# Instead of registering an atexit handler per Context (which leaks),
-# we maintain a list of weak references and clean them up once at exit.
-
+# Weak references for cleanup at exit (prevents memory leaks)
 _context_refs: List[weakref.ref] = []
 _context_refs_lock = threading.Lock()
 _atexit_registered = False
@@ -136,8 +123,6 @@ def _register_context(ctx: "Context") -> None:
                     priority=10,  # Run early in shutdown
                 )
             except Exception as e:
-                # GA-FIX (1.2): Upgraded from DEBUG to WARNING - this is a critical path
-                # that affects graceful shutdown behavior
                 logger.warning(
                     f"Could not register with shutdown coordinator: {e}. "
                     "Graceful shutdown may not work correctly."
@@ -182,11 +167,6 @@ class Context:
     - Isolation (multiple clients don't interfere)
 
     Resources are created lazily on first access.
-
-    Phase 4 additions:
-    - Runaway detection tracking (Issue 4.1)
-    - Cloud handlers (Issue 4.4)
-    - Safe detection slot with guaranteed cleanup (Issue 4.5)
     """
 
     default_exposure: str = "PRIVATE"
@@ -208,29 +188,20 @@ class Context:
     _queue_depth: int = field(default=0, repr=False)
     _queue_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
-    # Phase 4.1: Runaway detection tracking (moved from orchestrator globals)
+    # Runaway detection tracking
     _runaway_detections: int = field(default=0, repr=False)
     _runaway_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
-    # Phase 4.4: Cloud handlers (moved from virtual.py globals)
+    # Cloud handlers
     _cloud_handlers: dict = field(default_factory=dict, repr=False)
     _cloud_handlers_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     _shutdown: bool = field(default=False, repr=False)
 
     def __post_init__(self):
-        """
-        Initialize context with validation and cleanup registration.
-
-        Phase 4.3: Register cleanup on exit using weak references.
-        Phase 5.2: Validate and normalize default_exposure level.
-        """
-        # Phase 5.2: Validate and normalize exposure level
+        """Initialize context with validation and cleanup registration."""
         self.default_exposure = normalize_exposure_level(self.default_exposure)
-
-        # Phase 4.3: Register cleanup via weak reference mechanism
-        # Don't use atexit.register(self.close) directly - it leaks!
-        _register_context(self)
+        _register_context(self)  # Weak ref cleanup (not atexit directly - leaks)
 
     def get_executor(self) -> ThreadPoolExecutor:
         """Get or create the thread pool executor."""
@@ -270,10 +241,6 @@ class Context:
         with self._queue_lock:
             self._queue_depth = max(0, self._queue_depth - 1)
 
-    # =========================================================================
-    # PHASE 4.5: SAFE DETECTION SLOT WITH GUARANTEED CLEANUP
-    # =========================================================================
-
     @contextmanager
     def detection_slot(self):
         """
@@ -308,15 +275,10 @@ class Context:
             acquired = True
             yield current_depth
         finally:
-            # Phase 4.5: Guaranteed cleanup - always release if acquired
             if acquired:
                 self.get_detection_semaphore().release()
             with self._queue_lock:
                 self._queue_depth = max(0, self._queue_depth - 1)
-
-    # =========================================================================
-    # PHASE 4.1: RUNAWAY DETECTION TRACKING (moved from orchestrator globals)
-    # =========================================================================
 
     def get_runaway_detection_count(self) -> int:
         """
@@ -369,10 +331,6 @@ class Context:
         """Reset runaway detection count (mainly for testing)."""
         with self._runaway_lock:
             self._runaway_detections = 0
-
-    # =========================================================================
-    # PHASE 4.4: CLOUD HANDLERS (moved from virtual.py globals)
-    # =========================================================================
 
     def get_cloud_handler(self, provider: str):
         """
@@ -450,14 +408,7 @@ class Context:
             return self._virtual_handlers.get(handler_type)
 
     def close(self) -> None:
-        """
-        Release all resources.
-
-        GA-FIX (1.3): Changed executor shutdown from wait=False to wait=True
-        with timeout to ensure in-flight tasks complete before exit.
-        Uses background thread to enforce timeout since ThreadPoolExecutor.shutdown()
-        doesn't have a built-in timeout parameter.
-        """
+        """Release all resources with timeout-enforced executor shutdown."""
         if self._shutdown:
             return
 
@@ -468,7 +419,6 @@ class Context:
                 executor = self._executor
                 self._executor = None  # Clear early to prevent double-shutdown
 
-                # GA-FIX (1.3): Use background thread to enforce timeout
                 logger.debug(
                     f"Shutting down context executor (timeout: {_EXECUTOR_SHUTDOWN_TIMEOUT}s)..."
                 )
@@ -547,7 +497,6 @@ def get_default_context(warn: bool = True) -> Context:
     global _default_context, _default_context_warning_issued
 
     with _default_context_lock:
-        # Phase 4.2: Warn about shared state (once per process)
         if warn and not _default_context_warning_issued:
             warnings.warn(
                 "Using default context shares state across all callers. "

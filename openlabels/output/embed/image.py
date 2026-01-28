@@ -106,8 +106,7 @@ class ImageLabelWriter(EmbeddedLabelWriter):
             logger.warning("PIL not installed, cannot write image labels")
             return False
 
-        # SECURITY FIX (MED-006): Use try/finally to ensure PIL image is closed
-        img = Image.open(path)
+        img = Image.open(path)  # MED-006: closed in finally
         try:
             suffix = path.suffix.lower()
 
@@ -139,8 +138,7 @@ class ImageLabelWriter(EmbeddedLabelWriter):
             return None
 
         try:
-            # SECURITY FIX (MED-006): Use try/finally to ensure PIL image is closed
-            img = Image.open(path)
+            img = Image.open(path)  # MED-006: closed in finally
             try:
                 if hasattr(img, 'info') and 'openlabels' in img.info:
                     json_str = img.info['openlabels']

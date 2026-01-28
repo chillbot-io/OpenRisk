@@ -110,7 +110,6 @@ class ScoringResult:
 
 def get_entity_weight(entity_type: str) -> float:
     """Get calibrated weight for an entity type."""
-    # Phase 5.1: Use centralized normalization (always UPPERCASE)
     normalized = normalize_entity_type(entity_type)
     # Then apply registry alias resolution (SIN -> SIN_CA, etc.)
     canonical = normalize_type(normalized)
@@ -123,7 +122,6 @@ def get_categories(entities: Dict[str, int]) -> Set[str]:
     """Get set of categories present in entities."""
     categories = set()
     for entity_type in entities:
-        # Phase 5.1: Use centralized normalization (always UPPERCASE)
         normalized = normalize_entity_type(entity_type)
         canonical = normalize_type(normalized)
         cat = registry_get_category(canonical)

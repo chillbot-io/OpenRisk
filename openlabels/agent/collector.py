@@ -193,23 +193,17 @@ class FileCollector:
         original_path = Path(path)
         errors = []
 
-        # SECURITY FIX (TOCTOU-001): Check the ORIGINAL path for symlinks BEFORE
-        # resolving. Path.resolve() follows symlinks, so checking after resolve()
-        # would miss symlink attacks. We use lstat() which doesn't follow symlinks.
         try:
-            st = original_path.lstat()  # lstat = stat(follow_symlinks=False)
+            st = original_path.lstat()  # TOCTOU-001: check before resolve()
         except FileNotFoundError:
             raise FileNotFoundError(f"File not found: {path}")
         except OSError as e:
             raise PermissionError(f"Cannot access file: {e}")
 
-        # SECURITY: Reject symlinks to prevent symlink attacks
-        # An attacker could create a symlink to a sensitive file to bypass access controls
-        if stat.S_ISLNK(st.st_mode):
+        if stat.S_ISLNK(st.st_mode):  # Reject symlinks
             raise ValueError(f"Refusing to collect metadata for symlink (security): {path}")
 
-        # SECURITY: Only process regular files
-        if not stat.S_ISREG(st.st_mode):
+        if not stat.S_ISREG(st.st_mode):  # Regular files only
             raise ValueError(f"Not a regular file: {path}")
 
         # Now safe to resolve the path for consistent path representation
@@ -392,8 +386,6 @@ class FileCollector:
                 h.update(chunk)
         return h.hexdigest()
 
-    # SECURITY FIX (LOW-006): Use central constants for xattr limits
-
     def _validate_xattr_name(self, attr_name: str) -> bool:
         """
         Validate xattr attribute name (LOW-006).
@@ -423,37 +415,28 @@ class FileCollector:
         return True
 
     def _collect_xattrs(self, path: Path) -> Dict[str, str]:
-        """
-        Collect extended attributes.
-
-        SECURITY FIX (LOW-006): Validates attribute names before reading
-        to prevent processing of potentially malicious xattr values.
-        """
+        """Collect extended attributes. See SECURITY.md for LOW-006."""
         xattrs = {}
 
         if self._platform == "Windows":
-            # Windows uses NTFS streams, not xattrs
-            return xattrs
+            return xattrs  # Windows uses NTFS streams, not xattrs
 
         try:
             import xattr as xattr_module
             attr_count = 0
             for attr_name in xattr_module.listxattr(str(path)):
-                # SECURITY FIX (LOW-006): Validate attribute name before reading
-                if not self._validate_xattr_name(attr_name):
+                if not self._validate_xattr_name(attr_name):  # LOW-006
                     logger.warning(f"Skipping invalid xattr name on {path}: {attr_name!r}")
                     continue
 
-                # SECURITY FIX (LOW-006): Limit number of attributes collected
-                if attr_count >= MAX_XATTR_COUNT:
+                if attr_count >= MAX_XATTR_COUNT:  # LOW-006: limit count
                     logger.warning(f"Reached max xattr count ({MAX_XATTR_COUNT}) for {path}")
                     break
 
                 try:
                     value = xattr_module.getxattr(str(path), attr_name)
 
-                    # SECURITY FIX (LOW-006): Validate value length
-                    if len(value) > MAX_XATTR_VALUE_SIZE:
+                    if len(value) > MAX_XATTR_VALUE_SIZE:  # LOW-006: limit size
                         logger.warning(
                             f"Skipping oversized xattr '{attr_name}' on {path}: "
                             f"{len(value)} bytes (max {MAX_XATTR_VALUE_SIZE})"
@@ -489,8 +472,7 @@ class FileCollector:
                             key = key.strip()
                             value = value.strip().strip('"')
 
-                            # SECURITY FIX (LOW-006): Validate from getfattr output too
-                            if not self._validate_xattr_name(key):
+                            if not self._validate_xattr_name(key):  # LOW-006
                                 logger.warning(f"Skipping invalid xattr name: {key!r}")
                                 continue
                             if len(value) > MAX_XATTR_VALUE_SIZE:
@@ -561,14 +543,10 @@ def collect_directory(
     count = 0
 
     for file_path in walker:
-        # SECURITY FIX (TOCTOU-001): Use stat() directly instead of is_file()
-        # to eliminate race condition window where file could be replaced
-        # with symlink between check and collect operation.
         try:
-            st = file_path.stat(follow_symlinks=False)
+            st = file_path.stat(follow_symlinks=False)  # TOCTOU-001
             if not stat.S_ISREG(st.st_mode):
-                # Skip non-regular files (directories, symlinks, devices, etc.)
-                continue
+                continue  # Skip non-regular files
         except OSError:
             # File doesn't exist, permission denied, or other issue - skip
             continue

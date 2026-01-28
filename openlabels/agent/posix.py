@@ -143,11 +143,8 @@ def get_posix_permissions(path: str) -> PosixPermissions:
     """
     path = Path(path)
 
-    # SECURITY FIX (TOCTOU-001): Use lstat() directly instead of exists() then stat().
-    # lstat() doesn't follow symlinks, so we get the permissions of the symlink itself.
-    # For informational purposes, this is the safer default.
     try:
-        st = path.lstat()
+        st = path.lstat()  # TOCTOU-001: atomic, no symlink follow
     except FileNotFoundError:
         raise FileNotFoundError(f"File not found: {path}")
 

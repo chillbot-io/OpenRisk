@@ -321,9 +321,7 @@ class DictionaryDetector(BaseDetector):
         for end_idx, (term, entity_type) in self._automaton.iter(text_lower):
             start_idx = end_idx - len(term) + 1
 
-            # SECURITY FIX (MED-008): Validate start_idx is non-negative
-            # This handles edge cases where the calculation could produce invalid indices
-            if start_idx < 0:
+            if start_idx < 0:  # MED-008: validate index
                 logger.debug(f"Skipping match with negative start_idx: {start_idx}")
                 continue
 
@@ -341,8 +339,7 @@ class DictionaryDetector(BaseDetector):
 
         return spans
 
-    # SECURITY FIX (HIGH-008): Maximum matches per term to prevent memory exhaustion
-    MAX_MATCHES_PER_TERM = 100
+    MAX_MATCHES_PER_TERM = 100  # HIGH-008: prevent memory exhaustion
 
     def _find_terms(
         self,
@@ -362,8 +359,7 @@ class DictionaryDetector(BaseDetector):
                 if idx == -1:
                     break
 
-                # SECURITY FIX (HIGH-008): Limit matches per term to prevent OOM
-                if match_count >= self.MAX_MATCHES_PER_TERM:
+                if match_count >= self.MAX_MATCHES_PER_TERM:  # HIGH-008
                     logger.debug(f"Reached max matches ({self.MAX_MATCHES_PER_TERM}) for term")
                     break
 

@@ -1,16 +1,4 @@
-"""Credentials and device ID pattern definitions for PHI/PII entity recognition.
-
-This module contains patterns for detecting network/device identifiers and credentials:
-- IP Addresses (IPv4 and IPv6)
-- MAC Addresses
-- IMEI
-- Device Serial Numbers
-- URLs
-- Biometric Identifiers
-- Image IDs
-- Usernames
-- Passwords
-"""
+"""Credentials patterns: IP addresses, MAC, IMEI, serial numbers, URLs, usernames."""
 
 import re
 from typing import List, Tuple
@@ -24,16 +12,10 @@ from ..constants import (
     CONFIDENCE_WEAK,
 )
 
-# CREDENTIALS PATTERN DEFINITIONS
-# Each pattern is (regex, entity_type, confidence, group_index)
-# group_index is which capture group contains the value (default 0 = whole match)
+from ..pattern_registry import create_pattern_adder
 
 CREDENTIALS_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
-
-
-def add_pattern(pattern: str, entity_type: str, confidence: float, group: int = 0, flags: int = 0):
-    """Helper to add patterns to CREDENTIALS_PATTERNS."""
-    CREDENTIALS_PATTERNS.append((re.compile(pattern, flags), entity_type, confidence, group))
+add_pattern = create_pattern_adder(CREDENTIALS_PATTERNS)
 
 
 # =============================================================================
