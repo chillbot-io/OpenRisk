@@ -4,6 +4,7 @@ OpenLabels Reporter Component.
 Handles report generation in various formats.
 """
 
+import html
 import json
 from datetime import datetime
 from pathlib import Path
@@ -190,7 +191,7 @@ class Reporter:
                 f.write(self._generate_html_report(report))
 
     def _generate_html_report(self, report: Dict[str, Any]) -> str:
-        """Generate HTML report content."""
+        """Generate HTML report content with XSS protection."""
         summary = report["summary"]
         tier_colors = {
             "CRITICAL": "#dc3545",
@@ -200,10 +201,14 @@ class Reporter:
             "MINIMAL": "#6c757d",
         }
 
-        html = f"""<!DOCTYPE html>
+        # Escape user-controlled data to prevent XSS
+        safe_title = html.escape(str(report.get('title', '')))
+        safe_generated_at = html.escape(str(report.get('generated_at', '')))
+
+        html_content = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>{report['title']}</title>
+    <title>{safe_title}</title>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; }}
         h1 {{ color: #333; }}
@@ -215,8 +220,8 @@ class Reporter:
     </style>
 </head>
 <body>
-    <h1>{report['title']}</h1>
-    <p>Generated: {report['generated_at']}</p>
+    <h1>{safe_title}</h1>
+    <p>Generated: {safe_generated_at}</p>
 
     <div class="summary">
         <h2>Summary</h2>
@@ -230,15 +235,17 @@ class Reporter:
         <tr><th>Path</th><th>Score</th><th>Tier</th><th>Size</th></tr>
 """
         for f in report.get("files", []):
-            tier_color = tier_colors.get(f['tier'], '#6c757d')
-            html += f"""        <tr>
-            <td>{f['path']}</td>
-            <td>{f['score']}</td>
-            <td><span class="tier" style="background:{tier_color}">{f['tier']}</span></td>
-            <td>{f['size_bytes']:,}</td>
+            safe_tier = html.escape(str(f.get('tier', 'MINIMAL')))
+            tier_color = tier_colors.get(f.get('tier', ''), '#6c757d')
+            safe_path = html.escape(str(f.get('path', '')))
+            html_content += f"""        <tr>
+            <td>{safe_path}</td>
+            <td>{f.get('score', 0)}</td>
+            <td><span class="tier" style="background:{tier_color}">{safe_tier}</span></td>
+            <td>{f.get('size_bytes', 0):,}</td>
         </tr>
 """
-        html += """    </table>
+        html_content += """    </table>
 </body>
 </html>"""
-        return html
+        return html_content

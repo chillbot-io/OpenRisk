@@ -727,6 +727,32 @@ class GCSMetadataHandler:
         return metadata.get(self.METADATA_KEY)
 
 
+def _redact_connection_string(error_msg: str) -> str:
+    """Redact connection strings from error messages to prevent credential leakage."""
+    import re
+    # Redact Azure connection strings (AccountKey=..., SharedAccessSignature=...)
+    redacted = re.sub(
+        r'(AccountKey=)[^;]+',
+        r'\1[REDACTED]',
+        str(error_msg),
+        flags=re.IGNORECASE
+    )
+    redacted = re.sub(
+        r'(SharedAccessSignature=)[^;]+',
+        r'\1[REDACTED]',
+        redacted,
+        flags=re.IGNORECASE
+    )
+    # Redact full connection strings that might appear
+    redacted = re.sub(
+        r'DefaultEndpointsProtocol=[^"\'>\s]+',
+        'DefaultEndpointsProtocol=[REDACTED]',
+        redacted,
+        flags=re.IGNORECASE
+    )
+    return redacted
+
+
 class AzureBlobMetadataHandler:
     """Handle OpenLabels metadata on Azure Blob Storage."""
 
@@ -755,7 +781,8 @@ class AzureBlobMetadataHandler:
             with _azure_circuit_breaker:
                 return self._write_with_retry(conn_str, container, blob_name, value)
         except Exception as e:
-            logger.error(f"Azure Blob metadata write failed: {e}")
+            # Redact connection string from error message to prevent credential leakage
+            logger.error(f"Azure Blob metadata write failed: {_redact_connection_string(str(e))}")
             return False
 
     @with_retry(max_retries=3, base_delay=1.0)
@@ -795,7 +822,8 @@ class AzureBlobMetadataHandler:
             with _azure_circuit_breaker:
                 return self._read_with_retry(conn_str, container, blob_name)
         except Exception as e:
-            logger.debug(f"Azure blob metadata read failed for {container}/{blob_name}: {e}")
+            # Redact connection string from error message to prevent credential leakage
+            logger.debug(f"Azure blob metadata read failed for {container}/{blob_name}: {_redact_connection_string(str(e))}")
             return None
 
     @with_retry(max_retries=3, base_delay=1.0)

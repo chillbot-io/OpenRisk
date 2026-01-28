@@ -19,6 +19,7 @@ Example:
     >>> csv_str = results_to_csv(results)
 """
 
+import html
 import json
 import csv
 import io
@@ -294,13 +295,16 @@ class ReportGenerator:
         """Generate HTML report."""
         sorted_results = self._get_sorted_results()
 
+        # Escape user-controlled data to prevent XSS
+        safe_title = html.escape(self.config.title)
+
         # Build HTML
-        html = f"""<!DOCTYPE html>
+        html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{self.config.title}</title>
+    <title>{safe_title}</title>
     <style>
         :root {{
             --critical: #dc3545;
@@ -387,8 +391,8 @@ class ReportGenerator:
     </style>
 </head>
 <body>
-    <h1>{self.config.title}</h1>
-    <p class="meta">Generated: {self.generated_at}</p>
+    <h1>{safe_title}</h1>
+    <p class="meta">Generated: {html.escape(self.generated_at)}</p>
 
     <div class="summary">
         <div class="stat-card">
@@ -430,28 +434,32 @@ class ReportGenerator:
             score_class = "score-high" if score >= 70 else "score-medium" if score >= 40 else "score-low"
             tier = r.get("tier", "MINIMAL").upper()
 
+            # Escape user-controlled data to prevent XSS
+            safe_path = html.escape(str(r.get('path', '')))
+            safe_tier = html.escape(tier)
+
             entities_html = ""
             if self.config.include_entities:
                 entities = r.get("entities", [])
                 if entities:
                     entity_strs = [
-                        f"{e.get('type', '?')}({e.get('count', 1)})"
+                        f"{html.escape(str(e.get('type', '?')))}({e.get('count', 1)})"
                         for e in entities if isinstance(e, dict)
                     ]
                     entities_html = f"<td class='entities'>{', '.join(entity_strs)}</td>"
                 else:
                     entities_html = "<td class='entities'>-</td>"
 
-            html += f"""            <tr>
-                <td class="path">{r.get('path', '')}</td>
+            html_content += f"""            <tr>
+                <td class="path">{safe_path}</td>
                 <td class="score {score_class}">{score}</td>
-                <td><span class="tier-badge tier-{tier}">{tier}</span></td>
+                <td><span class="tier-badge tier-{safe_tier}">{safe_tier}</span></td>
                 <td class="size">{self._format_size(r.get('size_bytes', 0))}</td>
                 {entities_html}
             </tr>
 """
 
-        html += """        </tbody>
+        html_content += """        </tbody>
     </table>
 
     <footer>
@@ -460,7 +468,7 @@ class ReportGenerator:
 </body>
 </html>"""
 
-        return html
+        return html_content
 
     def _generate_tier_bar_html(self) -> str:
         """Generate the tier distribution bar HTML."""
@@ -473,9 +481,10 @@ class ReportGenerator:
             count = self.summary.tier_distribution.get(tier, 0)
             if count > 0:
                 pct = (count / total) * 100
+                safe_tier = html.escape(tier)
                 segments.append(
-                    f'<div class="tier-segment tier-{tier}" style="width:{pct:.1f}%">'
-                    f'{tier}: {count}</div>'
+                    f'<div class="tier-segment tier-{safe_tier}" style="width:{pct:.1f}%">'
+                    f'{safe_tier}: {count}</div>'
                 )
 
         return f'<div class="tier-bar">{"".join(segments)}</div>'
