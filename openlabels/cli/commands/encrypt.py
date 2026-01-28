@@ -10,6 +10,7 @@ Usage:
 """
 
 import re
+import stat as stat_module
 import subprocess
 from pathlib import Path
 
@@ -73,7 +74,12 @@ def validate_file_path(file_path: Path) -> bool:
         return False
     try:
         resolved = file_path.resolve()
-        return resolved.exists() and resolved.is_file()
+        # SECURITY FIX (TOCTOU-001): Use lstat() instead of exists() and is_file()
+        st = resolved.lstat()
+        # Reject symlinks and non-regular files
+        if stat_module.S_ISLNK(st.st_mode):
+            return False
+        return stat_module.S_ISREG(st.st_mode)
     except (OSError, ValueError):
         return False
 
