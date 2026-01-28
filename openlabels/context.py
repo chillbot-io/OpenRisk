@@ -133,9 +133,12 @@ def _register_context(ctx: "Context") -> None:
                     priority=10,  # Run early in shutdown
                 )
             except Exception as e:
-                # Shutdown coordinator may not be available in some environments
-                # (e.g., during testing, or when signal handlers can't be installed)
-                logger.debug(f"Could not register with shutdown coordinator: {e}")
+                # GA-FIX (1.2): Upgraded from DEBUG to WARNING - this is a critical path
+                # that affects graceful shutdown behavior
+                logger.warning(
+                    f"Could not register with shutdown coordinator: {e}. "
+                    "Graceful shutdown may not work correctly."
+                )
             _atexit_registered = True
 
         # Add weak reference to this context

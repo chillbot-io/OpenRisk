@@ -694,9 +694,9 @@ class PollingWatcher:
                 else:
                     content_hash = None
                 files[str(file_path)] = (st.st_mtime, st.st_size, content_hash)
-            except OSError:
-                # File doesn't exist, permission denied, or other issue
-                pass
+            except OSError as e:
+                # GA-FIX (1.2): Log file access issues at DEBUG level for debugging
+                logger.debug(f"Could not stat file during watch scan: {file_path}: {e}")
 
         return files
 

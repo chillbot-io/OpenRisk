@@ -71,8 +71,9 @@ def sanitize_filename(filename: str) -> str:
         if '%' in filename:
             import urllib.parse
             filename = urllib.parse.unquote(filename)
-    except (ValueError, UnicodeDecodeError):
-        pass  # If decoding fails, continue with original
+    except (ValueError, UnicodeDecodeError) as e:
+        # GA-FIX (1.2): Log decoding failures at DEBUG level
+        logger.debug(f"Failed to decode percent-encoded filename '{filename}': {e}")
 
     # SECURITY FIX (LOW-002): Replace non-ASCII characters to prevent homoglyph attacks
     # e.g., Cyrillic 'а' (U+0430) looks like Latin 'a' but is different

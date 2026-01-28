@@ -165,8 +165,9 @@ class FileOps:
                 # Clean up temp file on error
                 try:
                     os.unlink(tmp_path)
-                except OSError:
-                    pass
+                except OSError as cleanup_err:
+                    # GA-FIX (1.2): Log cleanup failures at DEBUG level
+                    logger.debug(f"Failed to clean up temp manifest file {tmp_path}: {cleanup_err}")
                 raise
         except OSError as e:
             logger.warning(f"Failed to save quarantine manifest: {e}")
