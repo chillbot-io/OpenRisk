@@ -44,11 +44,7 @@ class ScanTrigger(Enum):
     LOW_CONFIDENCE_HIGH_RISK = "low_conf_high_risk" # Uncertain critical finding
 
 
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
-
-# Single confidence threshold for all entity types
+# Configuration
 CONFIDENCE_THRESHOLD = 0.80
 
 # Weight threshold for "high risk" entities (weight >= this is high risk)
@@ -58,10 +54,6 @@ HIGH_RISK_WEIGHT_THRESHOLD = 8
 # Staleness threshold in days (1 year)
 STALENESS_THRESHOLD_DAYS = 365
 
-
-# =============================================================================
-# TRIGGER EVALUATION
-# =============================================================================
 
 def should_scan(
     entities: Optional[List[Entity]],
@@ -202,10 +194,6 @@ def calculate_scan_priority(
     # Cap at 100
     return min(100, priority)
 
-
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
 
 def needs_scan(
     entities: Optional[List[Entity]],
