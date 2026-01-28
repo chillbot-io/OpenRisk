@@ -495,8 +495,8 @@ class Context:
                     )
                     try:
                         executor.shutdown(wait=False, cancel_futures=True)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Error during forced executor shutdown: {e}")
 
         with self._index_lock:
             if self._label_index is not None:

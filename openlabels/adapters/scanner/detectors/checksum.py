@@ -1,5 +1,6 @@
 """Tier 3: Checksum-validated detectors."""
 
+import logging
 import re
 from typing import List, Tuple
 
@@ -12,6 +13,8 @@ from .constants import (
     CONFIDENCE_WEAK,
 )
 
+logger = logging.getLogger(__name__)
+
 
 # VALIDATORS
 
@@ -19,6 +22,7 @@ def luhn_check(num: str) -> bool:
     """Luhn algorithm for credit card / NPI validation."""
     digits = [int(d) for d in num if d.isdigit()]
     if len(digits) < 2:
+        logger.debug(f"Luhn check failed: too few digits ({len(digits)})")
         return False
 
     checksum = 0
@@ -29,7 +33,10 @@ def luhn_check(num: str) -> bool:
                 d -= 9
         checksum += d
 
-    return checksum % 10 == 0
+    result = checksum % 10 == 0
+    if not result:
+        logger.debug(f"Luhn check failed: checksum={checksum} mod 10 = {checksum % 10}")
+    return result
 
 
 def validate_ssn(ssn: str) -> Tuple[bool, float]:
@@ -67,14 +74,17 @@ def validate_ssn(ssn: str) -> Tuple[bool, float]:
 
     # Invalid area numbers (000, 666, 900-999)
     if area in ('000', '666') or area.startswith('9'):
+        logger.debug(f"SSN has invalid area code {area}, reducing confidence")
         confidence = CONFIDENCE_LOW  # Still detect for safety
 
     # Invalid group (00) - even lower confidence
     if group == '00':
+        logger.debug(f"SSN has invalid group {group}, reducing confidence")
         confidence = min(confidence, CONFIDENCE_WEAK)
 
     # Invalid serial (0000) - even lower confidence
     if serial == '0000':
+        logger.debug(f"SSN has invalid serial {serial}, reducing confidence")
         confidence = min(confidence, CONFIDENCE_WEAK)
 
     return True, confidence
@@ -121,6 +131,7 @@ def validate_credit_card(cc: str) -> Tuple[bool, float]:
 
     # PHI safety: detect even with invalid Luhn (possible typo)
     if not luhn_check(digits):
+        logger.debug(f"Credit card has valid prefix but failed Luhn check, detecting with reduced confidence")
         return True, CONFIDENCE_LUHN_INVALID  # Lower confidence but still detect (above default 0.85 threshold)
 
     return True, 0.99
@@ -502,7 +513,7 @@ CHECKSUM_PATTERNS = [
 class ChecksumDetector(BaseDetector):
     """
     Tier 3 detector: Algorithmic validation.
-    
+
     High confidence (0.99) because validation is mathematical.
     """
 
@@ -512,6 +523,8 @@ class ChecksumDetector(BaseDetector):
     def detect(self, text: str) -> List[Span]:
         spans = []
         seen = set()  # (start, end, text) to avoid duplicates from overlapping patterns
+        validation_failures = 0
+        duplicates_skipped = 0
 
         for pattern, entity_type, validator in CHECKSUM_PATTERNS:
             for match in pattern.finditer(text):
@@ -521,9 +534,10 @@ class ChecksumDetector(BaseDetector):
                 if is_valid:
                     key = (match.start(1), match.end(1), value)
                     if key in seen:
+                        duplicates_skipped += 1
                         continue
                     seen.add(key)
-                    
+
                     span = Span(
                         start=match.start(1),
                         end=match.end(1),
@@ -534,5 +548,20 @@ class ChecksumDetector(BaseDetector):
                         tier=self.tier,
                     )
                     spans.append(span)
+                    logger.debug(f"Detected {entity_type} at {match.start(1)}-{match.end(1)} with confidence {confidence:.2f}")
+                else:
+                    validation_failures += 1
+
+        if spans:
+            # Summarize by entity type
+            type_counts = {}
+            for span in spans:
+                type_counts[span.entity_type] = type_counts.get(span.entity_type, 0) + 1
+            logger.info(f"ChecksumDetector found {len(spans)} entities: {type_counts}")
+
+        if validation_failures > 0:
+            logger.debug(f"ChecksumDetector: {validation_failures} pattern matches failed validation")
+        if duplicates_skipped > 0:
+            logger.debug(f"ChecksumDetector: {duplicates_skipped} duplicate matches skipped")
 
         return spans

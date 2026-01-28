@@ -11,6 +11,7 @@ Covers entity types not handled by existing detectors:
 - BANK_ROUTING: ABA routing numbers
 """
 
+import logging
 import re
 from typing import List, Tuple
 
@@ -26,6 +27,8 @@ from .constants import (
     CONFIDENCE_RELIABLE,
     CONFIDENCE_WEAK,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Pattern definitions: (regex_pattern, entity_type, confidence, capture_group, flags)
@@ -188,13 +191,19 @@ class AdditionalPatternDetector(BasePatternDetector):
 
     def _compile_patterns(self):
         """Compile all patterns."""
-        import logging
+        compile_errors = 0
         for pattern, entity_type, confidence, group, flags in ADDITIONAL_PATTERNS:
             try:
                 compiled = re.compile(pattern, flags)
                 self._compiled_patterns.append((compiled, entity_type, confidence, group))
             except re.error as e:
-                logging.warning(f"Invalid regex pattern for {entity_type}: {e}")
+                logger.warning(f"Invalid regex pattern for {entity_type}: {e}")
+                compile_errors += 1
+
+        if compile_errors > 0:
+            logger.warning(f"AdditionalPatternDetector: {compile_errors} patterns failed to compile")
+        else:
+            logger.debug(f"AdditionalPatternDetector: compiled {len(self._compiled_patterns)} patterns")
 
     def is_available(self) -> bool:
         return len(self._compiled_patterns) > 0
@@ -202,6 +211,19 @@ class AdditionalPatternDetector(BasePatternDetector):
     def get_patterns(self):
         """Return compiled patterns."""
         return self._compiled_patterns
+
+    def detect(self, text: str) -> List[Span]:
+        """Detect additional patterns in text with logging."""
+        spans = super().detect(text)
+
+        if spans:
+            # Summarize by entity type
+            type_counts = {}
+            for span in spans:
+                type_counts[span.entity_type] = type_counts.get(span.entity_type, 0) + 1
+            logger.info(f"AdditionalPatternDetector found {len(spans)} entities: {type_counts}")
+
+        return spans
 
     def _validate_match(self, entity_type: str, value: str) -> bool:
         """Validate matched values, especially AGE."""
@@ -212,7 +234,9 @@ class AdditionalPatternDetector(BasePatternDetector):
                 if age_num:
                     age = int(age_num.group())
                     if age < 0 or age > 120:
+                        logger.debug(f"AGE validation failed: {age} is out of range (0-120)")
                         return False
-            except ValueError:
+            except ValueError as e:
+                logger.debug(f"AGE validation failed: {e}")
                 return False
         return True
