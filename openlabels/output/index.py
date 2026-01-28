@@ -231,31 +231,69 @@ class LabelIndex:
 
         return conn
 
+    def _validate_connection(self, conn: sqlite3.Connection) -> bool:
+        """
+        Validate that a connection is still usable.
+
+        Connections can become stale due to:
+        - Database file being deleted/moved
+        - Disk errors
+        - WAL corruption
+        - Long idle periods (some environments)
+
+        Args:
+            conn: SQLite connection to validate
+
+        Returns:
+            True if connection is healthy, False otherwise
+        """
+        try:
+            # Simple query to verify connection works
+            conn.execute("SELECT 1").fetchone()
+            return True
+        except sqlite3.Error:
+            return False
+
+    def _invalidate_connection(self, conn_key: str, conn: sqlite3.Connection) -> None:
+        """Close and remove an invalid connection."""
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+        try:
+            delattr(self._thread_local, conn_key)
+        except AttributeError:
+            pass
+
     @contextmanager
     def _get_connection(self):
         """
-        Get database connection with context management.
+        Get database connection with context management and health checks.
 
         Uses thread-local connection pooling for efficiency.
         Connection is NOT closed after use - it's reused for subsequent operations.
+        Validates connection health and recreates if stale.
         """
         if self._closed:
             raise DatabaseError("LabelIndex has been closed")
 
+        conn_key = f"conn_{self.db_path}"
         conn = self._get_thread_connection()
+
+        # Validate connection health - recreate if stale
+        if not self._validate_connection(conn):
+            logger.warning(
+                f"Stale database connection detected for thread "
+                f"{threading.current_thread().name}, reconnecting"
+            )
+            self._invalidate_connection(conn_key, conn)
+            conn = self._get_thread_connection()
+
         try:
             yield conn
         except sqlite3.Error as e:
-            # On database error, close and remove the connection so next call gets fresh one
-            conn_key = f"conn_{self.db_path}"
-            try:
-                conn.close()
-            except sqlite3.Error:
-                pass
-            try:
-                delattr(self._thread_local, conn_key)
-            except AttributeError:
-                pass
+            # On database error, invalidate connection so next call gets fresh one
+            self._invalidate_connection(conn_key, conn)
             raise DatabaseError(f"Database error: {e}") from e
 
     def close(self):
