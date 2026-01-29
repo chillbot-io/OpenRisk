@@ -570,11 +570,11 @@ class FinancialDetector(BasePatternDetector):
                 return Span(
                     start=span.start,
                     end=span.end,
+                    text=span.text,
                     entity_type=span.entity_type,
-                    value=span.value,
                     confidence=new_confidence,
                     detector=span.detector,
-                    metadata=span.metadata,
+                    tier=span.tier,
                 )
 
         return span

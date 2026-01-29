@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from openlabels.adapters.base import Entity
 from openlabels.core.types import ScanResult, ReportConfig, ReportFormat
 from openlabels.output.report import (
     ReportGenerator,
@@ -36,8 +37,8 @@ def sample_results():
             score=85,
             tier="CRITICAL",
             entities=[
-                {"type": "SSN", "count": 10},
-                {"type": "NAME", "count": 25},
+                Entity(type="SSN", count=10, confidence=0.95, source="scanner"),
+                Entity(type="NAME", count=25, confidence=0.9, source="scanner"),
             ],
         ),
         ScanResult(
@@ -47,7 +48,7 @@ def sample_results():
             score=45,
             tier="MEDIUM",
             entities=[
-                {"type": "EMAIL", "count": 5},
+                Entity(type="EMAIL", count=5, confidence=0.85, source="scanner"),
             ],
         ),
         ScanResult(
