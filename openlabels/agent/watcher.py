@@ -495,7 +495,6 @@ def watch_directory(
             event_queue.put_nowait(event)  # Non-blocking; drops if full
         except queue.Full:
             logger.warning("Event queue full - dropping event (consider increasing max_queue_size)")
-            pass
 
     watcher = start_watcher(path, on_change=on_change, recursive=recursive, **kwargs)
 

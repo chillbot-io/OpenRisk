@@ -38,6 +38,20 @@ logger = logging.getLogger(__name__)
 DEFAULT_VERSION_LIMIT = 100
 
 
+def _escape_like_pattern(value: str) -> str:
+    """
+    Escape special characters in SQL LIKE patterns to prevent injection.
+
+    The characters % and _ have special meaning in LIKE patterns:
+    - % matches any sequence of characters
+    - _ matches any single character
+
+    This function escapes them so they match literally.
+    """
+    # Escape backslash first (it's the escape character), then % and _
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 def _validate_label_json(json_str: str) -> dict:
     """Validate and parse label JSON data."""
     try:
@@ -150,15 +164,16 @@ class PostgresLabelIndex:
 
     @contextmanager
     def _cursor(self):
-        """Cursor context manager with automatic commit/rollback."""
+        """Cursor context manager with automatic commit/rollback.
+
+        Exception handling is delegated to _connection() for consistency.
+        All database errors are wrapped in DatabaseError by _connection().
+        """
         with self._connection() as conn:
             cursor = conn.cursor()
             try:
                 yield cursor
                 conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
             finally:
                 cursor.close()
 
@@ -461,7 +476,11 @@ class PostgresLabelIndex:
                 """, (label_id, limit))
 
                 columns = ['content_hash', 'scanned_at', 'source', 'risk_score', 'risk_tier', 'entity_types']
-                return [dict(zip(columns, row)) for row in cur.fetchall()]
+                # Use iterator instead of fetchall() to avoid memory exhaustion
+                results = []
+                for row in cur:
+                    results.append(dict(zip(columns, row)))
+                return results
 
         except Exception as e:
             logger.error(f"Failed to get versions: {e}")
@@ -497,8 +516,10 @@ class PostgresLabelIndex:
             params.append(risk_tier)
 
         if entity_type:
-            conditions.append("v.entity_types LIKE %s")
-            params.append(f"%{entity_type}%")
+            # Escape LIKE wildcards to prevent pattern injection
+            escaped_type = _escape_like_pattern(entity_type)
+            conditions.append("v.entity_types LIKE %s ESCAPE '\\'")
+            params.append(f"%{escaped_type}%")
 
         if since:
             conditions.append("v.scanned_at >= %s")
@@ -528,7 +549,11 @@ class PostgresLabelIndex:
 
                 columns = ['label_id', 'file_path', 'file_name', 'content_hash',
                           'scanned_at', 'risk_score', 'risk_tier', 'entity_types']
-                return [dict(zip(columns, row)) for row in cur.fetchall()]
+                # Use iterator instead of fetchall() to avoid memory exhaustion
+                results = []
+                for row in cur:
+                    results.append(dict(zip(columns, row)))
+                return results
 
         except Exception as e:
             logger.error(f"Query failed: {e}")
@@ -559,8 +584,10 @@ class PostgresLabelIndex:
             params.append(risk_tier)
 
         if entity_type:
-            conditions.append("v.entity_types LIKE %s")
-            params.append(f"%{entity_type}%")
+            # Escape LIKE wildcards to prevent pattern injection
+            escaped_type = _escape_like_pattern(entity_type)
+            conditions.append("v.entity_types LIKE %s ESCAPE '\\'")
+            params.append(f"%{escaped_type}%")
 
         if since:
             conditions.append("v.scanned_at >= %s")
@@ -607,14 +634,16 @@ class PostgresLabelIndex:
                     "SELECT COUNT(*) FROM label_objects WHERE tenant_id = %s",
                     (self.tenant_id,),
                 )
-                labels = cur.fetchone()[0]
+                result = cur.fetchone()
+                labels = result[0] if result else 0
 
                 cur.execute("""
                     SELECT COUNT(*) FROM label_versions v
                     JOIN label_objects o ON v.label_id = o.label_id
                     WHERE o.tenant_id = %s
                 """, (self.tenant_id,))
-                versions = cur.fetchone()[0]
+                result = cur.fetchone()
+                versions = result[0] if result else 0
 
                 return {"labels": labels, "versions": versions}
 

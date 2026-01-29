@@ -4,7 +4,8 @@ import hashlib
 import logging
 import re
 import secrets
-from typing import List, Tuple
+from functools import wraps
+from typing import Callable, List, Optional, Tuple
 
 from ..types import Span, Tier
 from .base import BasePatternDetector
@@ -20,96 +21,108 @@ from .constants import (
 logger = logging.getLogger(__name__)
 
 
-# --- CHECKSUM VALIDATORS ---
-def _validate_cusip(cusip: str) -> bool:
+def checksum_validator(
+    name: str,
+    length: Optional[int] = None,
+    min_length: Optional[int] = None,
+    max_length: Optional[int] = None,
+    normalize: bool = True,
+) -> Callable:
     """
-    Validate CUSIP check digit (position 9).
+    Decorator factory for checksum validators.
 
-    CUSIP: 9 characters
-    - Positions 1-6: Issuer (alphanumeric)
-    - Positions 7-8: Issue (alphanumeric)
-    - Position 9: Check digit
+    Handles common boilerplate: normalization, length validation, debug logging.
 
-    Algorithm: Modified Luhn (different from credit card Luhn)
+    Args:
+        name: Identifier name for logging (e.g., 'CUSIP', 'ISIN')
+        length: Exact required length (mutually exclusive with min/max)
+        min_length: Minimum length (use with max_length for ranges)
+        max_length: Maximum length (use with min_length for ranges)
+        normalize: If True, uppercase and remove spaces/hyphens
     """
-    cusip = cusip.upper().replace(' ', '').replace('-', '')
+    def decorator(func: Callable[[str], bool]) -> Callable[[str], bool]:
+        @wraps(func)
+        def wrapper(value: str) -> bool:
+            if normalize:
+                value = value.upper().replace(' ', '').replace('-', '')
 
-    if len(cusip) != 9:
-        logger.debug(f"CUSIP validation failed: expected 9 chars, got {len(cusip)}")
-        return False
-    
-    # Convert characters to values
-    # Digits: face value
-    # Letters: A=10, B=11, ..., Z=35
-    # Special: *=36, @=37, #=38
-    def char_value(c: str) -> int:
+            # Length validation
+            if length is not None and len(value) != length:
+                logger.debug(f"{name} validation failed: expected {length} chars, got {len(value)}")
+                return False
+            if min_length is not None and len(value) < min_length:
+                logger.debug(f"{name} validation failed: min {min_length} chars, got {len(value)}")
+                return False
+            if max_length is not None and len(value) > max_length:
+                logger.debug(f"{name} validation failed: max {max_length} chars, got {len(value)}")
+                return False
+
+            result = func(value)
+            if not result:
+                logger.debug(f"{name} validation failed: checksum mismatch")
+            return result
+        return wrapper
+    return decorator
+
+
+def _cusip_char_value(c: str) -> int:
+    """Convert CUSIP character to numeric value."""
+    if c.isdigit():
+        return int(c)
+    elif c.isalpha():
+        return ord(c) - ord('A') + 10
+    elif c == '*':
+        return 36
+    elif c == '@':
+        return 37
+    elif c == '#':
+        return 38
+    return -1
+
+
+def _alpha_to_numeric(s: str) -> Optional[str]:
+    """Convert alphanumeric string to numeric (A=10, B=11, ..., Z=35)."""
+    result = ''
+    for c in s:
         if c.isdigit():
-            return int(c)
+            result += c
         elif c.isalpha():
-            return ord(c) - ord('A') + 10
-        elif c == '*':
-            return 36
-        elif c == '@':
-            return 37
-        elif c == '#':
-            return 38
+            result += str(ord(c) - ord('A') + 10)
         else:
-            return -1
-    
+            return None
+    return result
+
+
+@checksum_validator('CUSIP', length=9)
+def _validate_cusip(cusip: str) -> bool:
+    """Validate CUSIP check digit using modified Luhn algorithm."""
     total = 0
-    for i, c in enumerate(cusip[:8]):  # First 8 characters
-        val = char_value(c)
+    for i, c in enumerate(cusip[:8]):
+        val = _cusip_char_value(c)
         if val < 0:
             return False
-        
-        # Double every second digit (0-indexed: positions 1, 3, 5, 7)
         if i % 2 == 1:
             val *= 2
-        
-        # Sum the digits
         total += val // 10 + val % 10
-    
+
     check_digit = (10 - (total % 10)) % 10
-
     try:
-        if int(cusip[8]) != check_digit:
-            logger.debug(f"CUSIP checksum failed: expected {check_digit}, got {cusip[8]}")
-            return False
-        return True
+        return int(cusip[8]) == check_digit
     except ValueError:
-        logger.debug(f"CUSIP validation failed: check digit is not numeric")
         return False
 
 
+@checksum_validator('ISIN', length=12)
 def _validate_isin(isin: str) -> bool:
-    """
-    Validate ISIN check digit using Luhn algorithm.
-    
-    ISIN: 12 characters
-    - Positions 1-2: Country code (letters)
-    - Positions 3-11: National security identifier (alphanumeric)
-    - Position 12: Check digit
-    """
-    isin = isin.upper().replace(' ', '').replace('-', '')
-    
-    if len(isin) != 12:
-        return False
-    
-    # First two must be letters (country code)
+    """Validate ISIN check digit using Luhn algorithm."""
     if not isin[:2].isalpha():
         return False
-    
-    # Convert to numeric string: A=10, B=11, ..., Z=35
-    numeric = ''
-    for c in isin:
-        if c.isdigit():
-            numeric += c
-        elif c.isalpha():
-            numeric += str(ord(c) - ord('A') + 10)
-        else:
-            return False
-    
-    # Apply Luhn algorithm
+
+    numeric = _alpha_to_numeric(isin)
+    if numeric is None:
+        return False
+
+    # Luhn algorithm
     total = 0
     for i, digit in enumerate(reversed(numeric)):
         d = int(digit)
@@ -118,44 +131,29 @@ def _validate_isin(isin: str) -> bool:
             if d > 9:
                 d -= 9
         total += d
-    
+
     return total % 10 == 0
 
 
+@checksum_validator('SEDOL', length=7)
 def _validate_sedol(sedol: str) -> bool:
-    """
-    Validate SEDOL check digit.
-    
-    SEDOL: 7 characters (alphanumeric, no vowels)
-    Weights: 1, 3, 1, 7, 3, 9, 1
-    """
-    sedol = sedol.upper().replace(' ', '')
-    
-    if len(sedol) != 7:
-        return False
-    
-    # SEDOL cannot contain vowels
+    """Validate SEDOL check digit using weighted sum."""
     if any(c in 'AEIOU' for c in sedol):
         return False
-    
+
     weights = [1, 3, 1, 7, 3, 9, 1]
-    
-    def char_value(c: str) -> int:
-        if c.isdigit():
-            return int(c)
-        elif c.isalpha():
-            return ord(c) - ord('A') + 10
-        return -1
-    
+
     total = 0
-    for i, c in enumerate(sedol[:6]):  # First 6 characters
-        val = char_value(c)
-        if val < 0:
+    for i, c in enumerate(sedol[:6]):
+        if c.isdigit():
+            val = int(c)
+        elif c.isalpha():
+            val = ord(c) - ord('A') + 10
+        else:
             return False
         total += val * weights[i]
-    
+
     check_digit = (10 - (total % 10)) % 10
-    
     try:
         return int(sedol[6]) == check_digit
     except ValueError:
@@ -246,135 +244,70 @@ def _validate_swift(swift: str) -> bool:
     return True
 
 
+@checksum_validator('LEI', length=20)
 def _validate_lei(lei: str) -> bool:
-    """
-    Validate LEI (Legal Entity Identifier) using ISO 7064 Mod 97-10.
-    
-    LEI: 20 characters
-    - Positions 1-4: LOU prefix
-    - Positions 5-6: Reserved (00)
-    - Positions 7-18: Entity-specific
-    - Positions 19-20: Check digits
-    """
-    lei = lei.upper().replace(' ', '').replace('-', '')
-    
-    if len(lei) != 20:
-        return False
-    
+    """Validate LEI using ISO 7064 Mod 97-10."""
     if not lei.isalnum():
         return False
-    
-    # Convert to numeric (A=10, B=11, ...)
-    numeric = ''
-    for c in lei:
-        if c.isdigit():
-            numeric += c
-        else:
-            numeric += str(ord(c) - ord('A') + 10)
-    
-    # ISO 7064 Mod 97-10 check
+
+    numeric = _alpha_to_numeric(lei)
+    if numeric is None:
+        return False
+
     return int(numeric) % 97 == 1
 
 
+@checksum_validator('FIGI', length=12)
 def _validate_figi(figi: str) -> bool:
-    """
-    Validate FIGI (Financial Instrument Global Identifier).
-    
-    FIGI: 12 characters
-    - Starts with BBG (Bloomberg) or other provider prefix
-    - Check digit at position 12
-    """
-    figi = figi.upper().replace(' ', '')
-    
-    if len(figi) != 12:
-        return False
-
-    if not figi.isalnum():
-        return False
-
-    # FIGI uses a modified check digit algorithm, simplified validation here
-    return True  # Format check only
+    """Validate FIGI format (simplified - format check only)."""
+    return figi.isalnum()
 
 
+BASE58_CHARS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+BECH32_CHARS = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+
+
+@checksum_validator('Bitcoin', min_length=25, max_length=34, normalize=False)
 def _validate_bitcoin_base58(address: str) -> bool:
-    """
-    Validate Bitcoin legacy/P2SH address (Base58Check).
-    
-    Legacy (P2PKH): Starts with 1, 25-34 chars
-    P2SH: Starts with 3, 25-34 chars
-    """
-    if not address or len(address) < 25 or len(address) > 34:
-        return False
-    
+    """Validate Bitcoin legacy/P2SH address using Base58Check with double SHA-256."""
     if address[0] not in ('1', '3'):
         return False
-    
-    # Base58 alphabet (no 0, O, I, l)
-    base58_chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-    
-    if not all(c in base58_chars for c in address):
+
+    if not all(c in BASE58_CHARS for c in address):
         return False
-    
-    # Full Base58Check validation with double SHA-256
+
     try:
-        # Decode Base58
         n = 0
         for c in address:
-            n = n * 58 + base58_chars.index(c)
+            n = n * 58 + BASE58_CHARS.index(c)
 
-        # Convert to bytes (25 bytes for Bitcoin addresses)
         data = n.to_bytes(25, 'big')
-
-        # Last 4 bytes are checksum
         payload, checksum = data[:-4], data[-4:]
 
-        # Verify checksum (double SHA-256)
         hash1 = hashlib.sha256(payload).digest()
         hash2 = hashlib.sha256(hash1).digest()
 
-        return secrets.compare_digest(hash2[:4], checksum)  # CVE-READY-005: constant-time
+        return secrets.compare_digest(hash2[:4], checksum)
     except (OverflowError, ValueError):
         return False
 
 
+@checksum_validator('Bitcoin Bech32', min_length=42, max_length=62, normalize=False)
 def _validate_bitcoin_bech32(address: str) -> bool:
-    """
-    Validate Bitcoin Bech32 address (SegWit).
-
-    Format: bc1 + witness version + data + checksum
-    - Native SegWit (P2WPKH): bc1q + 38 chars (witness v0)
-    - Taproot (P2TR): bc1p + 58 chars (witness v1)
-
-    The '1' in 'bc1' is the Bech32 separator between HRP and data.
-    """
+    """Validate Bitcoin Bech32 address (SegWit/Taproot)."""
     address = address.lower()
 
-    # Must start with bc1 (mainnet) - the '1' is the separator
     if not address.startswith('bc1'):
         return False
 
-    # Data part is everything after 'bc1'
     data_part = address[3:]
-
-    # Bech32 charset (excludes 1, b, i, o to avoid confusion)
-    charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
-
-    # Check minimum length (version + program + 6-char checksum)
-    if len(data_part) < 8:
+    if not all(c in BECH32_CHARS for c in data_part):
         return False
 
-    # Check all characters are valid Bech32
-    if not all(c in charset for c in data_part):
-        return False
-
-    # Check witness version (first char): q=0, p=1
     witness_version = data_part[0]
     if witness_version not in ('q', 'p'):
         return False
 
-    # Validate length based on witness version
-    # v0 (q): 42 chars total (bc1q + 38) for P2WPKH, or 62 for P2WSH
-    # v1 (p): 62 chars total (bc1p + 58) for Taproot
     total_len = len(address)
     if witness_version == 'q' and total_len not in (42, 62):
         return False
@@ -385,14 +318,10 @@ def _validate_bitcoin_bech32(address: str) -> bool:
 
 
 def _validate_ethereum(address: str) -> bool:
-    """
-    Validate Ethereum address format.
-    
-    Format: 0x + 40 hexadecimal characters
-    """
-    if not address.startswith('0x') and not address.startswith('0X'):
+    """Validate Ethereum address: 0x + 40 hex characters."""
+    if not address.startswith(('0x', '0X')):
         return False
-    
+
     hex_part = address[2:]
     
     if len(hex_part) != 40:

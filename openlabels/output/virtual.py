@@ -250,21 +250,51 @@ def _get_platform() -> str:
     return "unknown"
 
 
-class LinuxXattrHandler:
-    """Handle extended attributes on Linux using xattr module or setfattr."""
+class BaseXattrHandler:
+    """Base class for platform-specific extended attribute handlers."""
 
-    ATTR_NAME = XATTR_LINUX
+    ATTR_NAME: str = ""
 
     def write(self, path: str, value: str) -> bool:
-        """Write xattr value."""
+        """Write xattr value with validation."""
         if not validate_path_for_subprocess(path):
             logger.error(f"Invalid path for xattr write: {path[:100]}")
             return False
         if not validate_xattr_value(value):
             logger.error("Invalid value for xattr write")
             return False
+        return self._do_write(path, value)
 
-        # Try using xattr module first (safer, no subprocess)
+    def read(self, path: str) -> Optional[str]:
+        """Read xattr value with validation."""
+        if not validate_path_for_subprocess(path):
+            logger.debug(f"Invalid path for xattr read: {path[:100]}")
+            return None
+        return self._do_read(path)
+
+    def remove(self, path: str) -> bool:
+        """Remove xattr with validation."""
+        if not validate_path_for_subprocess(path):
+            logger.debug(f"Invalid path for xattr remove: {path[:100]}")
+            return False
+        return self._do_remove(path)
+
+    def _do_write(self, path: str, value: str) -> bool:
+        raise NotImplementedError
+
+    def _do_read(self, path: str) -> Optional[str]:
+        raise NotImplementedError
+
+    def _do_remove(self, path: str) -> bool:
+        raise NotImplementedError
+
+
+class LinuxXattrHandler(BaseXattrHandler):
+    """Handle extended attributes on Linux using xattr module or setfattr."""
+
+    ATTR_NAME = XATTR_LINUX
+
+    def _do_write(self, path: str, value: str) -> bool:
         try:
             import xattr
             xattr.setxattr(path, self.ATTR_NAME, value.encode('utf-8'))
@@ -274,43 +304,31 @@ class LinuxXattrHandler:
         except OSError as e:
             logger.debug(f"xattr module failed: {e}")
 
-        # Fallback to setfattr command
         try:
             result = subprocess.run(
                 ["setfattr", "-n", self.ATTR_NAME, "-v", value, path],
-                capture_output=True,
-                text=True,
+                capture_output=True, text=True,
             )
             return result.returncode == 0
         except FileNotFoundError:
             logger.error("setfattr not found. Install attr package.")
-            return False
         except OSError as e:
             logger.error(f"setfattr failed: {e}")
-            return False
+        return False
 
-    def read(self, path: str) -> Optional[str]:
-        """Read xattr value."""
-        if not validate_path_for_subprocess(path):
-            logger.debug(f"Invalid path for xattr read: {path[:100]}")
-            return None
-
-        # Try using xattr module first (safer, no subprocess)
+    def _do_read(self, path: str) -> Optional[str]:
         try:
             import xattr
-            value = xattr.getxattr(path, self.ATTR_NAME)
-            return value.decode('utf-8')
+            return xattr.getxattr(path, self.ATTR_NAME).decode('utf-8')
         except ImportError:
             logger.debug("xattr module not available, falling back to getfattr")
         except OSError as e:
             logger.debug(f"xattr read failed for {path}: {e}")
 
-        # Fallback to getfattr command
         try:
             result = subprocess.run(
                 ["getfattr", "-n", self.ATTR_NAME, "--only-values", path],
-                capture_output=True,
-                text=True,
+                capture_output=True, text=True,
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -318,15 +336,9 @@ class LinuxXattrHandler:
             logger.debug("getfattr not found")
         except OSError as e:
             logger.debug(f"getfattr failed for {path}: {e}")
-
         return None
 
-    def remove(self, path: str) -> bool:
-        """Remove xattr."""
-        if not validate_path_for_subprocess(path):
-            logger.debug(f"Invalid path for xattr remove: {path[:100]}")
-            return False
-
+    def _do_remove(self, path: str) -> bool:
         try:
             import xattr
             xattr.removexattr(path, self.ATTR_NAME)
@@ -344,45 +356,30 @@ class LinuxXattrHandler:
             return result.returncode == 0
         except OSError as e:
             logger.debug(f"setfattr remove failed for {path}: {e}")
-            return False
+        return False
 
 
-class MacOSXattrHandler:
+class MacOSXattrHandler(BaseXattrHandler):
     """Handle extended attributes on macOS using xattr command."""
 
     ATTR_NAME = XATTR_MACOS
 
-    def write(self, path: str, value: str) -> bool:
-        """Write xattr value using macOS xattr command."""
-        if not validate_path_for_subprocess(path):
-            logger.error(f"Invalid path for xattr write: {path[:100]}")
-            return False
-        if not validate_xattr_value(value):
-            logger.error("Invalid value for xattr write")
-            return False
-
+    def _do_write(self, path: str, value: str) -> bool:
         try:
             result = subprocess.run(
                 ["xattr", "-w", self.ATTR_NAME, value, path],
-                capture_output=True,
-                text=True,
+                capture_output=True, text=True,
             )
             return result.returncode == 0
         except OSError as e:
             logger.error(f"macOS xattr write failed: {e}")
             return False
 
-    def read(self, path: str) -> Optional[str]:
-        """Read xattr value using macOS xattr command."""
-        if not validate_path_for_subprocess(path):
-            logger.debug(f"Invalid path for xattr read: {path[:100]}")
-            return None
-
+    def _do_read(self, path: str) -> Optional[str]:
         try:
             result = subprocess.run(
                 ["xattr", "-p", self.ATTR_NAME, path],
-                capture_output=True,
-                text=True,
+                capture_output=True, text=True,
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -390,12 +387,7 @@ class MacOSXattrHandler:
             logger.debug(f"macOS xattr read failed for {path}: {e}")
         return None
 
-    def remove(self, path: str) -> bool:
-        """Remove xattr using macOS xattr command."""
-        if not validate_path_for_subprocess(path):
-            logger.debug(f"Invalid path for xattr remove: {path[:100]}")
-            return False
-
+    def _do_remove(self, path: str) -> bool:
         try:
             result = subprocess.run(
                 ["xattr", "-d", self.ATTR_NAME, path],
@@ -407,14 +399,13 @@ class MacOSXattrHandler:
             return False
 
 
-class WindowsADSHandler:
+class WindowsADSHandler(BaseXattrHandler):
     """Handle NTFS Alternate Data Streams on Windows."""
 
-    STREAM_NAME = XATTR_WINDOWS_ADS
+    ATTR_NAME = XATTR_WINDOWS_ADS
 
-    def write(self, path: str, value: str) -> bool:
-        """Write to NTFS ADS."""
-        ads_path = f"{path}:{self.STREAM_NAME}"
+    def _do_write(self, path: str, value: str) -> bool:
+        ads_path = f"{path}:{self.ATTR_NAME}"
         try:
             with open(ads_path, 'w', encoding='utf-8') as f:
                 f.write(value)
@@ -423,9 +414,8 @@ class WindowsADSHandler:
             logger.error(f"Windows ADS write failed: {e}")
             return False
 
-    def read(self, path: str) -> Optional[str]:
-        """Read from NTFS ADS."""
-        ads_path = f"{path}:{self.STREAM_NAME}"
+    def _do_read(self, path: str) -> Optional[str]:
+        ads_path = f"{path}:{self.ATTR_NAME}"
         try:
             with open(ads_path, 'r', encoding='utf-8') as f:
                 return f.read().strip()
@@ -435,9 +425,8 @@ class WindowsADSHandler:
             logger.debug(f"Windows ADS read failed for {path}: {e}")
             return None
 
-    def remove(self, path: str) -> bool:
-        """Remove NTFS ADS."""
-        ads_path = f"{path}:{self.STREAM_NAME}"
+    def _do_remove(self, path: str) -> bool:
+        ads_path = f"{path}:{self.ATTR_NAME}"
         try:
             os.remove(ads_path)
             return True
