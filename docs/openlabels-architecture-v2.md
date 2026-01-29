@@ -8,20 +8,53 @@ This document is the ground truth for OpenLabels architecture. It captures the c
 
 ## Table of Contents
 
-1. [Vision & Identity](#vision--identity)
-2. [Core Value Proposition](#core-value-proposition)
-3. [System Architecture](#system-architecture)
-4. [Adapters](#adapters)
-5. [Normalizers](#normalizers)
-6. [Scanner Adapter](#scanner-adapter)
-7. [Scoring Engine](#scoring-engine)
-8. [Scan Triggers](#scan-triggers)
-9. [OCR Priority Queue](#ocr-priority-queue)
-10. [Agent (On-Prem)](#agent-on-prem)
-11. [CLI & Query Language](#cli--query-language)
-12. [Repository Structure](#repository-structure)
-13. [API Reference](#api-reference)
-14. [Implementation Roadmap](#implementation-roadmap)
+1. [Terminology: Labeler vs Scanner](#terminology-labeler-vs-scanner)
+2. [Vision & Identity](#vision--identity)
+3. [Core Value Proposition](#core-value-proposition)
+4. [System Architecture](#system-architecture)
+5. [Labeler Adapters](#labeler-adapters)
+6. [Normalizers](#normalizers)
+7. [Scanner (Content Classification)](#scanner-content-classification)
+8. [Scoring Engine](#scoring-engine)
+9. [Scan Triggers](#scan-triggers)
+10. [OCR Priority Queue](#ocr-priority-queue)
+11. [Agent (On-Prem)](#agent-on-prem)
+12. [CLI & Query Language](#cli--query-language)
+13. [Repository Structure](#repository-structure)
+14. [API Reference](#api-reference)
+15. [Implementation Roadmap](#implementation-roadmap)
+
+---
+
+## Terminology: Labeler vs Scanner
+
+OpenLabels provides two distinct modes of operation. This distinction is critical for understanding the architecture:
+
+| Term | Definition |
+|------|------------|
+| **Labeler** | Reads metadata and existing labels/classifications from external sources (Macie findings, DLP results, Purview classifications, NTFS ACLs, NFS exports, etc.). Does NOT analyze file content—trusts external classification. |
+| **Scanner** | Built-in classification engine that analyzes file content to detect sensitive entities using patterns, checksums, and ML. For users without DLP capabilities, or as defense-in-depth verification. |
+
+### When to Use Which
+
+| Scenario | Use |
+|----------|-----|
+| Already have Macie/DLP/Purview classifying data | **Labeler** — normalize existing findings to portable scores |
+| No DLP capabilities | **Scanner** — analyze content directly |
+| Want defense-in-depth | **Both** — Labeler pulls existing labels, Scanner verifies with content analysis |
+| Scanning local Windows/Linux files | **Scanner** — plus Labeler for permission metadata (NTFS ACLs, POSIX modes) |
+
+### Architectural Mapping
+
+In the codebase:
+
+| Concept | Implementation |
+|---------|----------------|
+| Labeler | `MacieAdapter`, `DLPAdapter`, `PurviewAdapter`, `NTFSAdapter`, `NFSAdapter`, `M365Adapter` |
+| Scanner | `ScannerAdapter` (wraps detector orchestrator) |
+| Combined | `Orchestrator` merges outputs from both |
+
+Both Labeler and Scanner produce the same `NormalizedInput` format, enabling seamless combination.
 
 ---
 
@@ -37,9 +70,9 @@ Into a single **portable 0-100 risk score** that works across any platform.
 
 ### What OpenLabels Is NOT
 
-- **Not a scanner** (though it includes one as an adapter)
-- **Not a replacement for Macie/DLP/Purview** (it consumes their output)
-- **Not just another label** (it quantifies risk with context)
+- **Not just a scanner** — it's a scoring framework. The Scanner is one component; the Labeler consumes external DLP findings.
+- **Not a replacement for Macie/DLP/Purview** — it consumes their output via the Labeler and normalizes to a universal score
+- **Not just another label** — it quantifies risk by combining content sensitivity with exposure context
 
 ### The Core Insight
 
@@ -60,10 +93,10 @@ Same content, different risk. Only OpenLabels captures this.
 |------|----------|
 | Cross-platform comparison | Same score formula everywhere |
 | Content + Context risk | Only OpenLabels combines both |
-| Already have Macie/DLP | Use vendor adapter → get portable score |
-| Want more granularity | Add scanner adapter → standardized detection |
+| Already have Macie/DLP | Use **Labeler** → normalize existing findings to portable score |
+| No DLP capabilities | Use **Scanner** → analyze content directly |
 | Want portability | Scanner works anywhere (on-prem, any cloud) |
-| Want defense in depth | Run multiple adapters → conservative union |
+| Want defense in depth | Run **Labeler + Scanner** together → conservative union |
 | Actionable remediation | CLI with quarantine, move, delete based on risk |
 
 ---
@@ -88,17 +121,21 @@ Same content, different risk. Only OpenLabels captures this.
 │                              ADAPTERS                                       │
 │                     (all produce normalized entities + context)             │
 │                                                                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐│
-│  │   Macie     │  │   GCP DLP   │  │   Purview   │  │      Scanner        ││
-│  │   Adapter   │  │   Adapter   │  │   Adapter   │  │      Adapter        ││
-│  │             │  │             │  │             │  │                     ││
-│  │ • Findings  │  │ • Findings  │  │ • Classif.  │  │ • Patterns          ││
-│  │ • S3 meta   │  │ • GCS meta  │  │ • Blob meta │  │ • Checksums         ││
-│  │             │  │             │  │             │  │ • OCR Worker        ││
-│  │             │  │             │  │             │  │ • Archives          ││
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘│
-│         │                │                │                     │          │
-│         └────────────────┴────────────────┴─────────────────────┘          │
+│  ┌─────────────────────────────────────────────┐  ┌─────────────────────┐  │
+│  │              LABELER ADAPTERS               │  │      SCANNER        │  │
+│  │   (read metadata + existing labels)         │  │  (analyze content)  │  │
+│  │                                             │  │                     │  │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐       │  │ • Patterns          │  │
+│  │  │  Macie  │ │ GCP DLP │ │ Purview │       │  │ • Checksums         │  │
+│  │  │ +S3 meta│ │+GCS meta│ │+Blob    │       │  │ • ML detection      │  │
+│  │  └─────────┘ └─────────┘ └─────────┘       │  │ • OCR Worker        │  │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐       │  │ • Archives          │  │
+│  │  │  NTFS   │ │   NFS   │ │  M365   │       │  │                     │  │
+│  │  │  ACLs   │ │ exports │ │ perms   │       │  │                     │  │
+│  │  └─────────┘ └─────────┘ └─────────┘       │  │                     │  │
+│  └─────────────────────┬───────────────────────┘  └──────────┬──────────┘  │
+│                        │                                      │             │
+│                        └──────────────────┬───────────────────┘             │
 │                                    │                                        │
 │                                    ▼                                        │
 │                        ┌─────────────────────┐                             │
@@ -197,7 +234,9 @@ ANYWAY     LABELS              │
 
 ---
 
-## Adapters
+## Labeler Adapters
+
+**Labeler adapters** read metadata and existing classifications from external sources. They do NOT analyze file content—they normalize what external tools have already classified.
 
 All adapters implement the same interface and produce normalized output:
 
@@ -634,15 +673,17 @@ class MetadataNormalizer:
 
 ---
 
-## Scanner Adapter
+## Scanner (Content Classification)
 
-The scanner is an adapter like any other. It produces the same normalized output.
+The **Scanner** is the built-in classification engine for users without existing DLP capabilities (Macie, DLP, Purview). It analyzes file content directly using patterns, checksums, and ML.
+
+The Scanner is implemented as an adapter, producing the same `NormalizedInput` as Labeler adapters. This enables seamless combination: run the Labeler to pull existing classifications, then run the Scanner to verify with content analysis.
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           SCANNER ADAPTER                                   │
+│                    SCANNER (Content Classification)                         │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                    Content Input                                     │   │
