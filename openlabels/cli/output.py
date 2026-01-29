@@ -28,7 +28,7 @@ Usage:
 
 import sys
 from contextlib import contextmanager
-from typing import List, Optional, Tuple, Any, Generator
+from typing import List, Optional, Tuple, Any, Generator, Dict
 
 from rich.console import Console
 from rich.table import Table
@@ -313,3 +313,151 @@ def confirm_destructive(message: str, confirmation_word: str = "DELETE") -> bool
     console.print(f"[bold red]{message}[/bold red]")
     response = console.input(f"Type '{confirmation_word}' to confirm: ")
     return response == confirmation_word
+
+
+# Risk tier colors for Rich
+TIER_STYLES = {
+    "CRITICAL": "bold white on red",
+    "HIGH": "bold black on yellow",
+    "MEDIUM": "black on bright_yellow",
+    "LOW": "white on green",
+    "MINIMAL": "white on bright_black",
+    "UNKNOWN": "white on bright_black",
+}
+
+TIER_TEXT_COLORS = {
+    "CRITICAL": "red",
+    "HIGH": "yellow",
+    "MEDIUM": "orange3",
+    "LOW": "green",
+    "MINIMAL": "dim",
+    "UNKNOWN": "dim",
+}
+
+
+def risk_table(
+    results: List[Any],
+    title: Optional[str] = None,
+    max_rows: Optional[int] = None,
+    show_entities: bool = True,
+) -> None:
+    """
+    Print a risk results table with color-coded tiers.
+
+    Args:
+        results: List of scan result objects/dicts
+        title: Optional table title
+        max_rows: Maximum rows to display
+        show_entities: Whether to show entities column
+    """
+    t = Table(title=title, show_lines=False)
+
+    t.add_column("Path", style="cyan", no_wrap=True, max_width=50)
+    t.add_column("Score", justify="right", style="bold")
+    t.add_column("Tier", justify="center")
+    if show_entities:
+        t.add_column("Entities", style="dim")
+
+    display_results = results[:max_rows] if max_rows else results
+
+    for r in display_results:
+        # Handle both dict and object access
+        if isinstance(r, dict):
+            path = r.get("path", "")
+            score = r.get("score", 0)
+            tier = r.get("tier", "UNKNOWN")
+            entities = r.get("entities", {})
+        else:
+            path = getattr(r, "path", "")
+            score = getattr(r, "score", 0)
+            tier = getattr(r, "tier", "UNKNOWN")
+            entities = getattr(r, "entities", {})
+
+        # Format tier with style
+        tier_style = TIER_STYLES.get(str(tier).upper(), "")
+        tier_text = f"[{tier_style}] {tier} [/{tier_style}]" if tier_style else str(tier)
+
+        # Format score with color
+        score_color = TIER_TEXT_COLORS.get(str(tier).upper(), "")
+        score_text = f"[{score_color}]{score}[/{score_color}]" if score_color else str(score)
+
+        # Format entities
+        if show_entities:
+            if isinstance(entities, dict):
+                entities_str = " ".join(f"{k}({v})" for k, v in entities.items()) if entities else "-"
+            else:
+                entities_str = str(entities) if entities else "-"
+            t.add_row(path, score_text, tier_text, entities_str)
+        else:
+            t.add_row(path, score_text, tier_text)
+
+    console.print(t)
+
+    if max_rows and len(results) > max_rows:
+        dim(f"  ... and {len(results) - max_rows} more")
+
+
+def summary_panel(
+    title: str,
+    stats: Dict[str, Any],
+    style: str = "blue",
+) -> None:
+    """
+    Print a summary panel with statistics.
+
+    Args:
+        title: Panel title
+        stats: Dictionary of stat name -> value
+        style: Border style color
+    """
+    lines = []
+    for key, value in stats.items():
+        if isinstance(value, float):
+            lines.append(f"[bold]{key}:[/bold] {value:.1f}")
+        else:
+            lines.append(f"[bold]{key}:[/bold] {value}")
+
+    content = " | ".join(lines)
+    console.print(Panel(content, title=title, border_style=style))
+
+
+def tier_distribution(tier_counts: Dict[str, int]) -> None:
+    """
+    Print tier distribution as colored badges.
+
+    Args:
+        tier_counts: Dictionary of tier -> count
+    """
+    parts = []
+    for tier in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "MINIMAL"]:
+        count = tier_counts.get(tier, 0)
+        if count > 0:
+            style = TIER_STYLES.get(tier, "")
+            parts.append(f"[{style}] {tier}: {count} [/{style}]")
+
+    if parts:
+        console.print(" ".join(parts))
+
+
+def config_tree(config: Dict[str, Any], title: str = "Configuration") -> None:
+    """
+    Print configuration as a tree.
+
+    Args:
+        config: Configuration dictionary (can be nested)
+        title: Tree title
+    """
+    from rich.tree import Tree
+
+    tree = Tree(f"[bold]{title}[/bold]")
+
+    def add_items(parent, items: Dict[str, Any], prefix: str = ""):
+        for key, value in items.items():
+            if isinstance(value, dict):
+                branch = parent.add(f"[bold]{key}[/bold]")
+                add_items(branch, value)
+            else:
+                parent.add(f"[bold]{key}:[/bold] {value}")
+
+    add_items(tree, config)
+    console.print(tree)

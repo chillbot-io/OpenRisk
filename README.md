@@ -66,6 +66,21 @@ client.report("/data", format="html", output="report.html")
 - **Cloud adapters**: AWS Macie, Google Cloud DLP, Azure Purview (normalize to common format)
 - **Portable labels**: Labels travel with data via embedded metadata or virtual pointers
 
+## Terminology: Labeler vs Scanner
+
+OpenLabels provides two distinct modes of operation:
+
+| Mode | Purpose | When to Use |
+|------|---------|-------------|
+| **Labeler** | Reads metadata and existing labels from external sources (Macie, DLP, Purview, NTFS ACLs, etc.) | You already have a DLP tool classifying your data |
+| **Scanner** | Analyzes file content to detect sensitive data (patterns, checksums, ML) | You don't have DLP capabilities, or want defense-in-depth |
+
+**Labeler** consumes findings from your existing tools and normalizes them into a portable risk score. It does NOT scan file contents—it trusts the external classification.
+
+**Scanner** is a built-in classification engine that actually reads and analyzes file contents to detect sensitive entities. Use this if you don't have Macie/DLP/Purview, or as a second layer of verification.
+
+You can run both together for defense-in-depth: the Labeler pulls existing classifications while the Scanner verifies with content analysis.
+
 ## Risk Scoring
 
 Scores range 0-100 with five tiers:

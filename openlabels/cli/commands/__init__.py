@@ -12,6 +12,7 @@ Commands:
     heatmap     Display risk heatmap of directory structure
     shell       Interactive shell for exploring data risk
     health      Run system health checks
+    gui         Launch the graphical user interface
 """
 
 from .scan import add_scan_parser, cmd_scan
@@ -24,6 +25,10 @@ from .report import add_report_parser, cmd_report
 from .heatmap import add_heatmap_parser, cmd_heatmap
 from .shell import add_shell_parser, cmd_shell
 from .health import add_health_parser, cmd_health
+from .gui import add_gui_parser, cmd_gui
+from .inventory import add_inventory_parser, cmd_inventory
+from .config import add_config_parser, cmd_config
+from .export import add_export_parser, cmd_export
 
 __all__ = [
     # Parsers
@@ -37,6 +42,10 @@ __all__ = [
     "add_heatmap_parser",
     "add_shell_parser",
     "add_health_parser",
+    "add_gui_parser",
+    "add_inventory_parser",
+    "add_config_parser",
+    "add_export_parser",
     # Commands
     "cmd_scan",
     "cmd_find",
@@ -48,4 +57,8 @@ __all__ = [
     "cmd_heatmap",
     "cmd_shell",
     "cmd_health",
+    "cmd_gui",
+    "cmd_inventory",
+    "cmd_config",
+    "cmd_export",
 ]
