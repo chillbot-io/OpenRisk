@@ -19,17 +19,7 @@ from ..adapters.scanner.constants import FILE_READ_CHUNK_SIZE
 
 
 def generate_label_id() -> str:
-    """
-    Generate a new immutable label ID.
-
-    Format: ol_ + 12 random hex characters (48 bits)
-    Example: ol_7f3a9b2c4d5e
-
-    Properties:
-    - Unique within a tenant
-    - Should be globally unique (collision probability negligible)
-    - Never changes for the lifetime of the labeled file
-    """
+    """Generate immutable label ID: ol_ + 12 hex chars (e.g., ol_7f3a9b2c4d5e)."""
     return "ol_" + secrets.token_hex(6)
 
 
@@ -39,35 +29,13 @@ def is_valid_label_id(label_id: str) -> bool:
 
 
 def compute_content_hash(content: bytes) -> str:
-    """
-    Compute content hash for version tracking.
-
-    Algorithm: SHA-256 truncated to first 12 hex characters
-    Example: e3b0c44298fc
-
-    The content hash changes when file content changes, enabling
-    version tracking while the labelID remains constant.
-
-    Args:
-        content: File content as bytes
-
-    Returns:
-        12-character lowercase hex string
-    """
+    """Compute SHA-256 content hash truncated to 12 hex chars for version tracking."""
     digest = hashlib.sha256(content).hexdigest()
     return digest[:12].lower()
 
 
 def compute_content_hash_file(path: str) -> str:
-    """
-    Compute content hash from a file path.
-
-    Args:
-        path: Path to the file
-
-    Returns:
-        12-character lowercase hex string
-    """
+    """Compute SHA-256 content hash from file path, returns 12 hex chars."""
     sha256 = hashlib.sha256()
     with open(path, 'rb') as f:
         for chunk in iter(lambda: f.read(FILE_READ_CHUNK_SIZE), b''):
@@ -91,49 +59,16 @@ VALUE_NORMALIZERS = {
 
 
 def normalize_value(value: str, entity_type: str) -> str:
-    """
-    Normalize a value before hashing.
-
-    Normalization ensures the same logical value produces the same hash
-    regardless of formatting differences (spaces, hyphens, case).
-
-    Args:
-        value: The detected sensitive value
-        entity_type: The entity type (SSN, CREDIT_CARD, etc.)
-
-    Returns:
-        Normalized string
-    """
-    # Strip whitespace from all values
+    """Normalize value for consistent hashing (strips whitespace, applies type-specific rules)."""
     value = value.strip()
-
-    # Apply type-specific normalization if available
     normalizer = VALUE_NORMALIZERS.get(entity_type.upper())
     if normalizer:
         value = normalizer(value)
-
     return value
 
 
 def compute_value_hash(value: str, entity_type: str = '') -> str:
-    """
-    Compute value hash for cross-system correlation.
-
-    Algorithm: SHA-256 of normalized UTF-8 bytes, truncated to 6 hex chars
-    Example: 15e2b0
-
-    The value hash enables correlation of the same sensitive value
-    across different systems without exposing the actual value.
-
-    Note: This is NOT encryption. High-value targets can be brute-forced.
-
-    Args:
-        value: The detected sensitive value
-        entity_type: Optional entity type for normalization
-
-    Returns:
-        6-character lowercase hex string
-    """
+    """Compute 6-char SHA-256 hash of normalized value for cross-system correlation."""
     normalized = normalize_value(value, entity_type)
     value_bytes = normalized.encode('utf-8')
     digest = hashlib.sha256(value_bytes).hexdigest()
