@@ -385,9 +385,9 @@ class Orchestrator:
         )
 
 
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
+
+# --- Convenience Functions ---
+
 
 def create_orchestrator(
     enable_classification: bool = False,

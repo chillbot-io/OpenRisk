@@ -492,9 +492,9 @@ class FileCollector:
         return xattrs
 
 
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
+
+# --- Convenience Functions ---
+
 
 def collect_metadata(path: str, **kwargs) -> FileMetadata:
     """

@@ -9,10 +9,8 @@ enabling unified risk scoring and reporting.
 
 from typing import Dict
 
-# =============================================================================
-# VENDOR TYPE MAPPINGS
+# --- Vendor Type Mappings ---
 # All vendor-specific types map to canonical OpenLabels types
-# =============================================================================
 
 VENDOR_ALIASES: Dict[str, str] = {
     # ----- AWS Macie -----

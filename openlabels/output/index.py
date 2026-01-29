@@ -34,6 +34,54 @@ from ..core.exceptions import (
 
 logger = logging.getLogger(__name__)
 
+# Default limit for get_versions() to prevent unbounded memory usage
+DEFAULT_VERSION_LIMIT = 100
+
+
+def _build_filter_clause(
+    min_score: Optional[int] = None,
+    max_score: Optional[int] = None,
+    risk_tier: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    since: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+) -> tuple:
+    """
+    Build WHERE clause and params for label queries.
+
+    Returns:
+        Tuple of (where_clause_suffix, params_list)
+    """
+    clauses = []
+    params: List[Any] = []
+
+    if tenant_id is not None:
+        clauses.append("o.tenant_id = ?")
+        params.append(tenant_id)
+
+    if min_score is not None:
+        clauses.append("v.risk_score >= ?")
+        params.append(min_score)
+
+    if max_score is not None:
+        clauses.append("v.risk_score <= ?")
+        params.append(max_score)
+
+    if risk_tier:
+        clauses.append("v.risk_tier = ?")
+        params.append(risk_tier)
+
+    if entity_type:
+        clauses.append("v.entity_types LIKE ?")
+        params.append(f"%{entity_type}%")
+
+    if since:
+        clauses.append("v.scanned_at >= ?")
+        params.append(since)
+
+    where_suffix = " AND ".join(clauses) if clauses else "1=1"
+    return where_suffix, params
+
 
 def _validate_label_json(json_str: str) -> dict:
     """
@@ -599,26 +647,32 @@ class LabelIndex:
         """
         return self.get(pointer.label_id, pointer.content_hash)
 
-    def get_versions(self, label_id: str) -> List[Dict[str, Any]]:
+    def get_versions(
+        self,
+        label_id: str,
+        limit: int = DEFAULT_VERSION_LIMIT,
+    ) -> List[Dict[str, Any]]:
         """
-        Get all versions of a label.
+        Get versions of a label.
 
         Args:
             label_id: The label ID
+            limit: Maximum versions to return (default: 100)
 
         Returns:
-            List of version metadata dicts
+            List of version metadata dicts, most recent first
         """
         try:
             with self._get_connection() as conn:
-                rows = conn.execute("""
+                cursor = conn.execute("""
                     SELECT content_hash, scanned_at, source, risk_score, risk_tier, entity_types
                     FROM label_versions
                     WHERE label_id = ?
                     ORDER BY scanned_at DESC
-                """, (label_id,)).fetchall()
+                    LIMIT ?
+                """, (label_id, limit))
 
-                return [dict(row) for row in rows]
+                return [dict(row) for row in cursor]
 
         except sqlite3.Error as e:
             logger.error(f"Failed to get versions: {e}")
@@ -653,9 +707,15 @@ class LabelIndex:
         limit = max(1, min(limit, 10000))  # Cap at 10k per page
         offset = max(0, offset)
 
-        params: List[Any] = []
+        where_clause, params = _build_filter_clause(
+            min_score=min_score,
+            max_score=max_score,
+            risk_tier=risk_tier,
+            entity_type=entity_type,
+            since=since,
+        )
 
-        base_query = """
+        query = f"""
             SELECT
                 o.label_id,
                 o.file_path,
@@ -667,37 +727,16 @@ class LabelIndex:
                 v.entity_types
             FROM label_objects o
             JOIN label_versions v ON o.label_id = v.label_id
-            WHERE 1=1
+            WHERE {where_clause}
+            ORDER BY v.scanned_at DESC
+            LIMIT ? OFFSET ?
         """
-
-        if min_score is not None:
-            base_query += " AND v.risk_score >= ?"
-            params.append(min_score)
-
-        if max_score is not None:
-            base_query += " AND v.risk_score <= ?"
-            params.append(max_score)
-
-        if risk_tier:
-            base_query += " AND v.risk_tier = ?"
-            params.append(risk_tier)
-
-        if entity_type:
-            base_query += " AND v.entity_types LIKE ?"
-            params.append("%" + entity_type + "%")
-
-        if since:
-            base_query += " AND v.scanned_at >= ?"
-            params.append(since)
-
-        base_query += " ORDER BY v.scanned_at DESC LIMIT ? OFFSET ?"
-        params.append(limit)
-        params.append(offset)
+        params.extend([limit, offset])
 
         try:
             with self._get_connection() as conn:
-                rows = conn.execute(base_query, params).fetchall()
-                return [dict(row) for row in rows]
+                cursor = conn.execute(query, params)
+                return [dict(row) for row in cursor]
 
         except sqlite3.Error as e:
             logger.error(f"Query failed: {e}")
@@ -724,38 +763,24 @@ class LabelIndex:
         Returns:
             Total count of matching labels
         """
-        params: List[Any] = []
+        where_clause, params = _build_filter_clause(
+            min_score=min_score,
+            max_score=max_score,
+            risk_tier=risk_tier,
+            entity_type=entity_type,
+            since=since,
+        )
 
-        count_query = """
+        query = f"""
             SELECT COUNT(*)
             FROM label_objects o
             JOIN label_versions v ON o.label_id = v.label_id
-            WHERE 1=1
+            WHERE {where_clause}
         """
-
-        if min_score is not None:
-            count_query += " AND v.risk_score >= ?"
-            params.append(min_score)
-
-        if max_score is not None:
-            count_query += " AND v.risk_score <= ?"
-            params.append(max_score)
-
-        if risk_tier:
-            count_query += " AND v.risk_tier = ?"
-            params.append(risk_tier)
-
-        if entity_type:
-            count_query += " AND v.entity_types LIKE ?"
-            params.append("%" + entity_type + "%")
-
-        if since:
-            count_query += " AND v.scanned_at >= ?"
-            params.append(since)
 
         try:
             with self._get_connection() as conn:
-                result = conn.execute(count_query, params).fetchone()
+                result = conn.execute(query, params).fetchone()
                 return result[0] if result else 0
 
         except sqlite3.Error as e:
@@ -827,7 +852,7 @@ class LabelIndex:
         risk_tier: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Export labels to a JSONL file with pagination support.
+        Export labels to a JSONL file.
 
         Args:
             output_path: Path to output file
@@ -838,36 +863,26 @@ class LabelIndex:
 
         Returns:
             Dict with export stats: {"success": bool, "count": int, "error": str|None}
-
-        Security: See SECURITY.md for HIGH-004 (cursor iteration for memory bounds).
         """
         count = 0
         try:
             with self._get_connection() as conn:
-                # Build query with optional filters
-                params: List[Any] = [self.tenant_id]
-                query = """
+                where_clause, params = _build_filter_clause(
+                    min_score=min_score,
+                    max_score=max_score,
+                    risk_tier=risk_tier,
+                    tenant_id=self.tenant_id,
+                )
+
+                query = f"""
                     SELECT v.labels_json, v.risk_score, v.risk_tier, o.file_path
                     FROM label_versions v
                     JOIN label_objects o ON v.label_id = o.label_id
-                    WHERE o.tenant_id = ?
+                    WHERE {where_clause}
+                    ORDER BY v.scanned_at DESC
                 """
 
-                if min_score is not None:
-                    query += " AND v.risk_score >= ?"
-                    params.append(min_score)
-
-                if max_score is not None:
-                    query += " AND v.risk_score <= ?"
-                    params.append(max_score)
-
-                if risk_tier:
-                    query += " AND v.risk_tier = ?"
-                    params.append(risk_tier)
-
-                query += " ORDER BY v.scanned_at DESC"
-
-                cursor = conn.execute(query, params)  # HIGH-004: stream results
+                cursor = conn.execute(query, params)
 
                 with open(output_path, 'w') as f:
                     batch = []
@@ -879,12 +894,10 @@ class LabelIndex:
                         batch.append(json.dumps(record))
                         count += 1
 
-                        # Write in batches for better I/O performance
                         if len(batch) >= batch_size:
                             f.write('\n'.join(batch) + '\n')
                             batch.clear()
 
-                    # Write remaining records
                     if batch:
                         f.write('\n'.join(batch) + '\n')
 
@@ -915,28 +928,20 @@ class LabelIndex:
         """
         try:
             with self._get_connection() as conn:
-                # Build query with optional filters
-                params: List[Any] = [self.tenant_id]
-                query = """
+                where_clause, params = _build_filter_clause(
+                    min_score=min_score,
+                    max_score=max_score,
+                    risk_tier=risk_tier,
+                    tenant_id=self.tenant_id,
+                )
+
+                query = f"""
                     SELECT v.labels_json, v.risk_score, v.risk_tier, o.file_path
                     FROM label_versions v
                     JOIN label_objects o ON v.label_id = o.label_id
-                    WHERE o.tenant_id = ?
+                    WHERE {where_clause}
+                    ORDER BY v.scanned_at DESC
                 """
-
-                if min_score is not None:
-                    query += " AND v.risk_score >= ?"
-                    params.append(min_score)
-
-                if max_score is not None:
-                    query += " AND v.risk_score <= ?"
-                    params.append(max_score)
-
-                if risk_tier:
-                    query += " AND v.risk_tier = ?"
-                    params.append(risk_tier)
-
-                query += " ORDER BY v.scanned_at DESC"
 
                 cursor = conn.execute(query, params)
 
@@ -952,9 +957,9 @@ class LabelIndex:
             return
 
 
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
+
+# --- Convenience Functions ---
+
 
 import warnings
 

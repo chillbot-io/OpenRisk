@@ -716,7 +716,7 @@ class DetectorOrchestrator:
             all_spans.extend(other_spans)
 
         deduped = self._dedupe_spans(all_spans)
-        # Normalize confidence scores (Phase 3)
+        # Normalize confidence scores
         normalized = normalize_spans_confidence(deduped)
         return normalized, processed_text
 

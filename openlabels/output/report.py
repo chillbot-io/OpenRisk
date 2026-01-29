@@ -186,9 +186,7 @@ class ReportGenerator:
 
         return summary
 
-    # =========================================================================
-    # OUTPUT FORMATS
-    # =========================================================================
+    # --- Output Formats ---
 
     def to_json(self, indent: int = 2) -> str:
         """Generate JSON report."""
@@ -489,9 +487,7 @@ class ReportGenerator:
 
         return f'<div class="tier-bar">{"".join(segments)}</div>'
 
-    # =========================================================================
-    # HELPERS
-    # =========================================================================
+    # --- Helpers ---
 
     def _build_report_dict(self) -> Dict[str, Any]:
         """Build complete report as dictionary."""
@@ -576,9 +572,9 @@ class ReportGenerator:
             f.write(content)
 
 
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
+
+# --- Convenience Functions ---
+
 
 def results_to_json(
     results: List[Union[ScanResult, Dict]],

@@ -57,7 +57,7 @@ class DetectorFailureError(Exception):
 @dataclass
 class DetectionMetadata:
     """
-    Metadata about the detection process (Phase 3: Error Observability).
+    Metadata about the detection process.
 
     Tracks:
     - Which detectors succeeded

@@ -396,10 +396,6 @@ Examples:
     )
     dir_parser.set_defaults(func=cmd_detect_dir)
 
-    # ==========================================================================
-    # PARSE AND EXECUTE
-    # ==========================================================================
-
     args = parser.parse_args(argv)
 
     if args.version:

@@ -274,9 +274,9 @@ class ShutdownCoordinator:
                 cleanup()
 
 
-# =============================================================================
-# GLOBAL COORDINATOR
-# =============================================================================
+
+# --- Global Coordinator ---
+
 
 _coordinator: Optional[ShutdownCoordinator] = None
 _coordinator_lock = threading.Lock()

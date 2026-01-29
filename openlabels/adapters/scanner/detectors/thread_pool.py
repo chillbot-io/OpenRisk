@@ -101,7 +101,7 @@ def get_detection_queue_depth() -> int:
 
 def get_runaway_detection_count() -> int:
     """
-    Get count of runaway detections (Phase 3, Issue 3.4).
+    Get count of runaway detections.
 
     Runaway detections are threads that timed out but could not be
     cancelled. They continue running in the background, consuming
@@ -128,7 +128,7 @@ def _warn_deprecated_globals():
 
 def track_runaway_detection(detector_name: str) -> int:
     """
-    Track a runaway detection thread (Phase 3, Issue 3.4).
+    Track a runaway detection thread.
 
     Called when a detector times out and cannot be cancelled.
 

@@ -48,9 +48,7 @@ class BaseDetector(ABC):
         return True
 
 
-# =============================================================================
-# BasePatternDetector - Hook-based pattern detector
-# =============================================================================
+# --- BasePatternDetector (hook-based pattern detector) ---
 
 # Type aliases for pattern tuples
 # Standard: (pattern, entity_type, confidence, group_index)
@@ -205,9 +203,7 @@ class BasePatternDetector(BaseDetector):
         return spans
 
 
-# =============================================================================
-# PatternBasedDetector - Validator dict pattern detector (from main)
-# =============================================================================
+# --- PatternBasedDetector (validator dict pattern detector) ---
 
 # Type alias for compiled pattern tuple
 # (compiled_pattern, entity_type, confidence, capture_group)

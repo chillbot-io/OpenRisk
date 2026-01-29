@@ -1,6 +1,6 @@
 """Confidence score normalization for consistent detector outputs.
 
-Phase 3 Pipeline Cleanup: This module provides standardized confidence
+This module provides standardized confidence
 normalization across all detectors, ensuring all confidence values are
 properly calibrated to the 0-1 scale.
 

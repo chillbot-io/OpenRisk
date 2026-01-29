@@ -35,9 +35,7 @@ class RiskTier(Enum):
     CRITICAL = "CRITICAL"
 
 
-# =============================================================================
-# CALIBRATED PARAMETERS (January 2026)
-# =============================================================================
+# --- Calibrated Parameters (January 2026) ---
 
 # Scale factor: converts registry weights (1-10) to scoring weights
 # Calibrated so single SSN (weight=10) at PRIVATE = Medium tier (~40)
@@ -79,9 +77,9 @@ EXPOSURE_MULTIPLIERS = {
 }
 
 
-# =============================================================================
-# SCORING IMPLEMENTATION
-# =============================================================================
+
+# --- Scoring Implementation ---
+
 
 @dataclass
 class ScoringResult:
@@ -247,9 +245,9 @@ def score(
     )
 
 
-# =============================================================================
-# TESTING
-# =============================================================================
+
+# --- Testing ---
+
 
 if __name__ == '__main__':
     # Configure logging for test output

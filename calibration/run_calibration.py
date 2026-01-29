@@ -24,9 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from scorer import score_entities, RiskTier, ENTITY_WEIGHTS
 
 
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
+# --- Configuration ---
 
 DATA_DIR = Path('../data')
 OUTPUT_DIR = Path('.')
@@ -41,9 +39,7 @@ DATA_FILES = [
 ]
 
 
-# =============================================================================
-# ENTITY MAPPING
-# =============================================================================
+# --- Entity Mapping ---
 
 def load_entity_mapping() -> Dict[str, Optional[str]]:
     """Load the entity label -> OpenLabels type mapping."""
@@ -62,9 +58,7 @@ def map_entities(sample: dict, mapping: Dict[str, Optional[str]]) -> Dict[str, i
     return dict(counts)
 
 
-# =============================================================================
-# DATASET PROCESSING
-# =============================================================================
+# --- Dataset Processing ---
 
 @dataclass
 class ProcessedSample:
@@ -118,9 +112,7 @@ def process_dataset(mapping: Dict[str, Optional[str]]) -> List[ProcessedSample]:
     return results
 
 
-# =============================================================================
-# ANALYSIS
-# =============================================================================
+# --- Analysis ---
 
 def analyze_distribution(results: List[ProcessedSample]) -> dict:
     """Analyze score and tier distribution."""
@@ -196,9 +188,7 @@ def find_calibration_issues(results: List[ProcessedSample]) -> List[dict]:
     return issues[:50]  # Return first 50 issues
 
 
-# =============================================================================
-# SAMPLING FOR EXPERT LABELING
-# =============================================================================
+# --- Sampling for Expert Labeling ---
 
 def select_labeling_samples(results: List[ProcessedSample], n: int = 250) -> List[ProcessedSample]:
     """Select stratified sample for expert labeling."""
@@ -242,9 +232,7 @@ def export_for_labeling(samples: List[ProcessedSample], filepath: str):
             ])
 
 
-# =============================================================================
-# REPORTING
-# =============================================================================
+# --- Reporting ---
 
 def print_report(analysis: dict, issues: List[dict]):
     """Print calibration analysis report."""
@@ -289,10 +277,6 @@ def print_report(analysis: dict, issues: List[dict]):
             print(f"  [{issue['id']}] {issue['issue']}")
             print(f"    Entities: {issue['entities']}, Score: {issue['score']}, Tier: {issue['tier']}")
 
-
-# =============================================================================
-# MAIN
-# =============================================================================
 
 def main():
     print("OpenLabels Calibration Runner")

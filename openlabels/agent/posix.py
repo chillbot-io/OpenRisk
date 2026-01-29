@@ -388,9 +388,9 @@ def get_effective_permissions(path: str, uid: Optional[int] = None) -> dict:
     }
 
 
-# =============================================================================
-# CONVENIENCE FUNCTIONS
-# =============================================================================
+
+# --- Convenience Functions ---
+
 
 def mode_to_exposure(mode: int) -> ExposureLevel:
     """
