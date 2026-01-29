@@ -14,8 +14,10 @@ Concurrency Model:
     Uses ThreadPoolExecutor for parallel pattern matching across domains.
     Pattern matching is I/O-bound (regex on text) so GIL isn't a bottleneck.
 
-The orchestrator accepts optional Context for resource isolation.
-When Context is provided, uses context.detection_slot() instead of module globals.
+Resource Management:
+    All thread pool and backpressure state is managed via Context instances.
+    If no Context is provided, a default context is created automatically.
+    This ensures proper resource isolation and cleanup.
 
 For thread timeout limitations and mitigations, see thread_pool.py.
 """
@@ -37,17 +39,6 @@ from .metadata import (
     DetectionMetadata,
     DetectionQueueFullError,
     DetectorFailureError,
-)
-from .thread_pool import (
-    get_detection_queue_depth,
-    get_runaway_detection_count,
-    track_runaway_detection,
-    detection_slot_legacy,
-    get_executor_legacy,
-    # Backward compatibility aliases
-    _track_runaway_detection,
-    _detection_slot_legacy,
-    _get_executor_legacy,
 )
 
 # Detector imports
@@ -106,7 +97,7 @@ class DetectorOrchestrator:
     - Selective detector enablement via config
 
     Supports optional Context parameter for resource isolation.
-    When Context is provided, uses context resources instead of module globals.
+    All thread pool and backpressure state is managed via Context.
     """
 
     def __init__(
@@ -130,14 +121,18 @@ class DetectorOrchestrator:
             enable_financial: Enable financial identifier detection (CUSIP, crypto)
             enable_government: Enable government/classification detection
             context: Optional Context for resource isolation.
-                    When provided, uses context.detection_slot() and
-                    context.get_executor() instead of module-level globals.
+                    If not provided, a default context is created automatically.
+                    All thread pool and backpressure state is managed via the context.
         """
         self.config = config or Config()
         self.parallel = parallel
         self.enable_structured = enable_structured
 
-        self._context = context  # For resource isolation
+        # Create context if not provided - ensures proper resource management
+        if context is None:
+            from ....context import get_default_context
+            context = get_default_context(warn=False)
+        self._context = context
 
         # Get disabled detectors from config
         disabled = self.config.disabled_detectors if self.config else set()
@@ -212,47 +207,28 @@ class DetectorOrchestrator:
         return [d.name for d in self._available_detectors]
 
     def _get_executor(self) -> ThreadPoolExecutor:
-        """
-        Get the thread pool executor.
-
-        Uses Context.get_executor() if context is available,
-        otherwise falls back to deprecated module-level globals.
-        """
-        if self._context is not None:
-            return self._context.get_executor()
-        return get_executor_legacy()
+        """Get the thread pool executor from context."""
+        return self._context.get_executor()
 
     @contextmanager
     def _get_detection_slot(self):
         """
         Get a detection slot with backpressure control.
 
-        Uses Context.detection_slot() if context is available,
-        otherwise falls back to deprecated module-level globals.
-
         Yields:
             Current queue depth
         """
-        if self._context is not None:
-            with self._context.detection_slot() as depth:
-                yield depth
-        else:
-            with detection_slot_legacy() as depth:
-                yield depth
+        with self._context.detection_slot() as depth:
+            yield depth
 
     def _track_runaway(self, detector_name: str) -> int:
         """
         Track a runaway detection thread.
 
-        Uses Context.track_runaway_detection() if context is available,
-        otherwise falls back to deprecated module-level globals.
-
         Returns:
             Current runaway detection count
         """
-        if self._context is not None:
-            return self._context.track_runaway_detection(detector_name)
-        return track_runaway_detection(detector_name)
+        return self._context.track_runaway_detection(detector_name)
 
     MAX_MATCHES_PER_TERM = 100  # HIGH-009: prevent memory exhaustion
 
@@ -949,7 +925,4 @@ __all__ = [
     'DetectionMetadata',
     'DetectionQueueFullError',
     'DetectorFailureError',
-    # Thread pool utilities (from thread_pool.py)
-    'get_detection_queue_depth',
-    'get_runaway_detection_count',
 ]

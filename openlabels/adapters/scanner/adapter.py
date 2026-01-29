@@ -224,12 +224,17 @@ def _make_config(**kwargs) -> Config:
     return config
 
 
-def detect(text: str, **config_kwargs) -> DetectionResult:
+def detect(
+    text: str,
+    context: Optional["Context"] = None,
+    **config_kwargs,
+) -> DetectionResult:
     """
     Quick detection without explicitly creating a Detector.
 
     Args:
         text: Text to scan for PII/PHI.
+        context: Optional Context for resource isolation.
         **config_kwargs: Optional config overrides (min_confidence, etc.)
 
     Returns:
@@ -240,19 +245,29 @@ def detect(text: str, **config_kwargs) -> DetectionResult:
         >>> result = detect("Call me at 555-123-4567")
         >>> print(result.entity_counts)
         {'PHONE': 1}
+
+        >>> # With context for isolation:
+        >>> from openlabels import Context
+        >>> ctx = Context()
+        >>> result = detect("SSN: 123-45-6789", context=ctx)
     """
-    return Detector(config=_make_config(**config_kwargs)).detect(text)
+    return Detector(config=_make_config(**config_kwargs), context=context).detect(text)
 
 
-def detect_file(path: Union[str, Path], **config_kwargs) -> DetectionResult:
+def detect_file(
+    path: Union[str, Path],
+    context: Optional["Context"] = None,
+    **config_kwargs,
+) -> DetectionResult:
     """
     Quick file detection without explicitly creating a Detector.
 
     Args:
         path: Path to file to scan.
+        context: Optional Context for resource isolation.
         **config_kwargs: Optional config overrides.
 
     Returns:
         DetectionResult with detected spans.
     """
-    return Detector(config=_make_config(**config_kwargs)).detect_file(path)
+    return Detector(config=_make_config(**config_kwargs), context=context).detect_file(path)

@@ -192,36 +192,39 @@ class TestDetectionMetadata:
 
 
 class TestRunawayThreadTracking:
-    """Tests for Issue 3.4: Runaway thread monitoring."""
+    """Tests for Issue 3.4: Runaway thread monitoring via Context."""
 
     def test_runaway_detection_count_starts_at_zero(self):
-        """Runaway detection count starts at zero."""
-        from openlabels.adapters.scanner.detectors.orchestrator import get_runaway_detection_count
+        """Runaway detection count starts at zero for new Context."""
+        from openlabels.context import Context
 
-        # Note: This test may fail if previous tests left runaway counts.
-        # In production, the count would be reset on process restart.
-        count = get_runaway_detection_count()
-        assert isinstance(count, int)
-        assert count >= 0
+        # Fresh context should have zero runaway count
+        ctx = Context()
+        try:
+            count = ctx.get_runaway_detection_count()
+            assert isinstance(count, int)
+            assert count == 0
+        finally:
+            ctx.close()
 
     def test_track_runaway_increments_count(self):
-        """Tracking runaway detection increments count."""
-        from openlabels.adapters.scanner.detectors.thread_pool import (
-            track_runaway_detection as _track_runaway_detection,
-            get_runaway_detection_count,
-            _RUNAWAY_LOCK,
-        )
-        import openlabels.adapters.scanner.detectors.thread_pool as orch
+        """Tracking runaway detection increments count in Context."""
+        from openlabels.context import Context
 
-        # Get initial count
-        initial = get_runaway_detection_count()
+        ctx = Context()
+        try:
+            # Get initial count
+            initial = ctx.get_runaway_detection_count()
+            assert initial == 0
 
-        # Track a runaway
-        _track_runaway_detection("test_detector")
+            # Track a runaway
+            ctx.track_runaway_detection("test_detector")
 
-        # Count should increase
-        new_count = get_runaway_detection_count()
-        assert new_count == initial + 1
+            # Count should increase
+            new_count = ctx.get_runaway_detection_count()
+            assert new_count == initial + 1
+        finally:
+            ctx.close()
 
 
 class TestDetectionResultEnhancements:

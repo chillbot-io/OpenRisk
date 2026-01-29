@@ -16,7 +16,7 @@ Example:
 """
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from ..base import (
     Entity,
@@ -31,6 +31,9 @@ from .adapter import Detector
 from .config import Config
 from .types import Span
 
+if TYPE_CHECKING:
+    from ...context import Context
+
 
 class ScannerAdapter:
     """
@@ -44,6 +47,7 @@ class ScannerAdapter:
 
     Args:
         config: Optional scanner configuration
+        context: Optional Context for resource isolation
         **config_kwargs: Additional config overrides (min_confidence, etc.)
 
     Example:
@@ -52,11 +56,17 @@ class ScannerAdapter:
         ...     content = f.read()
         >>> result = adapter.extract(content, {"name": "document.pdf", "path": "/docs/document.pdf"})
         >>> print(result.entities)  # List of Entity objects
+
+        >>> # With context for isolation:
+        >>> from openlabels import Context
+        >>> ctx = Context()
+        >>> adapter = ScannerAdapter(context=ctx)
     """
 
     def __init__(
         self,
         config: Optional[Config] = None,
+        context: Optional["Context"] = None,
         **config_kwargs,
     ):
         """
@@ -64,6 +74,9 @@ class ScannerAdapter:
 
         Args:
             config: Optional Config object. If not provided, uses defaults.
+            context: Optional Context for resource isolation.
+                    When provided, the underlying detector uses context
+                    resources instead of module-level globals.
             **config_kwargs: Config overrides (min_confidence, enable_ml, etc.)
         """
         if config is None:
@@ -74,8 +87,9 @@ class ScannerAdapter:
 
             config.__post_init__()  # HIGH-006: re-validate after setattr
 
-        self._detector = Detector(config=config)
+        self._detector = Detector(config=config, context=context)
         self._config = config
+        self._context = context
 
     @property
     def detector(self) -> Detector:
@@ -244,17 +258,21 @@ class ScannerAdapter:
 # --- Convenience Functions ---
 
 
-def create_scanner_adapter(**kwargs) -> ScannerAdapter:
+def create_scanner_adapter(
+    context: Optional["Context"] = None,
+    **kwargs,
+) -> ScannerAdapter:
     """
     Create a ScannerAdapter with optional configuration.
 
     Args:
+        context: Optional Context for resource isolation.
         **kwargs: Config overrides (min_confidence, enable_ml, etc.)
 
     Returns:
         Configured ScannerAdapter instance
     """
-    return ScannerAdapter(**kwargs)
+    return ScannerAdapter(context=context, **kwargs)
 
 
 __all__ = [
