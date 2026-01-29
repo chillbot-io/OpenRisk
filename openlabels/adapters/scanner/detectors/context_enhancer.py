@@ -37,8 +37,7 @@ from .constants import (
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# DENY LISTS - Known false positives to reject immediately
+# --- Deny Lists (known false positives to reject) ---
 
 # Common words that get falsely detected as NAMEs
 NAME_DENY_LIST: Set[str] = {
@@ -140,8 +139,7 @@ LOCATION_SUFFIXES: Set[str] = {
 }
 
 
-# =============================================================================
-# HOTWORDS - Context words that adjust confidence
+# --- Hotwords (context words that adjust confidence) ---
 
 @dataclass
 class HotwordRule:
@@ -222,8 +220,7 @@ NAME_NEGATIVE_HOTWORDS: List[HotwordRule] = [
 ]
 
 
-# =============================================================================
-# PATTERN EXCLUSIONS - Structural patterns that indicate non-PII
+# --- Pattern Exclusions (structural patterns indicating non-PII) ---
 
 # Pattern: "X, Y and Z" or "X and Y" - likely a company/firm name
 COMPANY_PATTERN = re.compile(

@@ -291,8 +291,7 @@ def validate_aba_routing(aba: str) -> Tuple[bool, float]:
     return True, 0.99
 
 
-# =============================================================================
-# SHIPPING / TRACKING NUMBER VALIDATORS
+# --- Shipping / Tracking Number Validators ---
 
 def validate_ups_tracking(tracking: str) -> Tuple[bool, float]:
     """

@@ -12,9 +12,7 @@ Usage:
 """
 
 
-# =============================================================================
-# CONFIDENCE THRESHOLDS
-# =============================================================================
+# --- Confidence Thresholds ---
 # Previously hardcoded as 0.90 in multiple places
 
 DEFAULT_CONFIDENCE_THRESHOLD = 0.90

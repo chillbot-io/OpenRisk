@@ -79,8 +79,7 @@ add_pattern(
 )
 
 
-# =============================================================================
-# FULL ADDRESS PATTERNS (industry standard - single span)
+# --- Full Address Patterns ---
 
 # Full address: street, optional apt, city, state, zip
 # "5734 Mill Highway, Apt 773, Springfield, IL 62701"
@@ -121,8 +120,7 @@ add_pattern(
 )
 
 
-# =============================================================================
-# CITY, STATE PATTERNS
+# --- City, State Patterns ---
 
 # City, State ZIP: "Springfield, IL 62701"
 add_pattern(

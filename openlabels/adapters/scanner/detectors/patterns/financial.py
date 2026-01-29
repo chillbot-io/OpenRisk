@@ -41,16 +41,14 @@ add_pattern(r'(?:Invoice|Billing|Statement)\s*(?:Number|No|#)?\s*[:#]\s*([A-Z0-9
 add_pattern(r'(?:Claim)\s*(?:Number|No|#)?\s*[:#]\s*([A-Z0-9-]{8,20})', 'CLAIM_NUMBER', CONFIDENCE_MEDIUM_LOW, 1, re.I)
 
 
-# =============================================================================
-# CERTIFICATE/LICENSE NUMBERS (Safe Harbor #11)
+# --- Certificate/License Numbers (Safe Harbor #11) ---
 
 add_pattern(r'(?:Certificate|Certification)\s+(?:Number|No|#)[:\s]+([A-Z0-9-]{5,20})', 'CERTIFICATE_NUMBER', CONFIDENCE_LOW, 1, re.I)
 # NOTE: Require at least one digit to avoid matching "Radiologist"
 add_pattern(r'(?:Board\s+Certified?|Certified)\s+#?[:\s]*([A-Z]*\d[A-Z0-9]{4,14})', 'CERTIFICATE_NUMBER', CONFIDENCE_WEAK, 1, re.I)
 
 
-# =============================================================================
-# UNIQUE IDENTIFIERS (Safe Harbor #18)
+# --- Unique Identifiers (Safe Harbor #18) ---
 
 # Require explicit colon or # separator (not just whitespace) to avoid FPs
 add_pattern(r'(?:Case|File|Record)\s*(?:Number|No|#)?\s*[:#]\s*([A-Z0-9-]{5,20})', 'UNIQUE_ID', CONFIDENCE_MINIMAL, 1, re.I)
@@ -70,8 +68,7 @@ add_pattern(r'\b(\d{4}[\s-]\d{6}[\s-]\d{5})\b', 'CREDIT_CARD', CONFIDENCE_MEDIUM
 add_pattern(r'(?:ending\s+in|last\s+4|xxxx)[:\s]*(\d{4})\b', 'CREDIT_CARD_PARTIAL', CONFIDENCE_MARGINAL, 1, re.I)
 
 
-# =============================================================================
-# VEHICLE IDENTIFIERS (HIPAA Required)
+# --- Vehicle Identifiers (HIPAA Required) ---
 
 # === VIN (Vehicle Identification Number) ===
 # 17 characters: A-Z (except I, O, Q) and 0-9

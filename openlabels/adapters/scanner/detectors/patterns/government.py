@@ -39,8 +39,7 @@ add_pattern(r'(?:SSN|Social\s*Security)[:\s#]+(\d{3}[.\xb7]\d{2}[.\xb7]\d{4})', 
 add_pattern(r'(?:SSN|Social\s*Security)[:\s#]+(\d{3}\s*-\s*\d{2}\s*-\s*\d{4})', 'SSN', CONFIDENCE_MEDIUM_LOW, 1, re.I)  # spaces around hyphens
 
 
-# =============================================================================
-# DRIVER'S LICENSE
+# --- Driver's License ---
 
 # === Driver's License - Labeled ===
 add_pattern(r'(?:Driver\'?s?\s*License|DL|DLN)[:\s#]+([A-Z0-9]{5,15})', 'DRIVER_LICENSE', CONFIDENCE_MEDIUM_LOW, 1, re.I)
@@ -201,8 +200,7 @@ add_pattern(r'(?:Medical\s+License|License\s+#)[:\s]+([A-Z0-9]{5,15})', 'MEDICAL
 add_pattern(r'(?:EDIPI|DoD\s*ID|Military\s*ID)[:\s#]+(\d{10})\b', 'MILITARY_ID', CONFIDENCE_RELIABLE, 1, re.I)
 
 
-# =============================================================================
-# INTERNATIONAL IDENTIFIERS (with context/checksums)
+# --- International Identifiers ---
 
 # === UK NHS Number (10 digits with checksum) ===
 add_pattern(r'(?:NHS|National\s+Health)[:\s#]+(\d{3}\s?\d{3}\s?\d{4})', 'NHS_NUMBER', CONFIDENCE_RELIABLE, 1, re.I)

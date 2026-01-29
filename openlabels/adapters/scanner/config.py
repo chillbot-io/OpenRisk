@@ -13,8 +13,7 @@ from .constants import MAX_FILE_SIZE_BYTES, MAX_PAGE_WORKERS, MAX_TEXT_LENGTH
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# =============================================================================
+# --- Schema Version ---
 # Increment this when making breaking changes to Config fields.
 # The migration system will help upgrade old configs to new format.
 

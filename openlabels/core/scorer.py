@@ -35,8 +35,7 @@ class RiskTier(Enum):
     CRITICAL = "CRITICAL"
 
 
-# =============================================================================
-# CALIBRATED PARAMETERS (January 2026)
+# --- Calibrated Parameters (January 2026) ---
 
 # Scale factor: converts registry weights (1-10) to scoring weights
 # Calibrated so single SSN (weight=10) at PRIVATE = Medium tier (~40)
