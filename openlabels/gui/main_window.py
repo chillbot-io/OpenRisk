@@ -319,7 +319,11 @@ class MainWindow(QMainWindow):
             self._do_quarantine(file_path)
 
     def _do_quarantine(self, file_path: str):
-        """Actually quarantine a file."""
+        """Actually quarantine a file using secure file operations.
+
+        Uses Client.move() which provides TOCTOU protection and symlink validation
+        via the FileOps component (see SECURITY.md TOCTOU-001, HIGH-002).
+        """
         try:
             # Use default quarantine location
             quarantine_dir = Path.home() / ".openlabels" / "quarantine"
@@ -328,12 +332,19 @@ class MainWindow(QMainWindow):
             source = Path(file_path)
             dest = quarantine_dir / source.name
 
-            # Handle name collision
-            if dest.exists():
+            # Handle name collision by checking with lstat (TOCTOU-safe)
+            try:
+                dest.lstat()
+                # File exists, add timestamp
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 dest = quarantine_dir / f"{source.stem}_{timestamp}{source.suffix}"
+            except FileNotFoundError:
+                pass  # Destination doesn't exist, use original name
 
-            source.rename(dest)
+            # Use Client.move() for TOCTOU-safe file operation
+            result = client.move(file_path, str(dest))
+            if not result.success:
+                raise RuntimeError(result.error or "Move operation failed")
 
             # Remove from results
             self._scan_results = [r for r in self._scan_results if r.get("path") != file_path]

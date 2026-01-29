@@ -115,14 +115,18 @@ class Client:
                     If None, uses the default shared context.
             default_exposure: Default exposure level when not specified.
                              One of: PRIVATE, INTERNAL, ORG_WIDE, PUBLIC
+
+        Note:
+            If both context and a non-default exposure are specified,
+            the exposure from the passed context takes precedence.
         """
         if context is None:
-            context = get_default_context()
-
-        # Override default exposure if specified
-        if default_exposure.upper() != "PRIVATE":
-            # Create a new context with the custom exposure
-            context = Context(default_exposure=default_exposure.upper())
+            # No context provided - create one with the specified exposure
+            if default_exposure.upper() != "PRIVATE":
+                context = Context(default_exposure=default_exposure.upper())
+            else:
+                context = get_default_context()
+        # If context was provided, use it as-is (don't override its exposure)
 
         self._ctx = context
 
