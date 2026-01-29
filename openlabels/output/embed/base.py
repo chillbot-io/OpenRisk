@@ -34,7 +34,7 @@ class EmbeddedLabelWriter(ABC):
         Returns:
             True if successful, False otherwise
         """
-        pass
+        ...
 
     @abstractmethod
     def read(self, path: Path) -> Optional[LabelSet]:
@@ -47,12 +47,12 @@ class EmbeddedLabelWriter(ABC):
         Returns:
             LabelSet if found, None otherwise
         """
-        pass
+        ...
 
     @abstractmethod
     def supports(self, path: Path) -> bool:
         """Check if this writer supports the given file type."""
-        pass
+        ...
 
 
 __all__ = [

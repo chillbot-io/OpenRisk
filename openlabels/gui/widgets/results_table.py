@@ -58,7 +58,6 @@ class ResultsTableWidget(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup the UI."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)

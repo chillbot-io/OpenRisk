@@ -46,7 +46,6 @@ class S3CredentialsDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup the UI."""
         layout = QVBoxLayout(self)
 
         # Mode selection
@@ -241,7 +240,6 @@ class SettingsDialog(QDialog):
         self._load_settings()
 
     def _setup_ui(self):
-        """Setup the UI."""
         layout = QVBoxLayout(self)
 
         tabs = QTabWidget()
@@ -320,13 +318,29 @@ class SettingsDialog(QDialog):
             self._quarantine_path.setText(folder)
 
     def _load_settings(self):
-        """Load settings from config."""
-        # TODO: Load from actual config file
-        pass
+        """Load settings from QSettings."""
+        from PySide6.QtCore import QSettings
+        settings = QSettings("OpenLabels", "OpenLabels")
+
+        self._max_file_size.setValue(settings.value("scanning/max_file_size_mb", 100, int))
+        self._threads.setValue(settings.value("scanning/threads", 4, int))
+        self._include_archives.setChecked(settings.value("scanning/include_archives", False, bool))
+        self._excluded_patterns.setText(settings.value("scanning/excluded_patterns", ".git,node_modules,__pycache__"))
+        self._quarantine_path.setText(settings.value("storage/quarantine_path", str(Path.home() / ".openlabels" / "quarantine")))
+        self._show_hidden.setChecked(settings.value("display/show_hidden", False, bool))
 
     def _save_settings(self):
-        """Save settings to config."""
-        # TODO: Save to actual config file
+        """Save settings to QSettings."""
+        from PySide6.QtCore import QSettings
+        settings = QSettings("OpenLabels", "OpenLabels")
+
+        settings.setValue("scanning/max_file_size_mb", self._max_file_size.value())
+        settings.setValue("scanning/threads", self._threads.value())
+        settings.setValue("scanning/include_archives", self._include_archives.isChecked())
+        settings.setValue("scanning/excluded_patterns", self._excluded_patterns.text())
+        settings.setValue("storage/quarantine_path", self._quarantine_path.text())
+        settings.setValue("display/show_hidden", self._show_hidden.isChecked())
+
         self.accept()
 
     def _restore_defaults(self):
@@ -350,7 +364,6 @@ class LabelDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup the UI."""
         layout = QVBoxLayout(self)
 
         # File path
@@ -414,7 +427,6 @@ class QuarantineConfirmDialog(QDialog):
         self._setup_ui(file_path, score, tier)
 
     def _setup_ui(self, file_path: str, score: int, tier: str):
-        """Setup the UI."""
         layout = QVBoxLayout(self)
 
         # Warning message

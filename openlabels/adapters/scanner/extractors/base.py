@@ -55,9 +55,9 @@ class BaseExtractor(ABC):
     @abstractmethod
     def can_handle(self, content_type: str, extension: str) -> bool:
         """Check if this extractor handles the file type."""
-        pass
+        ...
 
     @abstractmethod
     def extract(self, content: bytes, filename: str) -> ExtractionResult:
         """Extract text from file content."""
-        pass
+        ...
