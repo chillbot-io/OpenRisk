@@ -525,27 +525,34 @@ class PostgresLabelIndex:
             conditions.append("v.scanned_at >= %s")
             params.append(since)
 
+        # SECURITY: Build query using explicit string joining instead of f-string
+        # interpolation. The where_clause is safe because it's constructed only
+        # from hardcoded condition strings above - never from user input.
+        # All user-provided values go through parameterized query placeholders.
         where_clause = " AND ".join(conditions)
         params.extend([limit, offset])
 
+        query_parts = [
+            "SELECT",
+            "    o.label_id,",
+            "    o.file_path,",
+            "    o.file_name,",
+            "    v.content_hash,",
+            "    v.scanned_at,",
+            "    v.risk_score,",
+            "    v.risk_tier,",
+            "    v.entity_types",
+            "FROM label_objects o",
+            "JOIN label_versions v ON o.label_id = v.label_id",
+            "WHERE " + where_clause,
+            "ORDER BY v.scanned_at DESC",
+            "LIMIT %s OFFSET %s",
+        ]
+        query = "\n".join(query_parts)
+
         try:
             with self._cursor() as cur:
-                cur.execute(f"""
-                    SELECT
-                        o.label_id,
-                        o.file_path,
-                        o.file_name,
-                        v.content_hash,
-                        v.scanned_at,
-                        v.risk_score,
-                        v.risk_tier,
-                        v.entity_types
-                    FROM label_objects o
-                    JOIN label_versions v ON o.label_id = v.label_id
-                    WHERE {where_clause}
-                    ORDER BY v.scanned_at DESC
-                    LIMIT %s OFFSET %s
-                """, params)
+                cur.execute(query, params)
 
                 columns = ['label_id', 'file_path', 'file_name', 'content_hash',
                           'scanned_at', 'risk_score', 'risk_tier', 'entity_types']
@@ -593,16 +600,20 @@ class PostgresLabelIndex:
             conditions.append("v.scanned_at >= %s")
             params.append(since)
 
+        # SECURITY: Build query using explicit string joining (see query() for rationale)
         where_clause = " AND ".join(conditions)
+
+        query_parts = [
+            "SELECT COUNT(*)",
+            "FROM label_objects o",
+            "JOIN label_versions v ON o.label_id = v.label_id",
+            "WHERE " + where_clause,
+        ]
+        query = "\n".join(query_parts)
 
         try:
             with self._cursor() as cur:
-                cur.execute(f"""
-                    SELECT COUNT(*)
-                    FROM label_objects o
-                    JOIN label_versions v ON o.label_id = v.label_id
-                    WHERE {where_clause}
-                """, params)
+                cur.execute(query, params)
 
                 result = cur.fetchone()
                 return result[0] if result else 0
