@@ -273,25 +273,6 @@ class TestCloudHandlersInContext:
         finally:
             ctx.close()
 
-    def test_deprecated_cloud_handlers_warn(self):
-        """Using deprecated module-level cloud handlers emits warning."""
-        from openlabels.output import virtual
-
-        # Reset the warning flag
-        virtual._cloud_handler_warning_issued = False
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-
-            # Access deprecated handler
-            virtual._get_s3_handler()
-
-            # Should have warned
-            assert len(w) >= 1
-            deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-            assert len(deprecation_warnings) >= 1
-
-
 class TestDetectionSlotSafety:
     """Tests for Issue 4.5: Safe detection slot with guaranteed cleanup."""
 

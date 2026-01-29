@@ -32,7 +32,7 @@ class TestSizeLimits:
         from openlabels.adapters.scanner.config import Config
 
         config = Config()
-        assert config.max_text_size == 10 * 1024 * 1024  # 10 MB default
+        assert config.max_text_size == 10_000_000  # 10 million chars (10 * MAX_TEXT_LENGTH)
 
     def test_file_size_limit_config_default(self):
         """Verify default max_file_size is set."""

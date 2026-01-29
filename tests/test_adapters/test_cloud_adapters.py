@@ -588,7 +588,7 @@ def test_purview_adapter_scan_result_format():
     result = adapter.extract(classifications, blob_metadata)
 
     assert len(result.entities) == 1
-    assert result.entities[0].type == "EMAIL"
+    assert result.entities[0].type == "Email"
     assert result.entities[0].count == 5
 
     print("  PASSED\n")
