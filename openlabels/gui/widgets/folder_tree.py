@@ -13,8 +13,9 @@ from PySide6.QtWidgets import (
     QWidget,
     QLabel,
     QHeaderView,
+    QFileSystemModel,
 )
-from PySide6.QtGui import QFileSystemModel, QStandardItemModel, QStandardItem, QIcon
+from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon
 from PySide6.QtCore import Signal, Qt, QDir
 
 
