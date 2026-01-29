@@ -129,7 +129,7 @@ class ScanWorker(QThread):
                 "error": None,
             }
 
-        except Exception as e:
+        except (OSError, IOError, ValueError, RuntimeError) as e:
             return {
                 "path": str(file_path),
                 "size": 0,
@@ -248,7 +248,7 @@ class ScanWorker(QThread):
                 # Clean up temp file
                 tmp_path.unlink(missing_ok=True)
 
-        except Exception as e:
+        except (OSError, IOError, ValueError, RuntimeError) as e:
             return {
                 "path": f"s3://{bucket}/{key}",
                 "size": size,
