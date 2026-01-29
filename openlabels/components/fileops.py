@@ -487,7 +487,12 @@ class FileOps:
                 deleted_count=0,
                 error_count=1,
                 deleted_files=[],
-                errors=[{"path": str(path), "error": "File not found"}],
+                errors=[{
+                    "path": str(path),
+                    "error_type": FileErrorType.NOT_FOUND.value,
+                    "message": "File not found",
+                    "retryable": False,
+                }],
             )
         except OSError as e:
             file_error = FileError.from_exception(e, str(path))
