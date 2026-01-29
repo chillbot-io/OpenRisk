@@ -1,6 +1,6 @@
 """Address patterns: street addresses, city/state, ZIP codes, GPS coordinates."""
 
-import re
+import regex  # Use regex module for ReDoS timeout protection (CVE-READY-003)
 from typing import List, Tuple
 from ..constants import (
     CONFIDENCE_HIGH,
@@ -16,7 +16,7 @@ from ..constants import (
 
 from ..pattern_registry import create_pattern_adder
 
-ADDRESS_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
+ADDRESS_PATTERNS: List[Tuple[regex.Pattern, str, float, int]] = []
 add_pattern = create_pattern_adder(ADDRESS_PATTERNS)
 
 
@@ -63,7 +63,7 @@ add_pattern(
     rf'(\d+[A-Za-z]?\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:{_STREET_SUFFIXES})\.?'
     rf'\s*[\n\r]+\s*'  # Newline with leading whitespace on next line
     rf'{_CITY_NAME}\s*,\s*{_STATE_ABBREV}\s+\d{{5}}(?:-\d{{4}})?)',
-    'ADDRESS', CONFIDENCE_NEAR_CERTAIN, 1, re.I
+    'ADDRESS', CONFIDENCE_NEAR_CERTAIN, 1, regex.I
 )
 
 # === Multi-line Address WITHOUT label (common in forms/documents) ===
@@ -75,7 +75,7 @@ add_pattern(
     rf'(\d+[A-Za-z]?\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:{_STREET_SUFFIXES})\.?'
     rf'\s*[\n\r]+\s*'  # Newline with leading whitespace on next line
     rf'{_CITY_NAME}\s*,\s*{_STATE_ABBREV}\s+\d{{5}}(?:-\d{{4}})?)',
-    'ADDRESS', CONFIDENCE_HIGH_MEDIUM, 1, re.I
+    'ADDRESS', CONFIDENCE_HIGH_MEDIUM, 1, regex.I
 )
 
 
@@ -89,7 +89,7 @@ add_pattern(
     rf'\s*,\s*{_CITY_NAME}'
     rf'\s*,\s*{_STATE_ABBREV}'
     rf'\s+\d{{5}}(?:-\d{{4}})?)',
-    'ADDRESS', CONFIDENCE_HIGH, 1, re.I
+    'ADDRESS', CONFIDENCE_HIGH, 1, regex.I
 )
 
 # Full address without apt: "123 Main St, Springfield, IL 62701"
@@ -98,7 +98,7 @@ add_pattern(
     rf'\s*,\s*{_CITY_NAME}'
     rf'\s*,\s*{_STATE_ABBREV}'
     rf'\s+\d{{5}}(?:-\d{{4}})?)',
-    'ADDRESS', CONFIDENCE_HIGH_MEDIUM, 1, re.I
+    'ADDRESS', CONFIDENCE_HIGH_MEDIUM, 1, regex.I
 )
 
 # Full address without comma before state: "123 Main St, Boston MA 02101"
@@ -107,7 +107,7 @@ add_pattern(
     rf'\s*,\s*{_CITY_NAME}'
     rf'\s+{_STATE_ABBREV}'  # No comma, just space before state
     rf'\s+\d{{5}}(?:-\d{{4}})?)',
-    'ADDRESS', 0.93, 1, re.I
+    'ADDRESS', 0.93, 1, regex.I
 )
 
 # Address without ZIP: "123 Main St, Springfield, IL"
@@ -116,7 +116,7 @@ add_pattern(
     rf'(?:\s*,?\s*(?:Apt|Suite|Ste|Unit|#|Bldg|Building|Floor|Fl)\.?\s*#?\s*[A-Za-z0-9]+)?'
     rf'\s*,\s*{_CITY_NAME}'
     rf'\s*,\s*{_STATE_ABBREV})\b',
-    'ADDRESS', CONFIDENCE_RELIABLE, 1, re.I
+    'ADDRESS', CONFIDENCE_RELIABLE, 1, regex.I
 )
 
 
@@ -143,7 +143,7 @@ add_pattern(
 add_pattern(
     rf'\d+[A-Za-z]?\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:{_STREET_SUFFIXES})\.?\b'
     rf'(?:\s*,?\s*(?:Apt|Suite|Ste|Unit|#|Bldg|Building|Floor|Fl)\.?\s*#?\s*[A-Za-z0-9]+)?',
-    'ADDRESS', CONFIDENCE_MARGINAL, 0, re.I
+    'ADDRESS', CONFIDENCE_MARGINAL, 0, regex.I
 )
 
 # === Directional Street Addresses (no suffix required) ===
@@ -159,7 +159,7 @@ add_pattern(
 # Matches: single digit + space + normal street address
 add_pattern(
     rf'\b\d\s+(\d+[A-Za-z]?\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:{_STREET_SUFFIXES}))\.?\b',
-    'ADDRESS', CONFIDENCE_MEDIUM, 1, re.I
+    'ADDRESS', CONFIDENCE_MEDIUM, 1, regex.I
 )
 
 # All-caps street address (common in OCR from IDs): "123 MAIN STREET"
@@ -169,10 +169,10 @@ add_pattern(
 )
 
 # PO Box
-add_pattern(r'P\.?O\.?\s*Box\s+\d+', 'ADDRESS', CONFIDENCE_MEDIUM_LOW, 0, re.I)
+add_pattern(r'P\.?O\.?\s*Box\s+\d+', 'ADDRESS', CONFIDENCE_MEDIUM_LOW, 0, regex.I)
 
 # Context-based location: "lives in Springfield", "from Chicago"
-# NOTE: No re.I flag - _CITY_NAME requires capitalized words to avoid matching
+# NOTE: No regex.I flag - _CITY_NAME requires capitalized words to avoid matching
 # everything after "from" (e.g., "from Los Angeles treated" would match too much)
 add_pattern(rf'(?:[Ll]ives?\s+in|[Ff]rom|[Rr]esident\s+of|[Ll]ocated\s+in|[Bb]ased\s+in|[Bb]orn\s+in)\s+({_CITY_NAME})', 'ADDRESS', CONFIDENCE_WEAK, 1)
 
@@ -182,7 +182,7 @@ add_pattern(rf'(?:[Ll]ives?\s+in|[Ff]rom|[Rr]esident\s+of|[Ll]ocated\s+in|[Bb]as
 
 
 # === ZIP Code (standalone, labeled only) ===
-add_pattern(r'(?:ZIP|Postal|Zip\s*Code)[:\s]+(\d{5}(?:-\d{4})?)', 'ZIP', CONFIDENCE_HIGH, 1, re.I)
+add_pattern(r'(?:ZIP|Postal|Zip\s*Code)[:\s]+(\d{5}(?:-\d{4})?)', 'ZIP', CONFIDENCE_HIGH, 1, regex.I)
 
 # === HIPAA Safe Harbor Restricted ZIP Prefixes ===
 # These 17 prefixes have populations < 20,000 and MUST be detected even without labels
@@ -236,8 +236,8 @@ add_pattern(r'\b(893\d{2}(?:-\d{4})?)\b', 'ZIP', CONFIDENCE_MEDIUM_LOW, 1)
 
 # Decimal degrees: 41.8781, -87.6298 or 41.8781 N, 87.6298 W
 add_pattern(r'(-?\d{1,3}\.\d{4,8})[,\s]+(-?\d{1,3}\.\d{4,8})', 'GPS_COORDINATES', CONFIDENCE_MEDIUM_LOW, 0)
-add_pattern(r'(\d{1,3}\.\d{4,8})\u00b0?\s*[NS][,\s]+(\d{1,3}\.\d{4,8})\u00b0?\s*[EW]', 'GPS_COORDINATES', CONFIDENCE_RELIABLE, 0, re.I)
+add_pattern(r'(\d{1,3}\.\d{4,8})\u00b0?\s*[NS][,\s]+(\d{1,3}\.\d{4,8})\u00b0?\s*[EW]', 'GPS_COORDINATES', CONFIDENCE_RELIABLE, 0, regex.I)
 # DMS format: 41 52'43"N 87 37'47"W
 add_pattern(r'(\d{1,3}\u00b0\d{1,2}[\'\u2032]\d{1,2}[\"\u2033]?[NS])\s*(\d{1,3}\u00b0\d{1,2}[\'\u2032]\d{1,2}[\"\u2033]?[EW])', 'GPS_COORDINATES', CONFIDENCE_MEDIUM, 0)
 # With label
-add_pattern(r'(?:GPS|Coordinates?|Location|Lat(?:itude)?[/,]\s*Lon(?:gitude)?)[:\s]+(.{10,40})', 'GPS_COORDINATES', CONFIDENCE_LOW, 1, re.I)
+add_pattern(r'(?:GPS|Coordinates?|Location|Lat(?:itude)?[/,]\s*Lon(?:gitude)?)[:\s]+(.{10,40})', 'GPS_COORDINATES', CONFIDENCE_LOW, 1, regex.I)

@@ -5,6 +5,7 @@ Performs file scanning in a separate thread to keep the UI responsive.
 """
 
 import stat as stat_module
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -31,11 +32,14 @@ class ScanWorker(QThread):
         self._target_type = target_type
         self._path = path
         self._s3_credentials = s3_credentials
-        self._stop_requested = False
+        # HIGH-001: Use threading.Event for thread-safe stop signaling
+        self._stop_event = threading.Event()
+        # Reuse single Client instance across scan operations
+        self._client = None
 
     def stop(self):
-        """Request the worker to stop."""
-        self._stop_requested = True
+        """Request the worker to stop (thread-safe)."""
+        self._stop_event.set()
 
     def run(self):
         """Main worker thread."""
@@ -47,9 +51,15 @@ class ScanWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
+    def _get_client(self):
+        """Get or create the shared Client instance."""
+        if self._client is None:
+            from openlabels import Client
+            self._client = Client()
+        return self._client
+
     def _scan_local(self):
         """Scan local/SMB/NFS path."""
-        from openlabels import Client
         from openlabels.adapters.scanner import detect_file as scanner_detect
 
         path = Path(self._path)
@@ -58,7 +68,7 @@ class ScanWorker(QThread):
             self.error.emit(f"Path not found: {path}")
             return
 
-        client = Client()
+        client = self._get_client()
 
         # Collect files first
         files = self._collect_files(path)
@@ -67,7 +77,7 @@ class ScanWorker(QThread):
         self.progress.emit(0, total)
 
         for i, file_path in enumerate(files):
-            if self._stop_requested:
+            if self._stop_event.is_set():
                 break
 
             result = self._scan_file(file_path, client)
@@ -85,7 +95,7 @@ class ScanWorker(QThread):
 
         try:
             for item in path.rglob("*"):
-                if self._stop_requested:
+                if self._stop_event.is_set():
                     break
                 try:
                     st = item.lstat()
@@ -103,7 +113,7 @@ class ScanWorker(QThread):
 
     def _scan_file(self, file_path: Path, client) -> Dict[str, Any]:
         """Scan a single file."""
-        from openlabels.adapters.scanner import detect_file as scanner_detect
+        from openlabels.adapters.scanner import detect_file as scanner_detect  # noqa: F811
 
         try:
             # Get file size
@@ -148,8 +158,6 @@ class ScanWorker(QThread):
             self.error.emit("boto3 is required for S3 scanning. Install with: pip install boto3")
             return
 
-        from openlabels import Client
-
         # Parse S3 path
         if self._path.startswith("s3://"):
             path_parts = self._path[5:].split("/", 1)
@@ -178,7 +186,10 @@ class ScanWorker(QThread):
             self.error.emit(f"Failed to connect to AWS: {e}")
             return
 
-        client = Client()
+        client = self._get_client()
+
+        # Check bucket ACL for exposure level
+        bucket_exposure = self._get_bucket_exposure(s3, bucket)
 
         # List objects
         try:
@@ -188,7 +199,7 @@ class ScanWorker(QThread):
             # First pass to count
             objects = []
             for page in pages:
-                if self._stop_requested:
+                if self._stop_event.is_set():
                     return
                 for obj in page.get("Contents", []):
                     if not obj["Key"].endswith("/"):  # Skip "folders"
@@ -199,10 +210,10 @@ class ScanWorker(QThread):
 
             # Process each object
             for i, obj in enumerate(objects):
-                if self._stop_requested:
+                if self._stop_event.is_set():
                     break
 
-                result = self._scan_s3_object(s3, bucket, obj, client)
+                result = self._scan_s3_object(s3, bucket, obj, client, bucket_exposure)
                 self.result.emit(result)
                 self.progress.emit(i + 1, total)
 
@@ -212,7 +223,54 @@ class ScanWorker(QThread):
 
         self.finished.emit()
 
-    def _scan_s3_object(self, s3_client, bucket: str, obj: Dict, client) -> Dict[str, Any]:
+    def _get_bucket_exposure(self, s3_client, bucket: str) -> str:
+        """Determine exposure level based on S3 bucket ACL and public access settings.
+
+        Returns:
+            Exposure level: PUBLIC, ORG_WIDE, INTERNAL, or PRIVATE
+        """
+        try:
+            # Check bucket public access block settings
+            try:
+                public_access = s3_client.get_public_access_block(Bucket=bucket)
+                config = public_access.get("PublicAccessBlockConfiguration", {})
+
+                # If all public access is blocked, bucket is PRIVATE
+                if all([
+                    config.get("BlockPublicAcls", False),
+                    config.get("IgnorePublicAcls", False),
+                    config.get("BlockPublicPolicy", False),
+                    config.get("RestrictPublicBuckets", False),
+                ]):
+                    return "PRIVATE"
+            except s3_client.exceptions.NoSuchPublicAccessBlockConfiguration:
+                pass  # No public access block = need to check ACL
+            except Exception:
+                pass  # Error checking = assume private for safety
+
+            # Check bucket ACL for public grants
+            try:
+                acl = s3_client.get_bucket_acl(Bucket=bucket)
+                for grant in acl.get("Grants", []):
+                    grantee = grant.get("Grantee", {})
+                    # Check for public access grants
+                    if grantee.get("URI") in [
+                        "http://acs.amazonaws.com/groups/global/AllUsers",
+                        "http://acs.amazonaws.com/groups/global/AuthenticatedUsers",
+                    ]:
+                        return "PUBLIC"
+            except Exception:
+                pass  # Error = assume private
+
+            # Default to PRIVATE if we can't determine
+            return "PRIVATE"
+
+        except Exception:
+            return "PRIVATE"
+
+    def _scan_s3_object(
+        self, s3_client, bucket: str, obj: Dict, client, exposure: str = "PRIVATE"
+    ) -> Dict[str, Any]:
         """Scan a single S3 object."""
         import tempfile
         from pathlib import Path
@@ -241,7 +299,7 @@ class ScanWorker(QThread):
                     "score": score_result.score,
                     "tier": score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier),
                     "entities": entities,
-                    "exposure": "PRIVATE",  # TODO: Check bucket ACL
+                    "exposure": exposure,
                     "error": None,
                 }
             finally:
@@ -255,6 +313,6 @@ class ScanWorker(QThread):
                 "score": 0,
                 "tier": "UNKNOWN",
                 "entities": {},
-                "exposure": "PRIVATE",
+                "exposure": exposure,
                 "error": str(e),
             }

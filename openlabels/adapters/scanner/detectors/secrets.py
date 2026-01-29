@@ -3,7 +3,7 @@
 import base64
 import binascii
 import logging
-import re
+import regex  # Use regex module for ReDoS timeout protection (CVE-READY-003)
 from typing import List, Tuple
 
 from ..types import Span, Tier
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 from .pattern_registry import create_pattern_adder
 
-SECRETS_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
+SECRETS_PATTERNS: List[Tuple[regex.Pattern, str, float, int]] = []
 _add = create_pattern_adder(SECRETS_PATTERNS)
 
 
@@ -32,10 +32,10 @@ _AWS_KEY_PREFIXES = r'(?:AKIA|ABIA|ACCA|AGPA|AIDA|AIPA|ANPA|ANVA|APKA|AROA|ASCA|
 _add(rf'\b({_AWS_KEY_PREFIXES}[A-Z0-9]{{16}})\b', 'AWS_ACCESS_KEY', CONFIDENCE_PERFECT, 1)
 
 # AWS Secret Access Key: 40 characters, base64-ish, usually after aws_secret or similar context
-_add(r'(?:aws_secret_access_key|aws_secret|secret_key|secretaccesskey)["\s:=]+([A-Za-z0-9+/]{40})', 'AWS_SECRET_KEY', CONFIDENCE_HIGH, 1, re.I)
+_add(r'(?:aws_secret_access_key|aws_secret|secret_key|secretaccesskey)["\s:=]+([A-Za-z0-9+/]{40})', 'AWS_SECRET_KEY', CONFIDENCE_HIGH, 1, regex.I)
 
 # AWS Session Token (temporary credentials)
-_add(r'(?:aws_session_token|session_token)["\s:=]+([A-Za-z0-9+/=]{100,})', 'AWS_SESSION_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:aws_session_token|session_token)["\s:=]+([A-Za-z0-9+/=]{100,})', 'AWS_SESSION_TOKEN', CONFIDENCE_RELIABLE, 1, regex.I)
 
 
 # --- GITHUB ---
@@ -107,10 +107,10 @@ _add(r'\b(AIza[a-zA-Z0-9\-_]{35})\b', 'GOOGLE_API_KEY', CONFIDENCE_VERY_HIGH, 1)
 _add(r'\b(\d{12}-[a-z0-9]{32}\.apps\.googleusercontent\.com)\b', 'GOOGLE_OAUTH_ID', CONFIDENCE_HIGH, 1)
 
 # Google OAuth Client Secret (contextual)
-_add(r'(?:client_secret|google_secret)["\s:=]+([a-zA-Z0-9\-_]{24})', 'GOOGLE_OAUTH_SECRET', CONFIDENCE_MEDIUM, 1, re.I)
+_add(r'(?:client_secret|google_secret)["\s:=]+([a-zA-Z0-9\-_]{24})', 'GOOGLE_OAUTH_SECRET', CONFIDENCE_MEDIUM, 1, regex.I)
 
 # Firebase API Key (same format as Google)
-_add(r'(?:firebase|fcm)["\s:=_-]*(?:api[_-]?key|server[_-]?key)["\s:=]+([a-zA-Z0-9\-_]{39})', 'FIREBASE_KEY', CONFIDENCE_HIGH, 1, re.I)
+_add(r'(?:firebase|fcm)["\s:=_-]*(?:api[_-]?key|server[_-]?key)["\s:=]+([a-zA-Z0-9\-_]{39})', 'FIREBASE_KEY', CONFIDENCE_HIGH, 1, regex.I)
 
 
 # --- TWILIO ---
@@ -121,7 +121,7 @@ _add(r'\b(AC[a-f0-9]{32})\b', 'TWILIO_ACCOUNT_SID', CONFIDENCE_VERY_HIGH, 1)
 _add(r'\b(SK[a-f0-9]{32})\b', 'TWILIO_KEY', CONFIDENCE_VERY_HIGH, 1)
 
 # Twilio Auth Token (contextual)
-_add(r'(?:twilio|auth)[_\s]*token["\s:=]+([a-f0-9]{32})\b', 'TWILIO_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:twilio|auth)[_\s]*token["\s:=]+([a-f0-9]{32})\b', 'TWILIO_TOKEN', CONFIDENCE_RELIABLE, 1, regex.I)
 
 
 # --- SENDGRID ---
@@ -158,7 +158,7 @@ _add(r'\b(oy2[a-z0-9]{43})\b', 'NUGET_KEY', CONFIDENCE_HIGH, 1)
 
 # --- HEROKU ---
 # Heroku API Key (UUID format in heroku context)
-_add(r'(?:heroku|HEROKU)[_\s]*(?:api[_\s]*)?(?:key|token)["\s:=]+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})', 'HEROKU_KEY', CONFIDENCE_HIGH, 1, re.I)
+_add(r'(?:heroku|HEROKU)[_\s]*(?:api[_\s]*)?(?:key|token)["\s:=]+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})', 'HEROKU_KEY', CONFIDENCE_HIGH, 1, regex.I)
 
 
 # --- SQUARE ---
@@ -182,10 +182,10 @@ _add(r'\b(shpss_[a-f0-9]{32})\b', 'SHOPIFY_SECRET', CONFIDENCE_PERFECT, 1)
 
 # --- DATADOG / MONITORING ---
 # Datadog API Key
-_add(r'(?:datadog|dd)[_\s]*(?:api[_\s]*)?key["\s:=]+([a-f0-9]{32})\b', 'DATADOG_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:datadog|dd)[_\s]*(?:api[_\s]*)?key["\s:=]+([a-f0-9]{32})\b', 'DATADOG_KEY', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Datadog Application Key
-_add(r'(?:datadog|dd)[_\s]*(?:app(?:lication)?[_\s]*)?key["\s:=]+([a-f0-9]{40})\b', 'DATADOG_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:datadog|dd)[_\s]*(?:app(?:lication)?[_\s]*)?key["\s:=]+([a-f0-9]{40})\b', 'DATADOG_KEY', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # New Relic API Key
 _add(r'\b(NRAK-[A-Z0-9]{27})\b', 'NEWRELIC_KEY', CONFIDENCE_VERY_HIGH, 1)
@@ -215,34 +215,34 @@ _add(r'\b(eyJ[a-zA-Z0-9\-_]+\.eyJ[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+)\b', 'JWT', CO
 _add(r'\b(Basic\s+[a-zA-Z0-9+/=]{20,})\b', 'BASIC_AUTH', CONFIDENCE_HIGH, 1)
 
 # Bearer Token (in authorization context)
-_add(r'(?:Authorization|Bearer)[:\s]+Bearer\s+([a-zA-Z0-9\-_\.]{20,})', 'BEARER_TOKEN', CONFIDENCE_MEDIUM, 1, re.I)
+_add(r'(?:Authorization|Bearer)[:\s]+Bearer\s+([a-zA-Z0-9\-_\.]{20,})', 'BEARER_TOKEN', CONFIDENCE_MEDIUM, 1, regex.I)
 
 
 # --- DATABASE CONNECTION STRINGS ---
 # PostgreSQL
-_add(r'(postgres(?:ql)?://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, re.I)
+_add(r'(postgres(?:ql)?://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, regex.I)
 
 # MySQL
-_add(r'(mysql://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, re.I)
+_add(r'(mysql://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, regex.I)
 
 # MongoDB
-_add(r'(mongodb(?:\+srv)?://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, re.I)
+_add(r'(mongodb(?:\+srv)?://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, regex.I)
 
 # Redis
-_add(r'(redis://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, re.I)
-_add(r'(rediss://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, re.I)
+_add(r'(redis://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, regex.I)
+_add(r'(rediss://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_VERY_HIGH, 1, regex.I)
 
 # Generic JDBC
-_add(r'(jdbc:[a-z]+://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_HIGH, 1, re.I)
+_add(r'(jdbc:[a-z]+://[^:]+:[^@]+@[^\s"\'<>]+)', 'DATABASE_URL', CONFIDENCE_HIGH, 1, regex.I)
 
 # SQL Server connection string
-_add(r'(Server=[^;]+;.*Password=[^;]+)', 'DATABASE_URL', CONFIDENCE_RELIABLE, 1, re.I)
-_add(r'(Data Source=[^;]+;.*Password=[^;]+)', 'DATABASE_URL', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(Server=[^;]+;.*Password=[^;]+)', 'DATABASE_URL', CONFIDENCE_RELIABLE, 1, regex.I)
+_add(r'(Data Source=[^;]+;.*Password=[^;]+)', 'DATABASE_URL', CONFIDENCE_RELIABLE, 1, regex.I)
 
 
 # --- AZURE ---
 # Azure Storage Account Key
-_add(r'(?:AccountKey|azure[_\s]*storage[_\s]*key)["\s:=]+([a-zA-Z0-9+/=]{88})', 'AZURE_STORAGE_KEY', CONFIDENCE_VERY_HIGH, 1, re.I)
+_add(r'(?:AccountKey|azure[_\s]*storage[_\s]*key)["\s:=]+([a-zA-Z0-9+/=]{88})', 'AZURE_STORAGE_KEY', CONFIDENCE_VERY_HIGH, 1, regex.I)
 
 # Azure Connection String
 _add(r'(DefaultEndpointsProtocol=https?;AccountName=[^;]+;AccountKey=[a-zA-Z0-9+/=]+)', 'AZURE_CONNECTION_STRING', CONFIDENCE_VERY_HIGH, 1)
@@ -267,7 +267,7 @@ _add(r'\b(sk-ant-[a-zA-Z0-9\-_]{32,})\b', 'ANTHROPIC_API_KEY', CONFIDENCE_PERFEC
 _add(r'\b(hf_[a-zA-Z0-9]{20,})\b', 'HUGGINGFACE_TOKEN', CONFIDENCE_PERFECT, 1)
 
 # Cohere API Key
-_add(r'(?:cohere)[_\s]*(?:api[_\s]*)?key["\s:=]+([a-zA-Z0-9]{20,})', 'COHERE_API_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:cohere)[_\s]*(?:api[_\s]*)?key["\s:=]+([a-zA-Z0-9]{20,})', 'COHERE_API_KEY', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Replicate API Token
 _add(r'\b(r8_[a-zA-Z0-9]{20,})\b', 'REPLICATE_API_KEY', CONFIDENCE_PERFECT, 1)
@@ -278,22 +278,22 @@ _add(r'\b(gsk_[a-zA-Z0-9]{48,})\b', 'GROQ_API_KEY', CONFIDENCE_PERFECT, 1)
 
 # --- CI/CD PLATFORMS ---
 # CircleCI API Token
-_add(r'(?:circleci|circle)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-f0-9]{40})', 'CIRCLECI_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:circleci|circle)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-f0-9]{40})', 'CIRCLECI_TOKEN', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Azure DevOps Personal Access Token
-_add(r'\b([a-z0-9]{52})\b(?=.*(?:azure|devops|visualstudio))', 'AZURE_DEVOPS_PAT', CONFIDENCE_MEDIUM, 1, re.I)
+_add(r'\b([a-z0-9]{52})\b(?=.*(?:azure|devops|visualstudio))', 'AZURE_DEVOPS_PAT', CONFIDENCE_MEDIUM, 1, regex.I)
 
 # Vercel Token
-_add(r'(?:vercel|zeit)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-zA-Z0-9]{24})', 'VERCEL_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:vercel|zeit)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-zA-Z0-9]{24})', 'VERCEL_TOKEN', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Netlify Token
-_add(r'(?:netlify)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-zA-Z0-9\-_]{40,})', 'NETLIFY_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:netlify)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-zA-Z0-9\-_]{40,})', 'NETLIFY_TOKEN', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Render API Key
 _add(r'\b(rnd_[a-zA-Z0-9]{32})\b', 'RENDER_API_KEY', CONFIDENCE_VERY_HIGH, 1)
 
 # Railway Token
-_add(r'(?:railway)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-f0-9\-]{36})', 'RAILWAY_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:railway)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-f0-9\-]{36})', 'RAILWAY_TOKEN', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Fly.io Token
 _add(r'\b(fo1_[a-zA-Z0-9\-_]{40,})\b', 'FLY_TOKEN', CONFIDENCE_VERY_HIGH, 1)
@@ -312,23 +312,23 @@ _add(r'\b(\d{8,10}:[a-zA-Z0-9_\-]{30,})\b', 'TELEGRAM_BOT_TOKEN', CONFIDENCE_VER
 _add(r'(https://[a-z0-9]+\.webhook\.office\.com/webhookb2/[a-f0-9\-]+/IncomingWebhook/[a-zA-Z0-9]+/[a-f0-9\-]+)', 'TEAMS_WEBHOOK', CONFIDENCE_VERY_HIGH, 1)
 
 # Twitch OAuth Token
-_add(r'\b(oauth:[a-z0-9]{30})\b', 'TWITCH_TOKEN', CONFIDENCE_VERY_HIGH, 1, re.I)
+_add(r'\b(oauth:[a-z0-9]{30})\b', 'TWITCH_TOKEN', CONFIDENCE_VERY_HIGH, 1, regex.I)
 
 # Zoom JWT Token (contextual)
-_add(r'(?:zoom)[_\s]*(?:jwt|api)[_\s]*(?:token|key|secret)["\s:=]+([a-zA-Z0-9\-_]{32,})', 'ZOOM_JWT', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:zoom)[_\s]*(?:jwt|api)[_\s]*(?:token|key|secret)["\s:=]+([a-zA-Z0-9\-_]{32,})', 'ZOOM_JWT', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Zoom SDK Key/Secret
-_add(r'(?:zoom)[_\s]*(?:sdk)[_\s]*(?:key|secret)["\s:=]+([a-zA-Z0-9]{22,})', 'ZOOM_SDK_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:zoom)[_\s]*(?:sdk)[_\s]*(?:key|secret)["\s:=]+([a-zA-Z0-9]{22,})', 'ZOOM_SDK_KEY', CONFIDENCE_RELIABLE, 1, regex.I)
 
 
 # --- ADDITIONAL PAYMENT PROCESSORS ---
 # PayPal Client ID/Secret (contextual)
-_add(r'(?:paypal)[_\s]*(?:client[_\s]*)?id["\s:=]+([A-Za-z0-9\-_]{80})', 'PAYPAL_CLIENT_ID', CONFIDENCE_RELIABLE, 1, re.I)
-_add(r'(?:paypal)[_\s]*(?:client[_\s]*)?secret["\s:=]+([A-Za-z0-9\-_]{80})', 'PAYPAL_SECRET', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:paypal)[_\s]*(?:client[_\s]*)?id["\s:=]+([A-Za-z0-9\-_]{80})', 'PAYPAL_CLIENT_ID', CONFIDENCE_RELIABLE, 1, regex.I)
+_add(r'(?:paypal)[_\s]*(?:client[_\s]*)?secret["\s:=]+([A-Za-z0-9\-_]{80})', 'PAYPAL_SECRET', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Plaid API Keys
-_add(r'(?:plaid)[_\s]*(?:client[_\s]*)?id["\s:=]+([a-f0-9]{24})', 'PLAID_CLIENT_ID', CONFIDENCE_RELIABLE, 1, re.I)
-_add(r'(?:plaid)[_\s]*secret["\s:=]+([a-f0-9]{30})', 'PLAID_SECRET', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:plaid)[_\s]*(?:client[_\s]*)?id["\s:=]+([a-f0-9]{24})', 'PLAID_CLIENT_ID', CONFIDENCE_RELIABLE, 1, regex.I)
+_add(r'(?:plaid)[_\s]*secret["\s:=]+([a-f0-9]{30})', 'PLAID_SECRET', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Adyen API Key
 _add(r'\b(AQE[a-zA-Z0-9\-_]{50,})\b', 'ADYEN_API_KEY', CONFIDENCE_VERY_HIGH, 1)
@@ -336,7 +336,7 @@ _add(r'\b(AQE[a-zA-Z0-9\-_]{50,})\b', 'ADYEN_API_KEY', CONFIDENCE_VERY_HIGH, 1)
 
 # --- SAAS PLATFORMS ---
 # Atlassian API Token
-_add(r'(?:atlassian|jira|confluence)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-zA-Z0-9]{24})', 'ATLASSIAN_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:atlassian|jira|confluence)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-zA-Z0-9]{24})', 'ATLASSIAN_TOKEN', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Notion API Token
 _add(r'\b(secret_[a-zA-Z0-9]{32,})\b', 'NOTION_TOKEN', CONFIDENCE_PERFECT, 1)
@@ -362,7 +362,7 @@ _add(r'\b(u\+[a-zA-Z0-9\-_]{18})\b', 'PAGERDUTY_KEY', CONFIDENCE_HIGH, 1)
 _add(r'\b(sdk-[a-f0-9\-]{36})\b', 'LAUNCHDARKLY_KEY', CONFIDENCE_VERY_HIGH, 1)
 
 # Segment Write Key
-_add(r'(?:segment)[_\s]*(?:write[_\s]*)?key["\s:=]+([a-zA-Z0-9]{32})', 'SEGMENT_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:segment)[_\s]*(?:write[_\s]*)?key["\s:=]+([a-zA-Z0-9]{32})', 'SEGMENT_KEY', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Intercom Access Token
 _add(r'\b(dG9rO[a-zA-Z0-9\-_]{40,})\b', 'INTERCOM_TOKEN', CONFIDENCE_HIGH, 1)
@@ -372,7 +372,7 @@ _add(r'\b(dG9rO[a-zA-Z0-9\-_]{40,})\b', 'INTERCOM_TOKEN', CONFIDENCE_HIGH, 1)
 # Supabase API Key
 _add(r'\b(sbp_[a-f0-9]{40})\b', 'SUPABASE_KEY', CONFIDENCE_PERFECT, 1)
 # Supabase anon/service key with context (HS256 JWT format)
-_add(r'(?:supabase)[_\s]*(?:anon|service)?[_\s]*(?:key|token)["\s:=]+(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+)', 'SUPABASE_KEY', CONFIDENCE_VERY_HIGH, 1, re.I)
+_add(r'(?:supabase)[_\s]*(?:anon|service)?[_\s]*(?:key|token)["\s:=]+(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+)', 'SUPABASE_KEY', CONFIDENCE_VERY_HIGH, 1, regex.I)
 
 # PlanetScale Token
 _add(r'\b(pscale_tkn_[a-zA-Z0-9\-_]{43})\b', 'PLANETSCALE_TOKEN', CONFIDENCE_PERFECT, 1)
@@ -381,7 +381,7 @@ _add(r'\b(pscale_tkn_[a-zA-Z0-9\-_]{43})\b', 'PLANETSCALE_TOKEN', CONFIDENCE_PER
 _add(r'\b(dapi[a-f0-9]{32})\b', 'DATABRICKS_TOKEN', CONFIDENCE_VERY_HIGH, 1)
 
 # Algolia Admin Key
-_add(r'(?:algolia)[_\s]*(?:admin[_\s]*)?(?:api[_\s]*)?key["\s:=]+([a-f0-9]{32})', 'ALGOLIA_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:algolia)[_\s]*(?:admin[_\s]*)?(?:api[_\s]*)?key["\s:=]+([a-f0-9]{32})', 'ALGOLIA_KEY', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Grafana API Token
 _add(r'\b(glc_[a-zA-Z0-9\-_]{32,})\b', 'GRAFANA_TOKEN', CONFIDENCE_VERY_HIGH, 1)
@@ -390,7 +390,7 @@ _add(r'\b(glsa_[a-zA-Z0-9\-_]{32,})\b', 'GRAFANA_TOKEN', CONFIDENCE_VERY_HIGH, 1
 
 # --- EMAIL SERVICES ---
 # Postmark Server Token
-_add(r'(?:postmark)[_\s]*(?:server[_\s]*)?(?:api[_\s]*)?(?:token|key)["\s:=]+([a-f0-9\-]{36})', 'POSTMARK_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:postmark)[_\s]*(?:server[_\s]*)?(?:api[_\s]*)?(?:token|key)["\s:=]+([a-f0-9\-]{36})', 'POSTMARK_TOKEN', CONFIDENCE_RELIABLE, 1, regex.I)
 
 # Mailgun API Key
 _add(r'\b(key-[a-f0-9]{32})\b', 'MAILGUN_KEY', CONFIDENCE_VERY_HIGH, 1)
@@ -409,20 +409,20 @@ _add(r'\b(LTAI[a-zA-Z0-9]{12,20})\b', 'ALIBABA_ACCESS_KEY', CONFIDENCE_VERY_HIGH
 
 # --- GENERIC SECRETS (CONTEXTUAL) ---
 # Password in config/code (with quotes)
-_add(r'(?:password|passwd|pwd)["\s:=]+["\']([^"\']{8,})["\']', 'PASSWORD', CONFIDENCE_LOW, 1, re.I)
+_add(r'(?:password|passwd|pwd)["\s:=]+["\']([^"\']{8,})["\']', 'PASSWORD', CONFIDENCE_LOW, 1, regex.I)
 
 # Password with international labels (FR: mot de passe, DE: Passwort, ES: contraseña, NL: wachtwoord, IT: parola/password, PT: senha)
 # More permissive: no quotes required, min 5 chars, allows special chars
-_add(r'(?:password|passwd|pwd|mot de passe|passwort|contraseña|wachtwoord|parola|senha)[:\s]+([^\s,.<>]{5,30})', 'PASSWORD', CONFIDENCE_WEAK, 1, re.I)
+_add(r'(?:password|passwd|pwd|mot de passe|passwort|contraseña|wachtwoord|parola|senha)[:\s]+([^\s,.<>]{5,30})', 'PASSWORD', CONFIDENCE_WEAK, 1, regex.I)
 
 # API key in config (generic)
-_add(r'(?:api[_\s]?key|apikey|api[_\s]?secret)["\s:=]+["\']([a-zA-Z0-9\-_]{16,})["\']', 'API_KEY', CONFIDENCE_LOW, 1, re.I)
+_add(r'(?:api[_\s]?key|apikey|api[_\s]?secret)["\s:=]+["\']([a-zA-Z0-9\-_]{16,})["\']', 'API_KEY', CONFIDENCE_LOW, 1, regex.I)
 
 # Secret in config (generic)
-_add(r'(?:secret|token|credential)["\s:=]+["\']([a-zA-Z0-9\-_]{16,})["\']', 'SECRET', CONFIDENCE_WEAK, 1, re.I)
+_add(r'(?:secret|token|credential)["\s:=]+["\']([a-zA-Z0-9\-_]{16,})["\']', 'SECRET', CONFIDENCE_WEAK, 1, regex.I)
 
 # Private key variable assignment
-_add(r'(?:private[_\s]?key|priv[_\s]?key)["\s:=]+["\']([a-zA-Z0-9+/=\-_]{20,})["\']', 'PRIVATE_KEY', CONFIDENCE_LOW, 1, re.I)
+_add(r'(?:private[_\s]?key|priv[_\s]?key)["\s:=]+["\']([a-zA-Z0-9+/=\-_]{20,})["\']', 'PRIVATE_KEY', CONFIDENCE_LOW, 1, regex.I)
 
 
 # --- DETECTOR CLASS ---
