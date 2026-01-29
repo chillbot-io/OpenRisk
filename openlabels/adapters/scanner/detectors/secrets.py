@@ -371,7 +371,8 @@ _add(r'\b(dG9rO[a-zA-Z0-9\-_]{40,})\b', 'INTERCOM_TOKEN', CONFIDENCE_HIGH, 1)
 # --- DATABASE PLATFORMS ---
 # Supabase API Key
 _add(r'\b(sbp_[a-f0-9]{40})\b', 'SUPABASE_KEY', CONFIDENCE_PERFECT, 1)
-_add(r'\b(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+)\b', 'SUPABASE_KEY', CONFIDENCE_HIGH, 1)
+# Supabase anon/service key with context (HS256 JWT format)
+_add(r'(?:supabase)[_\s]*(?:anon|service)?[_\s]*(?:key|token)["\s:=]+(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+)', 'SUPABASE_KEY', CONFIDENCE_VERY_HIGH, 1, re.I)
 
 # PlanetScale Token
 _add(r'\b(pscale_tkn_[a-zA-Z0-9\-_]{43})\b', 'PLANETSCALE_TOKEN', CONFIDENCE_PERFECT, 1)

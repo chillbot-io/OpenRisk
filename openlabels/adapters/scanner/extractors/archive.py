@@ -535,7 +535,6 @@ class SevenZipExtractor:
                         logger.warning(f"Skipping unsafe path in archive: {filename!r}")
                         stats.files_skipped += 1
                         stats.extraction_errors.append(f"Unsafe path: {filename}")
-                        sz.reset()  # Skip this file
                         continue
 
                     # Extract single file

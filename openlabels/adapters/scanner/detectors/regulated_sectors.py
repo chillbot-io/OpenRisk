@@ -20,10 +20,9 @@ from .constants import (
     CONFIDENCE_VERY_HIGH,
     CONFIDENCE_WEAK,
 )
+from .pattern_registry import create_pattern_adder
 
 logger = logging.getLogger(__name__)
-
-from .pattern_registry import create_pattern_adder
 
 REGULATED_PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
 _add = create_pattern_adder(REGULATED_PATTERNS)
@@ -185,10 +184,8 @@ _add(
 
 # Green Card Number (Permanent Resident Card)
 # 13 characters: 3 letters + 10 digits (e.g., SRC0123456789)
-_add(
-    r'\b([A-Z]{3}\d{10})\b',
-    'GREEN_CARD_NUMBER', CONFIDENCE_HIGH, 1
-)
+# Note: Standalone pattern removed - same format as USCIS receipt numbers
+# Use contextual pattern only to avoid false positives
 
 # Green Card with context
 _add(
@@ -272,7 +269,7 @@ class RegulatedSectorDetector(BasePatternDetector):
         if entity_type == 'A_NUMBER':
             # A-Number should be 7-9 digits after optional A prefix
             digits = value.lstrip('A')
-            return len(digits) >= 7 and len(digits) <= 9 and digits.isdigit()
+            return 7 <= len(digits) <= 9 and digits.isdigit()
 
         if entity_type == 'GPA':
             # GPA should be 0.0-4.0 range
