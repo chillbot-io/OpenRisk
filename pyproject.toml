@@ -51,8 +51,23 @@ ocr = [
     "intervaltree>=3.1.0,<4.0.0",  # SECURITY FIX (HIGH-014): Declare OCR dependency
 ]
 performance = ["pyahocorasick>=2.0.0,<3.0.0"]
+# Archive extraction support
+archives = [
+    "py7zr>=0.20.0,<1.0.0",  # 7z archive extraction
+    "rarfile>=4.1,<5.0.0",   # RAR archive extraction (requires unrar binary)
+]
+# Database backends for server mode
+database = [
+    "psycopg[binary]>=3.1.0,<4.0.0",  # PostgreSQL support (async + connection pooling)
+]
+# Security-hardened production deployment (includes all security-critical deps)
+security = [
+    "regex>=2023.0.0,<2025.0.0",  # ReDoS timeout protection (also in base deps)
+    "py7zr>=0.20.0,<1.0.0",       # Secure 7z extraction with limits
+    "psycopg[binary]>=3.1.0,<4.0.0",  # Parameterized queries for DB backend
+]
 all = [
-    "openlabels[pdf,office,images,ocr,performance]",
+    "openlabels[pdf,office,images,ocr,performance,archives,database]",
 ]
 dev = [
     "pytest>=7.0.0",

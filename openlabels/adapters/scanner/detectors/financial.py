@@ -334,41 +334,51 @@ def _validate_ethereum(address: str) -> bool:
         return False
 
 
-# BIP-39 word list (first 100 for validation - full list would be 2048 words)
-# In production, load full list from file
-BIP39_SAMPLE_WORDS = {
-    'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract',
-    'absurd', 'abuse', 'access', 'accident', 'account', 'accuse', 'achieve', 'acid',
-    'acoustic', 'acquire', 'across', 'act', 'action', 'actor', 'actress', 'actual',
-    'adapt', 'add', 'addict', 'address', 'adjust', 'admit', 'adult', 'advance',
-    'advice', 'aerobic', 'affair', 'afford', 'afraid', 'again', 'age', 'agent',
-    'agree', 'ahead', 'aim', 'air', 'airport', 'aisle', 'alarm', 'album',
-    'alcohol', 'alert', 'alien', 'all', 'alley', 'allow', 'almost', 'alone',
-    'alpha', 'already', 'also', 'alter', 'always', 'amateur', 'amazing', 'among',
-    'amount', 'amused', 'analyst', 'anchor', 'ancient', 'anger', 'angle', 'angry',
-    'animal', 'ankle', 'announce', 'annual', 'another', 'answer', 'antenna', 'antique',
-    'anxiety', 'any', 'apart', 'apology', 'appear', 'apple', 'approve', 'april',
-    'zebra', 'zero', 'zone', 'zoo',  # Include some end words
-}
+# BIP-39 word list loading
+def _load_bip39_wordlist() -> frozenset:
+    """
+    Load the full BIP-39 English wordlist (2048 words).
+
+    Falls back to a minimal sample if file not found.
+    """
+    from pathlib import Path
+
+    wordlist_path = Path(__file__).parent.parent / "dictionaries" / "bip39_english.txt"
+
+    try:
+        if wordlist_path.exists():
+            words = wordlist_path.read_text().strip().split('\n')
+            logger.debug(f"Loaded {len(words)} BIP-39 words from {wordlist_path}")
+            return frozenset(w.strip().lower() for w in words if w.strip())
+    except (OSError, IOError) as e:
+        logger.warning(f"Failed to load BIP-39 wordlist: {e}")
+
+    # Fallback sample (first/last words for basic validation)
+    logger.warning("Using fallback BIP-39 sample - seed phrase detection may be incomplete")
+    return frozenset({
+        'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract',
+        'zebra', 'zero', 'zone', 'zoo',
+    })
+
+BIP39_WORDS = _load_bip39_wordlist()
 
 
 def _validate_seed_phrase(text: str) -> bool:
     """
     Validate BIP-39 seed phrase structure.
-    
+
     Must be 12, 15, 18, 21, or 24 words.
     Words should be from BIP-39 word list.
     """
     words = text.lower().split()
-    
+
     if len(words) not in (12, 15, 18, 21, 24):
         return False
-    
+
     # Check at least 80% of words are in BIP-39 list
-    # (Using sample list - in production use full 2048 word list)
-    common_bip39 = sum(1 for w in words if w in BIP39_SAMPLE_WORDS)
-    
-    return common_bip39 >= len(words) * 0.5  # Relaxed for sample list
+    valid_words = sum(1 for w in words if w in BIP39_WORDS)
+
+    return valid_words >= len(words) * 0.8  # Require 80% match with full list
 
 
 # --- PATTERN DEFINITIONS ---
@@ -458,12 +468,32 @@ _add(r'(?:seed|mnemonic|recovery|backup)\s*(?:phrase|words?)?[:\s]+([a-z]+(?:\s+
      'CRYPTO_SEED_PHRASE', CONFIDENCE_HIGH, 1, _validate_seed_phrase, re.I)
 
 
+# --- CONTEXT KEYWORDS FOR CONFIDENCE BOOSTING ---
+# Keywords that, when found near a match, indicate higher likelihood of true positive
+CONTEXT_KEYWORDS = {
+    'SWIFT_BIC': frozenset({'swift', 'bic', 'bank', 'transfer', 'wire', 'iban', 'routing', 'payment'}),
+    'CUSIP': frozenset({'cusip', 'security', 'bond', 'stock', 'equity', 'ticker', 'sedol', 'isin'}),
+    'ISIN': frozenset({'isin', 'security', 'stock', 'bond', 'equity', 'cusip', 'sedol', 'ticker'}),
+    'SEDOL': frozenset({'sedol', 'london', 'lse', 'stock', 'security', 'uk', 'exchange'}),
+    'LEI': frozenset({'lei', 'legal', 'entity', 'identifier', 'gleif', 'corporate'}),
+    'LITECOIN_ADDRESS': frozenset({'litecoin', 'ltc', 'crypto', 'wallet', 'address', 'send', 'receive'}),
+    'DOGECOIN_ADDRESS': frozenset({'dogecoin', 'doge', 'crypto', 'wallet', 'address', 'tip'}),
+    'XRP_ADDRESS': frozenset({'xrp', 'ripple', 'crypto', 'wallet', 'address', 'ledger'}),
+    'SOLANA_ADDRESS': frozenset({'solana', 'sol', 'phantom', 'crypto', 'wallet', 'address'}),
+}
+
+# How much to boost confidence when context keywords are found
+CONTEXT_BOOST_AMOUNT = 0.25
+CONTEXT_WINDOW_SIZE = 100  # Characters before/after match to search for context
+
+
 # --- DETECTOR CLASS ---
 class FinancialDetector(BasePatternDetector):
     """
     Detects financial security identifiers and cryptocurrency addresses.
 
     Uses checksum validation where applicable for high confidence.
+    Applies context-aware confidence boosting for low-confidence patterns.
     """
 
     name = "financial"
@@ -474,8 +504,16 @@ class FinancialDetector(BasePatternDetector):
         return FINANCIAL_PATTERNS
 
     def detect(self, text: str) -> List[Span]:
-        """Detect financial identifiers in text with logging."""
+        """Detect financial identifiers in text with logging and context boosting."""
         spans = super().detect(text)
+
+        # Apply context-aware confidence boosting for low-confidence patterns
+        text_lower = text.lower()
+        boosted_spans = []
+        for span in spans:
+            boosted_span = self._boost_confidence_by_context(span, text_lower)
+            boosted_spans.append(boosted_span)
+        spans = boosted_spans
 
         if spans:
             # Summarize by entity type
@@ -491,6 +529,55 @@ class FinancialDetector(BasePatternDetector):
                     logger.debug(f"Cryptocurrency entity detected: {span.entity_type} at position {span.start}-{span.end}")
 
         return spans
+
+    def _boost_confidence_by_context(self, span: Span, text_lower: str) -> Span:
+        """
+        Boost confidence if contextual keywords are found near the match.
+
+        For low-confidence patterns (e.g., bare SWIFT codes at 0.40), finding
+        relevant context keywords nearby increases our confidence that the
+        match is a true positive.
+
+        Args:
+            span: The detected span
+            text_lower: Lowercased full text for context search
+
+        Returns:
+            Span with potentially boosted confidence
+        """
+        # Only boost patterns that have context keywords defined
+        context_keywords = CONTEXT_KEYWORDS.get(span.entity_type)
+        if not context_keywords:
+            return span
+
+        # Only boost low-confidence matches (< 0.70)
+        if span.confidence >= 0.70:
+            return span
+
+        # Extract context window around match
+        start = max(0, span.start - CONTEXT_WINDOW_SIZE)
+        end = min(len(text_lower), span.end + CONTEXT_WINDOW_SIZE)
+        context = text_lower[start:end]
+
+        # Check for context keywords
+        for keyword in context_keywords:
+            if keyword in context:
+                new_confidence = min(1.0, span.confidence + CONTEXT_BOOST_AMOUNT)
+                logger.debug(
+                    f"Context boost for {span.entity_type}: '{keyword}' found nearby, "
+                    f"confidence {span.confidence:.2f} -> {new_confidence:.2f}"
+                )
+                return Span(
+                    start=span.start,
+                    end=span.end,
+                    entity_type=span.entity_type,
+                    value=span.value,
+                    confidence=new_confidence,
+                    detector=span.detector,
+                    metadata=span.metadata,
+                )
+
+        return span
 
     def _adjust_confidence(self, entity_type: str, confidence: float,
                            value: str, has_validator: bool) -> float:

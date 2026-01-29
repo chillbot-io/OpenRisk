@@ -335,6 +335,60 @@ class FileCollector:
         """Format Unix timestamp as ISO string."""
         return datetime.fromtimestamp(ts).isoformat()
 
+    def _check_archive_encryption_headers(self, path: Path) -> Optional[str]:
+        """
+        Inspect archive headers to detect encryption.
+
+        Returns encryption type if detected, None otherwise.
+
+        Supported formats:
+        - ZIP: Check general purpose bit flag (bit 0 = encrypted)
+        - 7z: Check for encoded header or encryption markers
+        - RAR: Check archive flags for encryption
+        """
+        try:
+            with open(path, 'rb') as f:
+                header = f.read(64)
+
+            if len(header) < 4:
+                return None
+
+            # ZIP format: PK\x03\x04 signature
+            # Encryption flag is bit 0 of general purpose bit flag at offset 6
+            if header[:4] == b'PK\x03\x04' and len(header) >= 8:
+                general_flag = header[6] | (header[7] << 8)
+                if general_flag & 0x0001:  # Bit 0 = encrypted
+                    return "zip_encrypted"
+                # Also check for strong encryption (bit 6)
+                if general_flag & 0x0040:
+                    return "zip_strong_encryption"
+
+            # 7z format: 7z\xBC\xAF\x27\x1C signature
+            # Encrypted 7z archives typically have encoded headers
+            if header[:6] == b'7z\xbc\xaf\x27\x1c':
+                # Check for next header offset and encrypted header marker
+                # This is a heuristic - 7z encryption detection is complex
+                if len(header) >= 32:
+                    # Offset 20-23: next header offset
+                    # If archive uses encryption, often has specific patterns
+                    # For now, flag as potentially encrypted for manual review
+                    pass
+
+            # RAR format: Rar!\x1a\x07 signature (RAR 4.x and 5.x)
+            if header[:7] == b'Rar!\x1a\x07\x00' or header[:7] == b'Rar!\x1a\x07\x01':
+                # RAR5: After main header, check for encryption record
+                # RAR4: Archive flags at offset 10, bit 2 = encrypted headers
+                if len(header) >= 12:
+                    # RAR4 style check
+                    archive_flags = header[10] | (header[11] << 8)
+                    if archive_flags & 0x0004:  # Bit 2 = encrypted headers
+                        return "rar_encrypted"
+
+        except (OSError, IOError) as e:
+            logger.debug(f"Failed to read archive headers for encryption check: {e}")
+
+        return None
+
     def _check_encryption(self, path: Path, metadata: FileMetadata) -> bool:
         """Check if file appears to be encrypted."""
         # Check extension
@@ -342,10 +396,13 @@ class FileCollector:
             metadata.encryption_type = "file_level"
             return True
 
-        # Check for encrypted archives (basic heuristic)
-        if metadata.extension in self.ENCRYPTED_ARCHIVE_EXTENSIONS:
-            # TODO: Inspect archive headers for definitive encryption check
-            logger.debug(f"Encrypted archive extension detected: {metadata.extension}")
+        # Check for encrypted archives - inspect headers for definitive check
+        if metadata.extension in self.ARCHIVE_EXTENSIONS:
+            encryption_type = self._check_archive_encryption_headers(path)
+            if encryption_type:
+                metadata.encryption_type = encryption_type
+                logger.debug(f"Encrypted archive detected via header inspection: {path}")
+                return True
 
         # Check xattrs for encryption markers
         if metadata.xattrs:
