@@ -96,7 +96,7 @@ def _is_safe_path(path: str) -> bool:
     Check if an archive member path is safe (no path traversal).
 
     Prevents:
-    - Absolute paths
+    - Absolute paths (Unix and Windows)
     - Parent directory references (..)
     - Null bytes
     - Reserved names (Windows)
@@ -107,6 +107,13 @@ def _is_safe_path(path: str) -> bool:
     # Check for null bytes
     if '\x00' in path:
         return False
+
+    # Check for Windows absolute paths (e.g., C:\Windows, D:\path)
+    # This must be checked before PurePosixPath which doesn't recognize Windows paths
+    if len(path) >= 2 and path[1] == ':':
+        # Looks like a Windows drive letter (C:, D:, etc.)
+        if path[0].isalpha():
+            return False
 
     # Normalize and check for traversal
     try:
@@ -695,6 +702,13 @@ class ArchiveExtractor(BaseExtractor):
                     )
                     extracted_files.extend(nested_files)
                     warnings.extend(nested_warnings)
+                elif extracted_file.is_archive:
+                    # Nested archive but depth limit reached - add warning
+                    warnings.append(
+                        f"Maximum nesting depth {self.max_nesting_depth} reached, "
+                        f"skipping nested archive: {full_path}"
+                    )
+                    extracted_files.append((full_path, extracted_file.content))
                 else:
                     extracted_files.append((full_path, extracted_file.content))
 
