@@ -181,10 +181,41 @@ class FileOps:
         Returns:
             Tuple of (success, FileError or None)
 
+        Security: Uses lstat() for TOCTOU protection (TOCTOU-001).
         (Issue 3.5): Returns structured FileError instead of string.
         """
-        source_exists = source.exists()
-        dest_exists = dest.exists()
+        # TOCTOU-001: Use lstat() instead of exists() to prevent symlink attacks
+        try:
+            source_st = source.lstat()
+            source_exists = True
+            # HIGH-002: Reject symlinks for security
+            if stat_module.S_ISLNK(source_st.st_mode):
+                return False, FileError(
+                    path=str(source),
+                    error_type=FileErrorType.PERMISSION_DENIED,
+                    message=f"Symlinks not allowed for security reasons: {source}",
+                    retryable=False,
+                )
+            # Only allow regular files
+            if not stat_module.S_ISREG(source_st.st_mode):
+                return False, FileError(
+                    path=str(source),
+                    error_type=FileErrorType.PERMISSION_DENIED,
+                    message=f"Not a regular file: {source}",
+                    retryable=False,
+                )
+        except FileNotFoundError:
+            source_exists = False
+        except OSError as e:
+            return False, FileError.from_exception(e, str(source))
+
+        try:
+            dest.lstat()  # Check existence without following symlinks
+            dest_exists = True
+        except FileNotFoundError:
+            dest_exists = False
+        except OSError as e:
+            return False, FileError.from_exception(e, str(dest))
 
         # Case 1: Both exist - verify content
         if source_exists and dest_exists:

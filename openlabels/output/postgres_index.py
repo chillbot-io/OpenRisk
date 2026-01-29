@@ -164,15 +164,16 @@ class PostgresLabelIndex:
 
     @contextmanager
     def _cursor(self):
-        """Cursor context manager with automatic commit/rollback."""
+        """Cursor context manager with automatic commit/rollback.
+
+        Exception handling is delegated to _connection() for consistency.
+        All database errors are wrapped in DatabaseError by _connection().
+        """
         with self._connection() as conn:
             cursor = conn.cursor()
             try:
                 yield cursor
                 conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
             finally:
                 cursor.close()
 

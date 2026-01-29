@@ -344,8 +344,8 @@ class FileCollector:
 
         # Check for encrypted archives (basic heuristic)
         if metadata.extension in self.ENCRYPTED_ARCHIVE_EXTENSIONS:
-            # Would need to inspect archive headers for definitive check
-            pass
+            # TODO: Inspect archive headers for definitive encryption check
+            logger.debug(f"Encrypted archive extension detected: {metadata.extension}")
 
         # Check xattrs for encryption markers
         if metadata.xattrs:
