@@ -180,9 +180,7 @@ class HealthChecker:
                     )
         return None
 
-    # =========================================================================
-    # Default Health Checks
-    # =========================================================================
+    # --- Default Health Checks ---
 
     def _check_python_version(self) -> CheckResult:
         """Check Python version is compatible."""

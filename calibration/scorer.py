@@ -19,9 +19,7 @@ class RiskTier(Enum):
     CRITICAL = "Critical"
 
 
-# =============================================================================
-# CALIBRATION PARAMETERS - Adjust these based on calibration results
-# =============================================================================
+# --- Calibration Parameters ---
 
 # Entity weights calibrated so:
 # - Single SSN/CC → Medium (score ~35)
@@ -148,9 +146,7 @@ EXPOSURE_MULTIPLIERS = {
 }
 
 
-# =============================================================================
-# SCORING IMPLEMENTATION
-# =============================================================================
+# --- Scoring Implementation ---
 
 def get_categories(entities: Dict[str, int]) -> Set[str]:
     """Get set of categories present in entities."""
@@ -299,10 +295,6 @@ def score_entities(
         exposure=exposure,
     )
 
-
-# =============================================================================
-# CLI FOR TESTING
-# =============================================================================
 
 if __name__ == '__main__':
     # Quick test cases
