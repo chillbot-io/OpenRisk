@@ -61,7 +61,6 @@ class TransientError(OpenLabelsError):
 
     Callers should implement retry with exponential backoff.
     """
-    pass
 
 
 class DatabaseError(TransientError):
@@ -110,7 +109,6 @@ class PermanentError(OpenLabelsError):
 
     Callers should handle the error or propagate it.
     """
-    pass
 
 
 class NotFoundError(PermanentError):

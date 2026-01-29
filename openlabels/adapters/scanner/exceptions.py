@@ -20,22 +20,18 @@ __all__ = [
 
 class ScannerError(Exception):
     """Base exception for all scanner errors."""
-    pass
 
 
 class ConfigurationError(ScannerError):
     """Configuration or initialization error."""
-    pass
 
 
 class DetectionError(ScannerError):
     """Error during PII/PHI detection."""
-    pass
 
 
 class ProcessingError(ScannerError):
     """Error during file/text processing."""
-    pass
 
 
 class FileValidationError(ProcessingError):

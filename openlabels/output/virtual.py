@@ -130,7 +130,6 @@ class CloudURI:
 
 class CloudURIValidationError(ValueError):
     """Raised when a cloud URI fails validation."""
-    pass
 
 
 def parse_cloud_uri(uri: str) -> CloudURI:

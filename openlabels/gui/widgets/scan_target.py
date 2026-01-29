@@ -41,7 +41,6 @@ class ScanTargetPanel(QWidget):
         self._connect_signals()
 
     def _setup_ui(self):
-        """Setup the UI."""
         group = QGroupBox("Scan Target")
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)

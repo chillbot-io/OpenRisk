@@ -182,15 +182,8 @@ class Config:
         Migrate config from older schema version to current.
 
         This method handles upgrades when loading configs from older versions.
-        Add migration steps here as schema evolves.
         """
         original_version = self.schema_version
-
-        # Future migrations would be added here:
-        # if self.schema_version < 2:
-        #     # Migrate from v1 to v2
-        #     self.new_field = self.old_field  # Example migration
-        #     self.schema_version = 2
 
         if self.schema_version < CURRENT_SCHEMA_VERSION:
             # Config is from the future or unknown - warn but allow
