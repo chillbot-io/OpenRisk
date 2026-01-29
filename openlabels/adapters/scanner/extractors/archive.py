@@ -22,23 +22,18 @@ Example:
 import gzip
 import io
 import logging
-import os
+import posixpath
 import tarfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import List, Optional, Tuple, Generator, TYPE_CHECKING
+from typing import List, Optional, Tuple, Generator
 
 from ..constants import (
     MAX_DECOMPRESSED_SIZE,
     MAX_EXTRACTION_RATIO,
-    MAX_FILE_SIZE_BYTES,
-    MAX_FILENAME_LENGTH,
 )
 from .base import BaseExtractor, ExtractionResult
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +56,13 @@ ARCHIVE_MIME_TYPES = frozenset({
     'application/x-bzip2',
     'application/x-xz',
     'application/x-7z-compressed',
+})
+
+# Windows reserved device names (pre-computed for performance)
+_WINDOWS_RESERVED_NAMES = frozenset({
+    'CON', 'PRN', 'AUX', 'NUL',
+    'COM0', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+    'LPT0', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
 })
 
 
@@ -125,10 +127,9 @@ def _is_safe_path(path: str) -> bool:
             return False
 
         # Check Windows reserved names
-        reserved = {'CON', 'PRN', 'AUX', 'NUL'} | {f'COM{i}' for i in range(10)} | {f'LPT{i}' for i in range(10)}
         for part in parts:
             name_upper = part.upper().split('.')[0]
-            if name_upper in reserved:
+            if name_upper in _WINDOWS_RESERVED_NAMES:
                 return False
 
         return True
@@ -227,31 +228,53 @@ class ZipExtractor:
                         stats.files_skipped += 1
                         continue
 
-                    # Check total extracted size
-                    if total_extracted + info.file_size > max_total_size:
-                        logger.warning(
-                            f"Archive extraction would exceed {max_total_size} bytes, stopping"
-                        )
-                        stats.extraction_errors.append("Total size limit reached")
-                        break
-
                     try:
-                        file_content = zf.read(info.filename)
-                        total_extracted += len(file_content)
-                        stats.total_bytes += len(file_content)
-                        stats.files_processed += 1
+                        # Read file with streaming size check (don't trust header)
+                        with zf.open(info.filename) as member_file:
+                            chunks = []
+                            bytes_read = 0
+                            size_exceeded = False
+                            while True:
+                                chunk = member_file.read(65536)
+                                if not chunk:
+                                    break
+                                bytes_read += len(chunk)
+                                # Check limits during read, not before
+                                if bytes_read > MAX_SINGLE_FILE_SIZE:
+                                    logger.warning(
+                                        f"File {info.filename} exceeds size limit during extraction"
+                                    )
+                                    stats.files_skipped += 1
+                                    stats.extraction_errors.append(
+                                        f"File exceeded size limit: {info.filename}"
+                                    )
+                                    size_exceeded = True
+                                    break
+                                if total_extracted + bytes_read > max_total_size:
+                                    logger.warning(
+                                        f"Archive extraction would exceed {max_total_size} bytes"
+                                    )
+                                    stats.extraction_errors.append("Total size limit reached")
+                                    return stats
+                                chunks.append(chunk)
 
-                        ext = _get_extension(info.filename)
-                        is_nested = _is_archive_extension(ext)
-                        if is_nested:
-                            stats.nested_archives += 1
+                            if not size_exceeded:
+                                file_content = b''.join(chunks)
+                                total_extracted += len(file_content)
+                                stats.total_bytes += len(file_content)
+                                stats.files_processed += 1
 
-                        yield ExtractedFile(
-                            path=info.filename,
-                            content=file_content,
-                            size=len(file_content),
-                            is_archive=is_nested,
-                        )
+                                ext = _get_extension(info.filename)
+                                is_nested = _is_archive_extension(ext)
+                                if is_nested:
+                                    stats.nested_archives += 1
+
+                                yield ExtractedFile(
+                                    path=info.filename,
+                                    content=file_content,
+                                    size=len(file_content),
+                                    is_archive=is_nested,
+                                )
                     except Exception as e:
                         logger.warning(f"Failed to extract {info.filename}: {e}")
                         stats.extraction_errors.append(f"Extract error: {info.filename}: {e}")
@@ -318,35 +341,55 @@ class TarExtractor:
                         stats.files_skipped += 1
                         continue
 
-                    # Check total extracted size
-                    if total_extracted + member.size > max_total_size:
-                        logger.warning(
-                            f"Archive extraction would exceed {max_total_size} bytes, stopping"
-                        )
-                        stats.extraction_errors.append("Total size limit reached")
-                        break
-
                     try:
                         f = tf.extractfile(member)
                         if f is None:
                             continue
 
-                        file_content = f.read()
-                        total_extracted += len(file_content)
-                        stats.total_bytes += len(file_content)
-                        stats.files_processed += 1
+                        # Read with streaming size check
+                        chunks = []
+                        bytes_read = 0
+                        size_exceeded = False
+                        while True:
+                            chunk = f.read(65536)
+                            if not chunk:
+                                break
+                            bytes_read += len(chunk)
+                            if bytes_read > MAX_SINGLE_FILE_SIZE:
+                                logger.warning(
+                                    f"File {member.name} exceeds size limit during extraction"
+                                )
+                                stats.files_skipped += 1
+                                stats.extraction_errors.append(
+                                    f"File exceeded size limit: {member.name}"
+                                )
+                                size_exceeded = True
+                                break
+                            if total_extracted + bytes_read > max_total_size:
+                                logger.warning(
+                                    f"Archive extraction would exceed {max_total_size} bytes"
+                                )
+                                stats.extraction_errors.append("Total size limit reached")
+                                return stats
+                            chunks.append(chunk)
 
-                        ext = _get_extension(member.name)
-                        is_nested = _is_archive_extension(ext)
-                        if is_nested:
-                            stats.nested_archives += 1
+                        if not size_exceeded:
+                            file_content = b''.join(chunks)
+                            total_extracted += len(file_content)
+                            stats.total_bytes += len(file_content)
+                            stats.files_processed += 1
 
-                        yield ExtractedFile(
-                            path=member.name,
-                            content=file_content,
-                            size=len(file_content),
-                            is_archive=is_nested,
-                        )
+                            ext = _get_extension(member.name)
+                            is_nested = _is_archive_extension(ext)
+                            if is_nested:
+                                stats.nested_archives += 1
+
+                            yield ExtractedFile(
+                                path=member.name,
+                                content=file_content,
+                                size=len(file_content),
+                                is_archive=is_nested,
+                            )
                     except Exception as e:
                         logger.warning(f"Failed to extract {member.name}: {e}")
                         stats.extraction_errors.append(f"Extract error: {member.name}: {e}")
@@ -364,12 +407,13 @@ class GzipExtractor:
     @staticmethod
     def can_handle(content: bytes, extension: str) -> bool:
         """Check if this is a GZIP file (not .tar.gz)."""
+        # Exclude .tar.gz/.tgz which are handled by TarExtractor
+        if extension in {'.tar.gz', '.tgz'}:
+            return False
         # GZIP magic bytes: 1f 8b
         if len(content) >= 2 and content[:2] == b'\x1f\x8b':
-            # Exclude .tar.gz which is handled by TarExtractor
-            if extension not in {'.tar.gz', '.tgz'}:
-                return True
-        return extension == '.gz' and extension not in {'.tar.gz', '.tgz'}
+            return True
+        return extension == '.gz'
 
     @staticmethod
     def extract_files(
@@ -474,7 +518,6 @@ class SevenZipExtractor:
 
         try:
             with py7zr.SevenZipFile(io.BytesIO(content), mode='r') as sz:
-                # Get file list first
                 file_list = sz.getnames()
 
                 if len(file_list) > max_files:
@@ -482,35 +525,41 @@ class SevenZipExtractor:
                         f"Archive contains {len(file_list)} files, exceeds limit of {max_files}"
                     )
 
-                # Extract all to memory
-                extracted = sz.readall()
-
-                for filename, bio in extracted.items():
+                # Note: py7zr doesn't support streaming extraction, so we must
+                # extract to memory first. For very large 7z files, consider
+                # using the command-line 7z tool instead.
+                for filename in file_list:
                     stats.total_files += 1
 
-                    # Validate path safety
                     if not _is_safe_path(filename):
                         logger.warning(f"Skipping unsafe path in archive: {filename!r}")
                         stats.files_skipped += 1
                         stats.extraction_errors.append(f"Unsafe path: {filename}")
+                        sz.reset()  # Skip this file
                         continue
 
+                    # Extract single file
+                    extracted = sz.read([filename])
+                    if not extracted or filename not in extracted:
+                        continue
+
+                    bio = extracted[filename]
                     file_content = bio.read()
 
-                    # Check file size
                     if len(file_content) > MAX_SINGLE_FILE_SIZE:
                         logger.warning(
                             f"Skipping large file {filename} ({len(file_content)} bytes)"
                         )
                         stats.files_skipped += 1
+                        del file_content  # Free memory
                         continue
 
-                    # Check total extracted size
                     if total_extracted + len(file_content) > max_total_size:
                         logger.warning(
-                            f"Archive extraction would exceed {max_total_size} bytes, stopping"
+                            f"Archive extraction would exceed {max_total_size} bytes"
                         )
                         stats.extraction_errors.append("Total size limit reached")
+                        del file_content
                         break
 
                     total_extracted += len(file_content)
@@ -631,13 +680,14 @@ class ArchiveExtractor(BaseExtractor):
             else:
                 gen = extractor_func(content)
 
-            # Consume the generator
-            stats = None
             for extracted_file in gen:
-                full_path = os.path.join(parent_path, extracted_file.path)
+                # Use posixpath for archive paths (always POSIX-style, even on Windows)
+                if parent_path:
+                    full_path = posixpath.join(parent_path, extracted_file.path)
+                else:
+                    full_path = extracted_file.path
 
                 if extracted_file.is_archive and depth < self.max_nesting_depth:
-                    # Recursively extract nested archive
                     nested_files, nested_warnings = self._extract_archive_recursive(
                         extracted_file.content,
                         extracted_file.path,
@@ -648,15 +698,6 @@ class ArchiveExtractor(BaseExtractor):
                     warnings.extend(nested_warnings)
                 else:
                     extracted_files.append((full_path, extracted_file.content))
-
-            # Get final stats from generator return value
-            try:
-                # The generator returns stats when exhausted
-                pass
-            except StopIteration as e:
-                stats = e.value
-                if stats and stats.extraction_errors:
-                    warnings.extend(stats.extraction_errors)
 
         except ArchiveSecurityError as e:
             warnings.append(f"Security error in {filename}: {e}")
