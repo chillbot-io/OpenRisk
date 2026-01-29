@@ -8,7 +8,7 @@ Note: Full OCR tests require optional dependencies (rapidocr-onnxruntime, numpy,
 import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, PropertyMock
 
 # Import the functions we can test without optional dependencies
 from openlabels.adapters.scanner.ocr import (
@@ -376,8 +376,8 @@ class TestOCREngine:
         with tempfile.TemporaryDirectory() as tmpdir:
             engine = OCREngine(Path(tmpdir))
 
-            # Patch is_available to return False
-            with patch.object(engine, 'is_available', False):
+            # Patch is_available property on the class to return False
+            with patch.object(OCREngine, 'is_available', new_callable=PropertyMock, return_value=False):
                 with pytest.raises(ImportError):
                     engine._ensure_initialized()
 
