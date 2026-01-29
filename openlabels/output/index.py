@@ -87,6 +87,14 @@ def _validate_label_json(json_str: str) -> dict:
     """
     Validate and parse label JSON data.
 
+    Uses compact field names per OpenLabels spec:
+    - v: version
+    - id: label_id
+    - hash: content_hash
+    - labels: array of {t, c, d, h, n?, x?}
+    - src: source
+    - ts: timestamp
+
     Args:
         json_str: JSON string from database
 
@@ -105,34 +113,49 @@ def _validate_label_json(json_str: str) -> dict:
     if not isinstance(data, dict):
         raise CorruptedDataError("Label data must be an object")
 
-    required_fields = ["labelID", "content_hash", "labels", "source"]
+    # Validate required fields (compact schema)
+    required_fields = ["v", "id", "hash", "labels", "src", "ts"]
     for field in required_fields:
         if field not in data:
             raise CorruptedDataError(f"Missing required field: {field}")
 
-    if not isinstance(data.get("labelID"), str) or not data["labelID"]:
-        raise CorruptedDataError("labelID must be a non-empty string")
+    if not isinstance(data.get("v"), int):
+        raise CorruptedDataError("v (version) must be an integer")
 
-    if not isinstance(data.get("content_hash"), str) or not data["content_hash"]:
-        raise CorruptedDataError("content_hash must be a non-empty string")
+    if not isinstance(data.get("id"), str) or not data["id"]:
+        raise CorruptedDataError("id (label_id) must be a non-empty string")
+
+    if not isinstance(data.get("hash"), str) or not data["hash"]:
+        raise CorruptedDataError("hash (content_hash) must be a non-empty string")
 
     if not isinstance(data.get("labels"), list):
         raise CorruptedDataError("labels must be an array")
 
-    # Validate each label entry
+    if not isinstance(data.get("src"), str):
+        raise CorruptedDataError("src (source) must be a string")
+
+    if not isinstance(data.get("ts"), int):
+        raise CorruptedDataError("ts (timestamp) must be an integer")
+
+    # Validate each label entry (compact schema: t, c, d, h)
     for i, label in enumerate(data["labels"]):
         if not isinstance(label, dict):
             raise CorruptedDataError(f"labels[{i}] must be an object")
-        if "type" not in label or not isinstance(label.get("type"), str):
-            raise CorruptedDataError(f"labels[{i}].type must be a string")
-        if "count" in label and not isinstance(label.get("count"), int):
-            raise CorruptedDataError(f"labels[{i}].count must be an integer")
-        if "confidence" in label:
-            conf = label.get("confidence")
-            if not isinstance(conf, (int, float)) or conf < 0 or conf > 1:
-                raise CorruptedDataError(
-                    f"labels[{i}].confidence must be a number between 0 and 1"
-                )
+        if "t" not in label or not isinstance(label.get("t"), str):
+            raise CorruptedDataError(f"labels[{i}].t (type) must be a string")
+        if "c" not in label:
+            raise CorruptedDataError(f"labels[{i}].c (confidence) is required")
+        conf = label.get("c")
+        if not isinstance(conf, (int, float)) or conf < 0 or conf > 1:
+            raise CorruptedDataError(
+                f"labels[{i}].c (confidence) must be a number between 0 and 1"
+            )
+        if "d" not in label or not isinstance(label.get("d"), str):
+            raise CorruptedDataError(f"labels[{i}].d (detector) must be a string")
+        if "h" not in label or not isinstance(label.get("h"), str):
+            raise CorruptedDataError(f"labels[{i}].h (value_hash) must be a string")
+        if "n" in label and not isinstance(label.get("n"), int):
+            raise CorruptedDataError(f"labels[{i}].n (count) must be an integer")
 
     return data
 

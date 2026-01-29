@@ -6,11 +6,7 @@ Tests the SQLite-based label index including:
 - Transaction handling
 - Query filtering
 - Export functionality
-
-NOTE: There is a known schema mismatch between _validate_label_json (expects verbose
-field names like labelID, content_hash) and LabelSet.to_json() (produces compact
-field names like id, hash). Tests that require full store/get cycle are adjusted
-to account for this.
+- Full store/get cycle with compact schema validation
 """
 
 import pytest
@@ -112,13 +108,20 @@ class TestBuildFilterClause:
 
 
 class TestValidateLabelJson:
-    """Tests for label JSON validation."""
+    """Tests for label JSON validation using compact schema."""
 
     def test_valid_json(self):
-        """Valid JSON (verbose format) should pass."""
-        json_str = '{"labelID":"ol_123456789012","content_hash":"abc123def456","labels":[],"source":"test"}'
+        """Valid JSON (compact format) should pass."""
+        json_str = json.dumps({
+            "v": 1,
+            "id": "ol_123456789012",
+            "hash": "abc123def456",
+            "labels": [],
+            "src": "test",
+            "ts": 1234567890
+        })
         result = _validate_label_json(json_str)
-        assert result["labelID"] == "ol_123456789012"
+        assert result["id"] == "ol_123456789012"
 
     def test_invalid_json_syntax(self):
         """Malformed JSON should raise CorruptedDataError."""
@@ -128,40 +131,74 @@ class TestValidateLabelJson:
     def test_missing_required_field(self):
         """Missing required field should raise CorruptedDataError."""
         with pytest.raises(CorruptedDataError, match="Missing required field"):
-            _validate_label_json('{"labelID":"x"}')
+            _validate_label_json('{"v":1,"id":"x"}')
 
     def test_invalid_label_id_type(self):
-        """Non-string labelID should raise CorruptedDataError."""
-        with pytest.raises(CorruptedDataError, match="labelID must be"):
-            _validate_label_json('{"labelID":123,"content_hash":"x","labels":[],"source":"x"}')
+        """Non-string id should raise CorruptedDataError."""
+        json_str = json.dumps({
+            "v": 1, "id": 123, "hash": "x", "labels": [], "src": "x", "ts": 123
+        })
+        with pytest.raises(CorruptedDataError, match="id.*must be"):
+            _validate_label_json(json_str)
 
     def test_invalid_labels_type(self):
         """Non-array labels should raise CorruptedDataError."""
+        json_str = json.dumps({
+            "v": 1, "id": "x", "hash": "x", "labels": "not array", "src": "x", "ts": 123
+        })
         with pytest.raises(CorruptedDataError, match="labels must be an array"):
-            _validate_label_json('{"labelID":"x","content_hash":"x","labels":"not array","source":"x"}')
+            _validate_label_json(json_str)
 
     def test_invalid_label_entry(self):
         """Invalid label entry should raise CorruptedDataError."""
+        json_str = json.dumps({
+            "v": 1, "id": "x", "hash": "x", "labels": ["not object"], "src": "x", "ts": 123
+        })
         with pytest.raises(CorruptedDataError, match="must be an object"):
-            _validate_label_json('{"labelID":"x","content_hash":"x","labels":["not object"],"source":"x"}')
+            _validate_label_json(json_str)
 
     def test_invalid_confidence_range(self):
         """Confidence outside 0-1 should raise CorruptedDataError."""
-        with pytest.raises(CorruptedDataError, match="confidence must be"):
-            _validate_label_json(
-                '{"labelID":"x","content_hash":"x","labels":[{"type":"SSN","confidence":1.5}],"source":"x"}'
-            )
+        json_str = json.dumps({
+            "v": 1, "id": "x", "hash": "x",
+            "labels": [{"t": "SSN", "c": 1.5, "d": "test", "h": "abc123"}],
+            "src": "x", "ts": 123
+        })
+        with pytest.raises(CorruptedDataError, match="confidence.*must be"):
+            _validate_label_json(json_str)
 
     def test_valid_with_labels(self):
         """Valid JSON with labels should pass."""
         json_str = json.dumps({
-            "labelID": "ol_123456789012",
-            "content_hash": "abc123def456",
-            "labels": [{"type": "SSN", "confidence": 0.95, "count": 1}],
-            "source": "test"
+            "v": 1,
+            "id": "ol_123456789012",
+            "hash": "abc123def456",
+            "labels": [{"t": "SSN", "c": 0.95, "d": "checksum", "h": "abc123"}],
+            "src": "test",
+            "ts": 1234567890
         })
         result = _validate_label_json(json_str)
         assert len(result["labels"]) == 1
+
+    def test_missing_label_type(self):
+        """Missing label type should raise CorruptedDataError."""
+        json_str = json.dumps({
+            "v": 1, "id": "x", "hash": "x",
+            "labels": [{"c": 0.9, "d": "test", "h": "abc123"}],
+            "src": "x", "ts": 123
+        })
+        with pytest.raises(CorruptedDataError, match="t.*type.*must be"):
+            _validate_label_json(json_str)
+
+    def test_missing_label_detector(self):
+        """Missing label detector should raise CorruptedDataError."""
+        json_str = json.dumps({
+            "v": 1, "id": "x", "hash": "x",
+            "labels": [{"t": "SSN", "c": 0.9, "h": "abc123"}],
+            "src": "x", "ts": 123
+        })
+        with pytest.raises(CorruptedDataError, match="d.*detector.*must be"):
+            _validate_label_json(json_str)
 
 
 class TestLabelIndexInit:
@@ -237,15 +274,43 @@ class TestLabelIndexStore:
 class TestLabelIndexGet:
     """Tests for retrieving labels."""
 
+    def test_get_existing(self, index, sample_labelset):
+        """Should retrieve existing label after store."""
+        index.store(sample_labelset)
+
+        retrieved = index.get(sample_labelset.label_id)
+        assert retrieved is not None
+        assert retrieved.label_id == sample_labelset.label_id
+        assert retrieved.content_hash == sample_labelset.content_hash
+
     def test_get_nonexistent(self, index):
         """Should return None for nonexistent label."""
         result = index.get("ol_nonexistent1")
         assert result is None
 
+    def test_get_with_content_hash(self, index, sample_labelset):
+        """Should retrieve specific version by content hash."""
+        index.store(sample_labelset)
+
+        retrieved = index.get(
+            sample_labelset.label_id,
+            content_hash=sample_labelset.content_hash
+        )
+        assert retrieved is not None
+        assert retrieved.content_hash == sample_labelset.content_hash
+
     def test_get_raise_on_error(self, index):
         """Should raise NotFoundError with raise_on_error=True."""
         with pytest.raises(NotFoundError):
             index.get("ol_nonexistent1", raise_on_error=True)
+
+    def test_get_by_path_existing(self, index, sample_labelset):
+        """Should retrieve by file path after store."""
+        index.store(sample_labelset, file_path="/test/file.txt")
+
+        retrieved = index.get_by_path("/test/file.txt")
+        assert retrieved is not None
+        assert retrieved.label_id == sample_labelset.label_id
 
     def test_get_by_path_nonexistent(self, index):
         """Should return None for nonexistent path."""
@@ -256,6 +321,23 @@ class TestLabelIndexGet:
         """Should raise NotFoundError with raise_on_error=True."""
         with pytest.raises(NotFoundError):
             index.get_by_path("/nonexistent", raise_on_error=True)
+
+
+class TestLabelIndexResolve:
+    """Tests for resolving virtual label pointers."""
+
+    def test_resolve_pointer(self, index, sample_labelset):
+        """Should resolve valid pointer after store."""
+        index.store(sample_labelset)
+
+        pointer = VirtualLabelPointer(
+            sample_labelset.label_id,
+            sample_labelset.content_hash
+        )
+        resolved = index.resolve(pointer)
+
+        assert resolved is not None
+        assert resolved.label_id == sample_labelset.label_id
 
 
 class TestLabelIndexVersions:
