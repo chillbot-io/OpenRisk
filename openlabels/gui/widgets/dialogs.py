@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QWidget,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 
 
 class S3CredentialsDialog(QDialog):
@@ -320,13 +320,32 @@ class SettingsDialog(QDialog):
             self._quarantine_path.setText(folder)
 
     def _load_settings(self):
-        """Load settings from config."""
-        # TODO: Load from actual config file
-        pass
+        """Load settings from QSettings."""
+        settings = QSettings("OpenLabels", "OpenLabels")
+
+        self._max_file_size.setValue(settings.value("scan/max_file_size_mb", 100, type=int))
+        self._threads.setValue(settings.value("scan/threads", 4, type=int))
+        self._include_archives.setChecked(settings.value("scan/include_archives", False, type=bool))
+        self._excluded_patterns.setText(settings.value("scan/excluded_patterns", ".git,node_modules,__pycache__"))
+
+        default_quarantine = str(Path.home() / ".openlabels" / "quarantine")
+        self._quarantine_path.setText(settings.value("storage/quarantine_path", default_quarantine))
+
+        self._show_hidden.setChecked(settings.value("display/show_hidden", False, type=bool))
 
     def _save_settings(self):
-        """Save settings to config."""
-        # TODO: Save to actual config file
+        """Save settings to QSettings."""
+        settings = QSettings("OpenLabels", "OpenLabels")
+
+        settings.setValue("scan/max_file_size_mb", self._max_file_size.value())
+        settings.setValue("scan/threads", self._threads.value())
+        settings.setValue("scan/include_archives", self._include_archives.isChecked())
+        settings.setValue("scan/excluded_patterns", self._excluded_patterns.text())
+
+        settings.setValue("storage/quarantine_path", self._quarantine_path.text())
+
+        settings.setValue("display/show_hidden", self._show_hidden.isChecked())
+
         self.accept()
 
     def _restore_defaults(self):

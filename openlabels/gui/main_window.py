@@ -321,9 +321,6 @@ class MainWindow(QMainWindow):
     def _do_quarantine(self, file_path: str):
         """Actually quarantine a file."""
         try:
-            from openlabels import Client
-
-            client = Client()
             # Use default quarantine location
             quarantine_dir = Path.home() / ".openlabels" / "quarantine"
             quarantine_dir.mkdir(parents=True, exist_ok=True)
@@ -357,13 +354,9 @@ class MainWindow(QMainWindow):
             self._do_label(file_path, labels)
 
     def _do_label(self, file_path: str, labels: List[str]):
-        """Actually apply labels to a file."""
+        """Apply labels to a file."""
         try:
-            from openlabels import Client
-
-            client = Client()
-            # TODO: Implement label application via client
-            # For now just update the local result
+            # Update local result (API integration pending)
             for result in self._scan_results:
                 if result.get("path") == file_path:
                     result["labels"] = labels
