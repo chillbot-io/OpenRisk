@@ -19,14 +19,13 @@ Usage:
 
 import json
 import logging
+import os
 import threading
 from typing import Optional, List, Dict, Any
-from datetime import datetime
 from contextlib import contextmanager
-from urllib.parse import urlparse
 
 from ..core.labels import LabelSet, VirtualLabelPointer
-from ..adapters.scanner.constants import DEFAULT_QUERY_LIMIT, DEFAULT_BATCH_SIZE
+from ..adapters.scanner.constants import DEFAULT_QUERY_LIMIT
 from ..core.exceptions import (
     DatabaseError,
     CorruptedDataError,
@@ -96,13 +95,13 @@ class PostgresLabelIndex:
 
     SCHEMA_VERSION = 1
 
+    # Thread-local storage for connections, keyed by connection string hash
     _thread_local = threading.local()
 
     def __init__(
         self,
         connection_string: str,
         tenant_id: str = "default",
-        pool_size: int = 5,
     ):
         """
         Initialize PostgreSQL label index.
@@ -111,12 +110,13 @@ class PostgresLabelIndex:
             connection_string: PostgreSQL connection URL
                 (e.g., postgresql://user:pass@host:5432/dbname)
             tenant_id: Tenant identifier for multi-tenant isolation
-            pool_size: Maximum connections per thread (not used for thread-local)
         """
         self.connection_string = connection_string
         self.tenant_id = tenant_id
         self._lock = threading.Lock()
         self._closed = False
+        # Unique key for this connection in thread-local storage
+        self._conn_key = f"conn_{hash(connection_string)}"
 
         # Import psycopg
         self._psycopg, self._psycopg_version = _get_psycopg()
@@ -129,11 +129,11 @@ class PostgresLabelIndex:
         if self._closed:
             raise DatabaseError("PostgresLabelIndex has been closed")
 
-        conn = getattr(self._thread_local, 'conn', None)
+        conn = getattr(self._thread_local, self._conn_key, None)
 
         if conn is None or (hasattr(conn, 'closed') and conn.closed):
             conn = self._psycopg.connect(self.connection_string)
-            self._thread_local.conn = conn
+            setattr(self._thread_local, self._conn_key, conn)
             logger.debug(f"Created new PostgreSQL connection for thread {threading.current_thread().name}")
 
         return conn
@@ -246,13 +246,16 @@ class PostgresLabelIndex:
         with self._lock:
             self._closed = True
 
-        conn = getattr(self._thread_local, 'conn', None)
+        conn = getattr(self._thread_local, self._conn_key, None)
         if conn is not None:
             try:
                 conn.close()
             except Exception as e:
                 logger.warning(f"Error closing connection: {e}")
-            self._thread_local.conn = None
+            try:
+                delattr(self._thread_local, self._conn_key)
+            except AttributeError:
+                pass
 
     def __enter__(self):
         return self
@@ -281,7 +284,7 @@ class PostgresLabelIndex:
             True if successful
         """
         entity_types = ','.join(sorted(set(l.type for l in label_set.labels)))
-        file_name = file_path.rsplit('/', 1)[-1] if file_path else None
+        file_name = os.path.basename(file_path) if file_path else None
 
         try:
             with self._cursor() as cur:
