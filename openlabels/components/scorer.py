@@ -72,10 +72,10 @@ class Scorer:
                 inputs.append(normalized)
             return self.score_from_adapters(inputs, exposure=exposure)
 
-        # Default: use built-in scanner
+        # Default: use built-in scanner with context for isolation
         from ..adapters.scanner import detect_file
 
-        detection_result = detect_file(path)
+        detection_result = detect_file(path, context=self._ctx)
         entities = self._normalize_entity_counts(detection_result.entity_counts)
         confidence = self._calculate_average_confidence(detection_result.spans)
 
@@ -100,7 +100,8 @@ class Scorer:
 
         exposure = (exposure or self.default_exposure).upper()
 
-        detection_result = detect(text)
+        # Pass context for resource isolation
+        detection_result = detect(text, context=self._ctx)
         entities = self._normalize_entity_counts(detection_result.entity_counts)
         confidence = self._calculate_average_confidence(detection_result.spans)
 

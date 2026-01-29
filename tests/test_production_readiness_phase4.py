@@ -415,27 +415,22 @@ class TestOrchestratorContextIntegration:
         finally:
             ctx.close()
 
-    def test_orchestrator_without_context_uses_legacy(self):
-        """Orchestrator without Context uses legacy globals with warning."""
+    def test_orchestrator_without_context_uses_default(self):
+        """Orchestrator without Context auto-creates default context."""
         from openlabels.adapters.scanner.detectors.orchestrator import (
             DetectorOrchestrator,
         )
         from openlabels.adapters.scanner.config import Config
-        import openlabels.adapters.scanner.detectors.thread_pool as thread_pool
 
-        # Reset warning flag
-        thread_pool._DEPRECATED_GLOBALS_WARNING_ISSUED = False
+        # Create orchestrator without explicit context
+        orchestrator = DetectorOrchestrator(config=Config())
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        # Should have auto-created a context
+        assert orchestrator._context is not None
 
-            orchestrator = DetectorOrchestrator(config=Config())
-            # Trigger executor access
-            orchestrator._get_executor()
-
-            # Should have warned about deprecated globals
-            deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-            assert len(deprecation_warnings) >= 1
+        # The executor should work
+        executor = orchestrator._get_executor()
+        assert executor is not None
 
 
 class TestContextCloudHandlerIntegration:

@@ -39,6 +39,7 @@ from .scorer import score as compute_score, ScoringResult, RiskTier
 
 if TYPE_CHECKING:
     from ..adapters.base import Adapter, NormalizedInput
+    from ..context import Context
 
 
 @dataclass
@@ -103,6 +104,7 @@ class Orchestrator:
     Args:
         enable_classification: If True, scanner will run when triggered
         scanner_config: Optional config dict for scanner
+        context: Optional Context for resource isolation
 
     Example:
         >>> # Scenario 1: Metadata only (has vendor labels)
@@ -112,12 +114,18 @@ class Orchestrator:
         >>> # Scenario 2: Full classification
         >>> orchestrator = Orchestrator(enable_classification=True)
         >>> result = orchestrator.process(adapter, source_data, metadata, content)
+
+        >>> # Scenario 3: With isolated context
+        >>> from openlabels import Context
+        >>> ctx = Context()
+        >>> orchestrator = Orchestrator(enable_classification=True, context=ctx)
     """
 
     def __init__(
         self,
         enable_classification: bool = False,
         scanner_config: Optional[Dict] = None,
+        context: Optional["Context"] = None,
     ):
         """
         Initialize the orchestrator.
@@ -125,17 +133,21 @@ class Orchestrator:
         Args:
             enable_classification: Enable scanner for content classification
             scanner_config: Optional scanner configuration overrides
+            context: Optional Context for resource isolation.
+                    When provided, the scanner uses context resources
+                    instead of module-level globals.
         """
         self.enable_classification = enable_classification
         self._scanner = None
         self._scanner_config = scanner_config or {}
+        self._context = context
 
     @property
     def scanner(self):
         """Lazy-load scanner adapter only when needed."""
         if self._scanner is None and self.enable_classification:
             from ..adapters.scanner.scanner_adapter import ScannerAdapter
-            self._scanner = ScannerAdapter(**self._scanner_config)
+            self._scanner = ScannerAdapter(context=self._context, **self._scanner_config)
         return self._scanner
 
     def process(
