@@ -288,6 +288,10 @@ Examples:
         add_heatmap_parser,
         add_shell_parser,
         add_health_parser,
+        add_gui_parser,
+        add_inventory_parser,
+        add_config_parser,
+        add_export_parser,
     )
 
     add_scan_parser(subparsers)
@@ -300,6 +304,10 @@ Examples:
     add_heatmap_parser(subparsers)
     add_shell_parser(subparsers)
     add_health_parser(subparsers)
+    add_gui_parser(subparsers)
+    add_inventory_parser(subparsers)
+    add_config_parser(subparsers)
+    add_export_parser(subparsers)
 
     # Legacy detect commands
     # detect command

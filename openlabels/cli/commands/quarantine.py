@@ -117,10 +117,175 @@ def write_manifest(
     return manifest_path
 
 
+def list_quarantined_files(quarantine_dir: Path) -> List[dict]:
+    """List all quarantined files with their manifests."""
+    files = []
+
+    if not quarantine_dir.exists():
+        return files
+
+    # Find manifest files
+    manifests = list(quarantine_dir.glob("quarantine_manifest_*.json"))
+
+    for manifest_path in manifests:
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+                for file_info in manifest.get("files", []):
+                    file_info["manifest"] = str(manifest_path)
+                    file_info["quarantine_date"] = manifest.get("quarantine_date", "")
+                    files.append(file_info)
+        except (json.JSONDecodeError, IOError):
+            continue
+
+    return files
+
+
+def cmd_quarantine_list(args) -> int:
+    """List quarantined files."""
+    from openlabels.cli.output import console
+    from rich.panel import Panel
+    from rich.table import Table
+
+    quarantine_dir = Path(args.quarantine_dir) if args.quarantine_dir else Path.home() / ".openlabels" / "quarantine"
+
+    files = list_quarantined_files(quarantine_dir)
+
+    if not files:
+        echo("No quarantined files found.")
+        echo(f"Quarantine directory: {quarantine_dir}")
+        return 0
+
+    # Show as panel with table
+    console.print(Panel(
+        f"[bold]{len(files)} files quarantined[/bold]\n\n"
+        f"Restore: openlabels quarantine --restore <original-path>\n"
+        f"Delete:  openlabels quarantine --delete <original-path>",
+        title=f"Quarantine: {quarantine_dir}",
+        border_style="yellow",
+    ))
+
+    # Show table
+    table = Table()
+    table.add_column("Original Path", style="cyan")
+    table.add_column("Quarantined", style="dim")
+    table.add_column("Score", justify="right")
+    table.add_column("Tier", justify="center")
+
+    for f in files:
+        tier = f.get("tier", "UNKNOWN")
+        tier_style = {
+            "CRITICAL": "bold red",
+            "HIGH": "yellow",
+            "MEDIUM": "orange3",
+            "LOW": "green",
+        }.get(tier, "dim")
+
+        table.add_row(
+            f.get("original_path", ""),
+            f.get("quarantine_date", "")[:16] if f.get("quarantine_date") else "",
+            str(f.get("score", 0)),
+            f"[{tier_style}]{tier}[/{tier_style}]",
+        )
+
+    console.print(table)
+    return 0
+
+
+def cmd_quarantine_restore(args) -> int:
+    """Restore a quarantined file."""
+    quarantine_dir = Path(args.quarantine_dir) if args.quarantine_dir else Path.home() / ".openlabels" / "quarantine"
+    original_path = args.restore
+
+    files = list_quarantined_files(quarantine_dir)
+
+    # Find the file
+    file_info = None
+    for f in files:
+        if f.get("original_path") == original_path:
+            file_info = f
+            break
+
+    if not file_info:
+        error(f"File not found in quarantine: {original_path}")
+        return 1
+
+    new_path = Path(file_info.get("new_path", ""))
+    if not new_path.exists():
+        error(f"Quarantined file no longer exists: {new_path}")
+        return 1
+
+    # Restore the file
+    try:
+        original = Path(original_path)
+        original.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(new_path), str(original))
+        success(f"Restored: {original_path}")
+        return 0
+    except Exception as e:
+        error(f"Failed to restore: {e}")
+        return 1
+
+
+def cmd_quarantine_delete(args) -> int:
+    """Delete a quarantined file permanently."""
+    from openlabels.cli.output import confirm_destructive
+
+    quarantine_dir = Path(args.quarantine_dir) if args.quarantine_dir else Path.home() / ".openlabels" / "quarantine"
+    original_path = args.delete
+
+    files = list_quarantined_files(quarantine_dir)
+
+    # Find the file
+    file_info = None
+    for f in files:
+        if f.get("original_path") == original_path:
+            file_info = f
+            break
+
+    if not file_info:
+        error(f"File not found in quarantine: {original_path}")
+        return 1
+
+    new_path = Path(file_info.get("new_path", ""))
+
+    if not args.force:
+        if not confirm_destructive(
+            f"Permanently delete {original_path}?",
+            confirmation_word="DELETE"
+        ):
+            echo("Cancelled")
+            return 1
+
+    try:
+        if new_path.exists():
+            new_path.unlink()
+        success(f"Deleted: {original_path}")
+        return 0
+    except Exception as e:
+        error(f"Failed to delete: {e}")
+        return 1
+
+
 def cmd_quarantine(args) -> int:
     """Execute the quarantine command."""
+    # Handle subcommands
+    if args.list:
+        return cmd_quarantine_list(args)
+    if args.restore:
+        return cmd_quarantine_restore(args)
+    if args.delete:
+        return cmd_quarantine_delete(args)
+
+    # Original quarantine behavior requires source, where, and to
+    if not args.source:
+        error("Source path is required for quarantine operation")
+        error("Or use --list to view quarantined files")
+        return 1
+
     if not args.where:
         error("--where filter is required for quarantine")
+        error("Or use --list to view quarantined files")
         return 1
 
     if not args.to:
@@ -261,20 +426,40 @@ def add_quarantine_parser(subparsers):
     """Add the quarantine subparser."""
     parser = subparsers.add_parser(
         "quarantine",
-        help="Move matching files to quarantine location",
+        help="Move matching files to quarantine location, or manage quarantined files",
     )
     parser.add_argument(
         "source",
-        help="Local source path to search",
+        nargs="?",
+        help="Local source path to search (not needed for --list, --restore, --delete)",
+    )
+    # Management subcommands
+    parser.add_argument(
+        "--list", "-l",
+        action="store_true",
+        help="List quarantined files",
     )
     parser.add_argument(
+        "--restore",
+        metavar="PATH",
+        help="Restore a quarantined file by its original path",
+    )
+    parser.add_argument(
+        "--delete",
+        metavar="PATH",
+        help="Permanently delete a quarantined file by its original path",
+    )
+    parser.add_argument(
+        "--quarantine-dir",
+        help="Quarantine directory (default: ~/.openlabels/quarantine)",
+    )
+    # Original quarantine operation arguments
+    parser.add_argument(
         "--where", "-w",
-        required=True,
-        help="Filter expression (required)",
+        help="Filter expression (required for quarantine operation)",
     )
     parser.add_argument(
         "--to", "-t",
-        required=True,
         help="Local destination quarantine directory",
     )
     parser.add_argument(
