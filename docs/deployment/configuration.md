@@ -39,9 +39,24 @@ Complete reference for OpenLabels configuration options.
 | Variable | Description | Default | Values |
 |----------|-------------|---------|--------|
 | `OPENLABELS_DETECTOR_TIMEOUT` | Detector timeout | `30` | Seconds |
-| `OPENLABELS_ENABLE_ML` | Enable ML-based detection | `true` | `true`, `false` |
-| `OPENLABELS_ML_MODEL_PATH` | Custom ML model path | Built-in | File path |
 | `OPENLABELS_STRICT_MODE` | Fail on any detector error | `false` | `true`, `false` |
+
+### Database
+
+| Variable | Description | Default | Values |
+|----------|-------------|---------|--------|
+| `OPENLABELS_DATABASE_URL` | Database connection string | `~/.openlabels/index.db` | SQLite path or PostgreSQL URL |
+| `OPENLABELS_TENANT_ID` | Tenant identifier for multi-tenant mode | `default` | String |
+
+**SQLite (default - single node):**
+```bash
+export OPENLABELS_DATABASE_URL="~/.openlabels/index.db"
+```
+
+**PostgreSQL (server mode - multi-tenant):**
+```bash
+export OPENLABELS_DATABASE_URL="postgresql://user:password@localhost:5432/openlabels"
+```
 
 ### Performance
 
@@ -49,7 +64,7 @@ Complete reference for OpenLabels configuration options.
 |----------|-------------|---------|--------|
 | `OPENLABELS_BATCH_SIZE` | Database batch size | `1000` | Integer |
 | `OPENLABELS_MEMORY_LIMIT` | Memory limit for processing | None | Size string |
-| `OPENLABELS_CONNECTION_POOL_SIZE` | SQLite connection pool size | `5` | Integer |
+| `OPENLABELS_CONNECTION_POOL_SIZE` | Connection pool size | `5` | Integer |
 
 ## CLI Flags
 
@@ -177,7 +192,6 @@ scanning:
 # Detection
 detection:
   detector_timeout: 30
-  enable_ml: true
   strict_mode: false
 
 # Patterns to always exclude

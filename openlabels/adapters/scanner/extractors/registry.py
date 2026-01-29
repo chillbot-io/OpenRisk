@@ -18,8 +18,11 @@ def _init_extractors() -> List[BaseExtractor]:
         from .pdf import PDFExtractor
         from .image import ImageExtractor
         from .office import DOCXExtractor, XLSXExtractor, TextExtractor, RTFExtractor
+        from .archive import ArchiveExtractor
 
         _EXTRACTORS = [
+            # Archive extractor first - it delegates to others for contained files
+            ArchiveExtractor(),
             PDFExtractor(),
             DOCXExtractor(),
             XLSXExtractor(),

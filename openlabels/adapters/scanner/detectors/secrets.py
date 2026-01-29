@@ -254,6 +254,159 @@ _add(r'(\?sv=\d{4}-\d{2}-\d{2}&[^"\s]+sig=[a-zA-Z0-9%]+)', 'AZURE_SAS_TOKEN', CO
 _add(r'(Endpoint=sb://[^;]+;SharedAccessKeyName=[^;]+;SharedAccessKey=[a-zA-Z0-9+/=]+)', 'AZURE_CONNECTION_STRING', CONFIDENCE_VERY_HIGH, 1)
 
 
+# --- AI/ML PLATFORMS ---
+# OpenAI API Key (multiple formats)
+_add(r'\b(sk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20})\b', 'OPENAI_API_KEY', CONFIDENCE_PERFECT, 1)
+_add(r'\b(sk-proj-[a-zA-Z0-9\-_]{20,})\b', 'OPENAI_API_KEY', CONFIDENCE_PERFECT, 1)
+_add(r'\b(sk-[a-zA-Z0-9]{32,})\b', 'OPENAI_API_KEY', CONFIDENCE_HIGH, 1)
+
+# Anthropic API Key
+_add(r'\b(sk-ant-[a-zA-Z0-9\-_]{32,})\b', 'ANTHROPIC_API_KEY', CONFIDENCE_PERFECT, 1)
+
+# Hugging Face Token
+_add(r'\b(hf_[a-zA-Z0-9]{20,})\b', 'HUGGINGFACE_TOKEN', CONFIDENCE_PERFECT, 1)
+
+# Cohere API Key
+_add(r'(?:cohere)[_\s]*(?:api[_\s]*)?key["\s:=]+([a-zA-Z0-9]{20,})', 'COHERE_API_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Replicate API Token
+_add(r'\b(r8_[a-zA-Z0-9]{20,})\b', 'REPLICATE_API_KEY', CONFIDENCE_PERFECT, 1)
+
+# Groq API Key
+_add(r'\b(gsk_[a-zA-Z0-9]{48,})\b', 'GROQ_API_KEY', CONFIDENCE_PERFECT, 1)
+
+
+# --- CI/CD PLATFORMS ---
+# CircleCI API Token
+_add(r'(?:circleci|circle)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-f0-9]{40})', 'CIRCLECI_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Azure DevOps Personal Access Token
+_add(r'\b([a-z0-9]{52})\b(?=.*(?:azure|devops|visualstudio))', 'AZURE_DEVOPS_PAT', CONFIDENCE_MEDIUM, 1, re.I)
+
+# Vercel Token
+_add(r'(?:vercel|zeit)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-zA-Z0-9]{24})', 'VERCEL_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Netlify Token
+_add(r'(?:netlify)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-zA-Z0-9\-_]{40,})', 'NETLIFY_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Render API Key
+_add(r'\b(rnd_[a-zA-Z0-9]{32})\b', 'RENDER_API_KEY', CONFIDENCE_VERY_HIGH, 1)
+
+# Railway Token
+_add(r'(?:railway)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-f0-9\-]{36})', 'RAILWAY_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Fly.io Token
+_add(r'\b(fo1_[a-zA-Z0-9\-_]{40,})\b', 'FLY_TOKEN', CONFIDENCE_VERY_HIGH, 1)
+
+
+# --- CONTAINER REGISTRIES ---
+# Docker Hub Token
+_add(r'\b(dckr_pat_[a-zA-Z0-9\-_]{20,})\b', 'DOCKER_HUB_TOKEN', CONFIDENCE_PERFECT, 1)
+
+
+# --- COMMUNICATION PLATFORMS ---
+# Telegram Bot Token (format: bot_id:token)
+_add(r'\b(\d{8,10}:[a-zA-Z0-9_\-]{30,})\b', 'TELEGRAM_BOT_TOKEN', CONFIDENCE_VERY_HIGH, 1)
+
+# Microsoft Teams Webhook
+_add(r'(https://[a-z0-9]+\.webhook\.office\.com/webhookb2/[a-f0-9\-]+/IncomingWebhook/[a-zA-Z0-9]+/[a-f0-9\-]+)', 'TEAMS_WEBHOOK', CONFIDENCE_VERY_HIGH, 1)
+
+# Twitch OAuth Token
+_add(r'\b(oauth:[a-z0-9]{30})\b', 'TWITCH_TOKEN', CONFIDENCE_VERY_HIGH, 1, re.I)
+
+# Zoom JWT Token (contextual)
+_add(r'(?:zoom)[_\s]*(?:jwt|api)[_\s]*(?:token|key|secret)["\s:=]+([a-zA-Z0-9\-_]{32,})', 'ZOOM_JWT', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Zoom SDK Key/Secret
+_add(r'(?:zoom)[_\s]*(?:sdk)[_\s]*(?:key|secret)["\s:=]+([a-zA-Z0-9]{22,})', 'ZOOM_SDK_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+
+
+# --- ADDITIONAL PAYMENT PROCESSORS ---
+# PayPal Client ID/Secret (contextual)
+_add(r'(?:paypal)[_\s]*(?:client[_\s]*)?id["\s:=]+([A-Za-z0-9\-_]{80})', 'PAYPAL_CLIENT_ID', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:paypal)[_\s]*(?:client[_\s]*)?secret["\s:=]+([A-Za-z0-9\-_]{80})', 'PAYPAL_SECRET', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Plaid API Keys
+_add(r'(?:plaid)[_\s]*(?:client[_\s]*)?id["\s:=]+([a-f0-9]{24})', 'PLAID_CLIENT_ID', CONFIDENCE_RELIABLE, 1, re.I)
+_add(r'(?:plaid)[_\s]*secret["\s:=]+([a-f0-9]{30})', 'PLAID_SECRET', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Adyen API Key
+_add(r'\b(AQE[a-zA-Z0-9\-_]{50,})\b', 'ADYEN_API_KEY', CONFIDENCE_VERY_HIGH, 1)
+
+
+# --- SAAS PLATFORMS ---
+# Atlassian API Token
+_add(r'(?:atlassian|jira|confluence)[_\s]*(?:api[_\s]*)?(?:token|key)["\s:=]+([a-zA-Z0-9]{24})', 'ATLASSIAN_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Notion API Token
+_add(r'\b(secret_[a-zA-Z0-9]{32,})\b', 'NOTION_TOKEN', CONFIDENCE_PERFECT, 1)
+_add(r'\b(ntn_[a-zA-Z0-9]{32,})\b', 'NOTION_TOKEN', CONFIDENCE_PERFECT, 1)
+
+# Airtable API Key
+_add(r'\b(key[a-zA-Z0-9]{14})\b', 'AIRTABLE_KEY', CONFIDENCE_MEDIUM, 1)
+_add(r'\b(pat[a-zA-Z0-9]{10,}\.[a-f0-9]{32,})\b', 'AIRTABLE_KEY', CONFIDENCE_VERY_HIGH, 1)
+
+# Linear API Key
+_add(r'\b(lin_api_[a-zA-Z0-9]{20,})\b', 'LINEAR_TOKEN', CONFIDENCE_PERFECT, 1)
+
+# Figma Access Token
+_add(r'\b(figd_[a-zA-Z0-9\-_]{40,})\b', 'FIGMA_TOKEN', CONFIDENCE_VERY_HIGH, 1)
+
+# Sentry DSN
+_add(r'(https://[a-f0-9]+@(?:o\d+\.)?(?:sentry\.io|[a-z]+\.ingest\.sentry\.io)/\d+)', 'SENTRY_DSN', CONFIDENCE_VERY_HIGH, 1)
+
+# PagerDuty API Key
+_add(r'\b(u\+[a-zA-Z0-9\-_]{18})\b', 'PAGERDUTY_KEY', CONFIDENCE_HIGH, 1)
+
+# LaunchDarkly SDK Key
+_add(r'\b(sdk-[a-f0-9\-]{36})\b', 'LAUNCHDARKLY_KEY', CONFIDENCE_VERY_HIGH, 1)
+
+# Segment Write Key
+_add(r'(?:segment)[_\s]*(?:write[_\s]*)?key["\s:=]+([a-zA-Z0-9]{32})', 'SEGMENT_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Intercom Access Token
+_add(r'\b(dG9rO[a-zA-Z0-9\-_]{40,})\b', 'INTERCOM_TOKEN', CONFIDENCE_HIGH, 1)
+
+
+# --- DATABASE PLATFORMS ---
+# Supabase API Key
+_add(r'\b(sbp_[a-f0-9]{40})\b', 'SUPABASE_KEY', CONFIDENCE_PERFECT, 1)
+# Supabase anon/service key with context (HS256 JWT format)
+_add(r'(?:supabase)[_\s]*(?:anon|service)?[_\s]*(?:key|token)["\s:=]+(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+)', 'SUPABASE_KEY', CONFIDENCE_VERY_HIGH, 1, re.I)
+
+# PlanetScale Token
+_add(r'\b(pscale_tkn_[a-zA-Z0-9\-_]{43})\b', 'PLANETSCALE_TOKEN', CONFIDENCE_PERFECT, 1)
+
+# Databricks Token
+_add(r'\b(dapi[a-f0-9]{32})\b', 'DATABRICKS_TOKEN', CONFIDENCE_VERY_HIGH, 1)
+
+# Algolia Admin Key
+_add(r'(?:algolia)[_\s]*(?:admin[_\s]*)?(?:api[_\s]*)?key["\s:=]+([a-f0-9]{32})', 'ALGOLIA_KEY', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Grafana API Token
+_add(r'\b(glc_[a-zA-Z0-9\-_]{32,})\b', 'GRAFANA_TOKEN', CONFIDENCE_VERY_HIGH, 1)
+_add(r'\b(glsa_[a-zA-Z0-9\-_]{32,})\b', 'GRAFANA_TOKEN', CONFIDENCE_VERY_HIGH, 1)
+
+
+# --- EMAIL SERVICES ---
+# Postmark Server Token
+_add(r'(?:postmark)[_\s]*(?:server[_\s]*)?(?:api[_\s]*)?(?:token|key)["\s:=]+([a-f0-9\-]{36})', 'POSTMARK_TOKEN', CONFIDENCE_RELIABLE, 1, re.I)
+
+# Mailgun API Key
+_add(r'\b(key-[a-f0-9]{32})\b', 'MAILGUN_KEY', CONFIDENCE_VERY_HIGH, 1)
+
+# Resend API Key
+_add(r'\b(re_[a-zA-Z0-9]{32})\b', 'RESEND_KEY', CONFIDENCE_VERY_HIGH, 1)
+
+
+# --- ADDITIONAL CLOUD PROVIDERS ---
+# DigitalOcean Token
+_add(r'\b(dop_v1_[a-f0-9]{64})\b', 'DIGITALOCEAN_TOKEN', CONFIDENCE_PERFECT, 1)
+
+# Alibaba Cloud Access Key
+_add(r'\b(LTAI[a-zA-Z0-9]{12,20})\b', 'ALIBABA_ACCESS_KEY', CONFIDENCE_VERY_HIGH, 1)
+
+
 # --- GENERIC SECRETS (CONTEXTUAL) ---
 # Password in config/code (with quotes)
 _add(r'(?:password|passwd|pwd)["\s:=]+["\']([^"\']{8,})["\']', 'PASSWORD', CONFIDENCE_LOW, 1, re.I)

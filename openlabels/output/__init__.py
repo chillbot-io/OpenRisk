@@ -61,6 +61,47 @@ from .index import (
     DEFAULT_INDEX_PATH,
 )
 
+# PostgreSQL index (server mode)
+from .postgres_index import PostgresLabelIndex
+
+
+def create_index(
+    connection_string: str = None,
+    tenant_id: str = "default",
+    **kwargs,
+):
+    """
+    Factory function to create a label index.
+
+    Automatically selects SQLite or PostgreSQL based on connection string.
+
+    Args:
+        connection_string: Database connection string.
+            - None or file path: Uses SQLite (default: ~/.openlabels/index.db)
+            - postgresql:// or postgres://: Uses PostgreSQL
+        tenant_id: Tenant identifier for multi-tenant isolation
+        **kwargs: Additional arguments passed to the index constructor
+
+    Returns:
+        LabelIndex (SQLite) or PostgresLabelIndex (PostgreSQL)
+
+    Examples:
+        # SQLite (default)
+        >>> index = create_index()
+
+        # SQLite with custom path
+        >>> index = create_index("/path/to/index.db")
+
+        # PostgreSQL
+        >>> index = create_index("postgresql://user:pass@localhost/openlabels")
+    """
+    if connection_string and connection_string.startswith(('postgresql://', 'postgres://')):
+        return PostgresLabelIndex(connection_string, tenant_id=tenant_id, **kwargs)
+    else:
+        # SQLite
+        db_path = connection_string if connection_string else None
+        return LabelIndex(db_path=db_path, tenant_id=tenant_id)
+
 # Report generation
 from .report import (
     ReportGenerator,
@@ -101,6 +142,8 @@ __all__ = [
 
     # Index
     'LabelIndex',
+    'PostgresLabelIndex',
+    'create_index',
     'get_default_index',
     'store_label',
     'get_label',

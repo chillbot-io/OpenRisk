@@ -95,7 +95,7 @@ Same content, different risk. Only OpenLabels captures this.
 │  │ • Findings  │  │ • Findings  │  │ • Classif.  │  │ • Patterns          ││
 │  │ • S3 meta   │  │ • GCS meta  │  │ • Blob meta │  │ • Checksums         ││
 │  │             │  │             │  │             │  │ • OCR Worker        ││
-│  │             │  │             │  │             │  │ • Optional ML       ││
+│  │             │  │             │  │             │  │ • Archives          ││
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘│
 │         │                │                │                     │          │
 │         └────────────────┴────────────────┴─────────────────────┘          │
@@ -682,10 +682,6 @@ The scanner is an adapter like any other. It produces the same normalized output
 │  │    │ • Crypto     │  │              │  │              │             │   │
 │  │    └──────────────┘  └──────────────┘  └──────────────┘             │   │
 │  │                                                                      │   │
-│  │    ┌──────────────────────────────────────────────────────────┐     │   │
-│  │    │               ML Detectors (Optional)                     │     │   │
-│  │    │    PHI-BERT, PII-BERT - lazy-loaded from HuggingFace     │     │   │
-│  │    └──────────────────────────────────────────────────────────┘     │   │
 │  └──────────────────────────────┬──────────────────────────────────────┘   │
 │                                 │                                           │
 │                                 ▼                                           │
@@ -718,12 +714,10 @@ class ScannerAdapter:
     def __init__(
         self,
         enable_ocr: bool = True,
-        enable_ml: bool = False,  # Lazy-load from HuggingFace if True
         parallel: bool = True,
     ):
         self.orchestrator = DetectorOrchestrator(
             parallel=parallel,
-            enable_ml=enable_ml,
         )
         self.ocr_worker = OCRWorker() if enable_ocr else None
         self.archive_expander = ArchiveExpander()
@@ -2066,6 +2060,23 @@ CREATE TABLE label_versions (
 
     PRIMARY KEY (label_id, content_hash)
 );
+```
+
+### Database Backends
+
+| Backend | Use Case | Connection String |
+|---------|----------|-------------------|
+| SQLite | Single-node, CLI, development | `~/.openlabels/index.db` (default) |
+| PostgreSQL | Server mode, multi-tenant, production | `postgresql://user:pass@host/db` |
+
+```python
+from openlabels.output import create_index
+
+# SQLite (default)
+index = create_index()
+
+# PostgreSQL (server mode)
+index = create_index("postgresql://localhost/openlabels", tenant_id="acme-corp")
 ```
 
 ### File Type Matrix
