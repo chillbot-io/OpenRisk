@@ -430,7 +430,7 @@ class FileOps:
             )
 
         except OSError as e:
-            # Classify the error             file_error = FileError.from_exception(e, str(source))
+            file_error = FileError.from_exception(e, str(source))
             return OperationResult(
                 success=False,
                 operation="move",
@@ -529,7 +529,7 @@ class FileOps:
                     errors=[],
                 )
             except OSError as e:
-                # Classify the error                 file_error = FileError.from_exception(e, str(path))
+                file_error = FileError.from_exception(e, str(path))
                 return DeleteResult(
                     deleted_count=0,
                     error_count=1,
