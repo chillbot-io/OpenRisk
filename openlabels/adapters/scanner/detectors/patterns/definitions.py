@@ -12,7 +12,7 @@ Domain-specific modules:
 - address.py: Address patterns, ZIP codes, GPS coordinates
 """
 
-import re
+import regex  # Use regex module for ReDoS timeout protection (CVE-READY-003)
 from typing import List, Tuple
 
 # Import domain-specific patterns
@@ -28,7 +28,7 @@ from .address import ADDRESS_PATTERNS
 # group_index is which capture group contains the value (default 0 = whole match)
 
 # Aggregate all patterns for backward compatibility
-PATTERNS: List[Tuple[re.Pattern, str, float, int]] = []
+PATTERNS: List[Tuple[regex.Pattern, str, float, int]] = []
 PATTERNS.extend(PII_PATTERNS)
 PATTERNS.extend(HEALTHCARE_PATTERNS)
 PATTERNS.extend(GOVERNMENT_PATTERNS)
@@ -43,7 +43,7 @@ def add_pattern(pattern: str, entity_type: str, confidence: float, group: int = 
     This function is kept for backward compatibility and for any patterns
     that don't fit cleanly into domain-specific modules.
     """
-    PATTERNS.append((re.compile(pattern, flags), entity_type, confidence, group))
+    PATTERNS.append((regex.compile(pattern, flags), entity_type, confidence, group))
 
 
 # Export all domain pattern lists for direct access

@@ -1,11 +1,11 @@
 """Shared pattern registration utilities for detectors."""
 
-import re
+import regex  # Use regex module for ReDoS timeout protection (CVE-READY-003)
 from typing import Callable, List, Optional, Tuple, Any
 
 # Type alias for compiled pattern tuples
-PatternTuple = Tuple[re.Pattern, str, float, int]
-PatternTupleWithValidator = Tuple[re.Pattern, str, float, int, Optional[Callable]]
+PatternTuple = Tuple[regex.Pattern, str, float, int]
+PatternTupleWithValidator = Tuple[regex.Pattern, str, float, int, Optional[Callable]]
 
 
 def create_pattern_adder(
@@ -33,7 +33,7 @@ def create_pattern_adder(
             validator: Optional[Callable] = None,
             flags: int = 0,
         ) -> None:
-            compiled = re.compile(pattern, flags) if compile_pattern else pattern
+            compiled = regex.compile(pattern, flags) if compile_pattern else pattern
             pattern_list.append((compiled, entity_type, confidence, group, validator))
         return _add
     else:
@@ -45,7 +45,7 @@ def create_pattern_adder(
             flags: int = 0,
         ) -> None:
             if compile_pattern:
-                pattern_list.append((re.compile(pattern, flags), entity_type, confidence, group))
+                pattern_list.append((regex.compile(pattern, flags), entity_type, confidence, group))
             else:
                 pattern_list.append((pattern, entity_type, confidence, group, flags))
         return _add

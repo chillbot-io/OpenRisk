@@ -362,11 +362,6 @@ def add_heatmap_parser(subparsers):
         action="store_true",
         help="Show entity types for each item",
     )
-    parser.add_argument(
-        "--no-color",
-        action="store_true",
-        help="Disable colored output (ignored, use NO_COLOR env var)",
-    )
     parser.set_defaults(func=cmd_heatmap)
 
     return parser

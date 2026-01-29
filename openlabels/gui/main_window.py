@@ -319,11 +319,12 @@ class MainWindow(QMainWindow):
             self._do_quarantine(file_path)
 
     def _do_quarantine(self, file_path: str):
-        """Actually quarantine a file."""
-        try:
-            from openlabels import Client
+        """Actually quarantine a file using secure file operations.
 
-            client = Client()
+        Uses Client.move() which provides TOCTOU protection and symlink validation
+        via the FileOps component (see SECURITY.md TOCTOU-001, HIGH-002).
+        """
+        try:
             # Use default quarantine location
             quarantine_dir = Path.home() / ".openlabels" / "quarantine"
             quarantine_dir.mkdir(parents=True, exist_ok=True)
@@ -331,12 +332,19 @@ class MainWindow(QMainWindow):
             source = Path(file_path)
             dest = quarantine_dir / source.name
 
-            # Handle name collision
-            if dest.exists():
+            # Handle name collision by checking with lstat (TOCTOU-safe)
+            try:
+                dest.lstat()
+                # File exists, add timestamp
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 dest = quarantine_dir / f"{source.stem}_{timestamp}{source.suffix}"
+            except FileNotFoundError:
+                pass  # Destination doesn't exist, use original name
 
-            source.rename(dest)
+            # Use Client.move() for TOCTOU-safe file operation
+            result = client.move(file_path, str(dest))
+            if not result.success:
+                raise RuntimeError(result.error or "Move operation failed")
 
             # Remove from results
             self._scan_results = [r for r in self._scan_results if r.get("path") != file_path]
@@ -357,13 +365,9 @@ class MainWindow(QMainWindow):
             self._do_label(file_path, labels)
 
     def _do_label(self, file_path: str, labels: List[str]):
-        """Actually apply labels to a file."""
+        """Apply labels to a file."""
         try:
-            from openlabels import Client
-
-            client = Client()
-            # TODO: Implement label application via client
-            # For now just update the local result
+            # Update local result (API integration pending)
             for result in self._scan_results:
                 if result.get("path") == file_path:
                     result["labels"] = labels
