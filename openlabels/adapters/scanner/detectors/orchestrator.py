@@ -7,6 +7,7 @@ Detectors are organized by domain:
 - secrets.py: API keys, tokens, credentials, private keys
 - financial.py: Security identifiers (CUSIP, ISIN, SWIFT) and crypto
 - government.py: Classification markings, CAGE codes, contracts
+- regulated_sectors.py: FERPA (education), Legal, Immigration identifiers
 - dictionaries.py: Dictionary-based detection
 
 Concurrency Model:
@@ -61,6 +62,7 @@ from .structured import extract_structured_phi, post_process_ocr, map_span_to_or
 from .secrets import SecretsDetector
 from .financial import FinancialDetector
 from .government import GovernmentDetector
+from .regulated_sectors import RegulatedSectorDetector
 
 # Pipeline imports
 from ..pipeline.merger import filter_tracking_numbers
@@ -162,6 +164,11 @@ class DetectorOrchestrator:
         if enable_government and "government" not in disabled:
             self._detectors.append(GovernmentDetector())
             logger.info("GovernmentDetector enabled (classification, contracts)")
+
+        # Regulated sectors (FERPA, Legal, Immigration) - always enabled unless disabled
+        if "regulated_sectors" not in disabled:
+            self._detectors.append(RegulatedSectorDetector())
+            logger.info("RegulatedSectorDetector enabled (FERPA, legal, immigration)")
 
         # Add dictionary detector if dictionaries exist
         if "dictionaries" not in disabled and self.config.dictionaries_dir.exists():
