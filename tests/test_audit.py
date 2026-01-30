@@ -252,3 +252,71 @@ class TestAuditEncryption:
         audit2 = AuditLog(temp_dir, crypto)
         with pytest.raises(Exception):
             list(audit2.read(dek2))
+
+    def test_queue_keypair_created(self, audit, admin_dek, temp_dir):
+        """Verify that setup creates queue keypair files."""
+        assert (temp_dir / "audit" / "queue_public.key").exists()
+        assert (temp_dir / "audit" / "queue_private.enc").exists()
+
+    def test_queued_entries_encrypted(self, audit, admin_dek, temp_dir):
+        """Verify that queued entries are encrypted, not plaintext."""
+        # Log without admin DEK (queued)
+        audit.log("secret-user", AuditAction.SPAN_VIEW, {"file": "secret.csv"})
+
+        queue_file = temp_dir / "audit" / "queue.enc"
+        assert queue_file.exists()
+
+        # Raw queue should not contain plaintext
+        content = queue_file.read_bytes()
+        assert b"secret-user" not in content
+        assert b"secret.csv" not in content
+
+    def test_encrypted_queue_flush(self, audit, admin_dek):
+        """Verify that encrypted queued entries can be flushed and read."""
+        # Log without admin DEK (queued and encrypted)
+        audit.log("user1", AuditAction.VAULT_UNLOCK, {"test": "data1"})
+        audit.log("user2", AuditAction.SPAN_VIEW, {"test": "data2"})
+
+        # Flush the encrypted queue
+        count = audit.flush_queue(admin_dek)
+        assert count == 2
+
+        # Verify entries are readable
+        entries = list(audit.read(admin_dek))
+        assert len(entries) == 2
+        assert entries[0].action == AuditAction.SPAN_VIEW
+        assert entries[1].action == AuditAction.VAULT_UNLOCK
+
+
+class TestCryptoAsymmetric:
+    """Tests for asymmetric encryption (seal/unseal)."""
+
+    def test_seal_unseal_roundtrip(self, crypto):
+        """Verify seal/unseal roundtrip works."""
+        private_key, public_key = crypto.generate_keypair()
+        plaintext = b"secret message for asymmetric encryption"
+
+        sealed = crypto.seal(plaintext, public_key)
+        unsealed = crypto.unseal(sealed, private_key)
+
+        assert unsealed == plaintext
+
+    def test_seal_different_each_time(self, crypto):
+        """Verify sealing produces different output each time (ephemeral keys)."""
+        private_key, public_key = crypto.generate_keypair()
+        plaintext = b"same message"
+
+        sealed1 = crypto.seal(plaintext, public_key)
+        sealed2 = crypto.seal(plaintext, public_key)
+
+        assert sealed1 != sealed2  # Different ephemeral keys
+
+    def test_unseal_wrong_key_fails(self, crypto):
+        """Verify unsealing with wrong key fails."""
+        private_key1, public_key1 = crypto.generate_keypair()
+        private_key2, public_key2 = crypto.generate_keypair()
+
+        sealed = crypto.seal(b"secret", public_key1)
+
+        with pytest.raises(Exception):
+            crypto.unseal(sealed, private_key2)
