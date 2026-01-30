@@ -240,10 +240,16 @@ class TestScanCommand:
 
         assert result.returncode == 0
         # --format jsonl outputs one JSON object per line
+        # Filter for actual JSON lines (skip any status/progress output)
+        json_count = 0
         for line in result.stdout.strip().split('\n'):
-            if line:
+            line = line.strip()
+            if line and line.startswith('{') and line.endswith('}'):
                 parsed = json.loads(line)
                 assert "path" in parsed
+                json_count += 1
+        # Should have at least one result for the test files we created
+        assert json_count >= 1
 
     def test_scan_nonexistent_path(self):
         """Test error handling for nonexistent path."""
