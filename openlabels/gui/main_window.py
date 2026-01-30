@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QToolBar,
     QApplication,
+    QTabWidget,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
 from PySide6.QtGui import QAction, QIcon
@@ -40,6 +41,7 @@ from openlabels.gui.widgets.results_table import ResultsTableWidget
 from openlabels.gui.widgets.dialogs import SettingsDialog, LabelDialog, QuarantineConfirmDialog
 from openlabels.gui.workers.scan_worker import ScanWorker
 from openlabels.gui.workers.file_watcher import FileWatcher
+from openlabels.gui.widgets.dashboard import DashboardWidget
 
 if TYPE_CHECKING:
     from openlabels.auth import AuthManager
@@ -177,6 +179,14 @@ class MainWindow(QMainWindow):
         self._scan_target = ScanTargetPanel()
         layout.addWidget(self._scan_target)
 
+        # Tab widget for Results / Dashboard views
+        self._tab_widget = QTabWidget()
+
+        # --- Results Tab ---
+        results_widget = QWidget()
+        results_layout = QVBoxLayout(results_widget)
+        results_layout.setContentsMargins(0, 0, 0, 0)
+
         # Splitter for tree and table
         splitter = QSplitter(Qt.Horizontal)
 
@@ -192,8 +202,19 @@ class MainWindow(QMainWindow):
 
         # Set splitter sizes (30% tree, 70% table)
         splitter.setSizes([300, 700])
+        results_layout.addWidget(splitter)
 
-        layout.addWidget(splitter, stretch=1)
+        self._tab_widget.addTab(results_widget, "Results")
+
+        # --- Dashboard Tab ---
+        self._dashboard = DashboardWidget()
+        self._dashboard.file_selected.connect(self._on_dashboard_file_selected)
+        self._tab_widget.addTab(self._dashboard, "Dashboard")
+
+        # Update dashboard when switching to it
+        self._tab_widget.currentChanged.connect(self._on_tab_changed)
+
+        layout.addWidget(self._tab_widget, stretch=1)
 
         # Bottom actions bar
         actions_layout = QHBoxLayout()
@@ -716,6 +737,21 @@ class MainWindow(QMainWindow):
     def _on_watcher_error(self, error: str):
         """Handle watcher error."""
         self._status_label.setText(f"Monitor error: {error}")
+
+    # --- Dashboard ---
+
+    @Slot(int)
+    def _on_tab_changed(self, index: int):
+        """Handle tab change - update dashboard when selected."""
+        if index == 1:  # Dashboard tab
+            self._dashboard.set_results(self._scan_results)
+
+    @Slot(str)
+    def _on_dashboard_file_selected(self, file_path: str):
+        """Handle file selection from dashboard."""
+        # Switch to results tab and show file detail
+        self._tab_widget.setCurrentIndex(0)
+        self._on_file_detail(file_path)
 
     @Slot(str)
     def _on_folder_selected(self, folder_path: str):
