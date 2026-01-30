@@ -272,10 +272,11 @@ class TestDependenciesCheck:
 
     def test_fails_when_core_dep_missing(self):
         """Test that missing core dependency causes FAIL."""
+        import builtins
         checker = HealthChecker()
 
         # Mock import to fail for 'rich'
-        original_import = __builtins__.__dict__.get('__import__', __import__)
+        original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
             if name == 'rich':

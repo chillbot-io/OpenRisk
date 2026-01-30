@@ -182,8 +182,8 @@ class TestAuditQueue:
         entry = audit.log("user1", AuditAction.VAULT_UNLOCK, {})
         assert entry.entry_hash != ""
 
-        # Should be queued
-        queue_file = temp_dir / "audit" / "queue.jsonl"
+        # Should be queued (encrypted)
+        queue_file = temp_dir / "audit" / "queue.enc"
         assert queue_file.exists()
 
     def test_flush_queue(self, audit, admin_dek, temp_dir):
@@ -191,7 +191,7 @@ class TestAuditQueue:
         audit.log("user1", AuditAction.VAULT_UNLOCK, {})
         audit.log("user2", AuditAction.SPAN_VIEW, {})
 
-        queue_file = temp_dir / "audit" / "queue.jsonl"
+        queue_file = temp_dir / "audit" / "queue.enc"
         assert queue_file.exists()
 
         # Flush queue
