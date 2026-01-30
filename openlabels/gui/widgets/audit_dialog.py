@@ -1,7 +1,5 @@
 """
 Audit Log Viewer Dialog.
-
-Admin-only dialog for viewing the hash-chained audit trail.
 """
 
 import csv

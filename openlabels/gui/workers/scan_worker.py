@@ -59,15 +59,7 @@ class ScanWorker(QThread):
         return self._client
 
     def _extract_spans_with_context(self, detection, context_chars: int = 50) -> List[Dict[str, Any]]:
-        """Extract spans from detection result with surrounding context.
-
-        Args:
-            detection: DetectionResult from scanner
-            context_chars: Number of characters to include before/after span
-
-        Returns:
-            List of span dictionaries suitable for vault storage
-        """
+        """Extract spans with surrounding context for vault storage."""
         spans_data = []
         text = detection.text
 

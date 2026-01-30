@@ -515,17 +515,13 @@ class MainWindow(QMainWindow):
         self._store_to_vault(result)
 
     def _store_to_vault(self, result: Dict[str, Any]):
-        """Store scan result spans to user's vault.
-
-        Args:
-            result: Scan result dict containing path, spans, score, etc.
-        """
+        """Store scan result spans to user's vault."""
         if not self._session:
-            return  # No session, can't store to vault
+            return
 
         spans_data = result.get("spans", [])
         if not spans_data:
-            return  # No spans to store
+            return
 
         file_path = result.get("path", "")
         if not file_path:

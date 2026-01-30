@@ -1,51 +1,30 @@
 """
 Real-time file monitoring service.
-
-Watches directories for file changes and emits signals for new/modified files.
-Uses Qt's QFileSystemWatcher for cross-platform support.
 """
 
 import os
-from pathlib import Path
 from typing import Set, Dict, Optional
-from datetime import datetime
 
 from PySide6.QtCore import QObject, Signal, QFileSystemWatcher, QTimer
 
 
+# Default extensions to monitor
+DEFAULT_EXTENSIONS = {
+    ".txt", ".csv", ".json", ".xml", ".yaml", ".yml",
+    ".log", ".md", ".doc", ".docx", ".xls", ".xlsx",
+    ".pdf", ".rtf", ".html", ".htm", ".sql", ".db",
+    ".env", ".ini", ".cfg", ".conf", ".config",
+}
+
+
 class FileWatcher(QObject):
-    """
-    Watches directories for file changes.
+    """Watches directories for file changes and emits signals."""
 
-    Emits signals when files are created, modified, or deleted.
-    Integrates with the scan worker for automatic scanning.
-
-    Usage:
-        watcher = FileWatcher()
-        watcher.file_changed.connect(on_file_changed)
-        watcher.start_watching("/path/to/dir")
-
-    Signals:
-        file_changed(str): Emitted when a file is created or modified
-        file_deleted(str): Emitted when a file is deleted
-        watching_started(str): Emitted when monitoring starts for a path
-        watching_stopped(str): Emitted when monitoring stops for a path
-        error(str): Emitted on errors
-    """
-
-    file_changed = Signal(str)      # Path to changed file
-    file_deleted = Signal(str)      # Path to deleted file
-    watching_started = Signal(str)  # Path being watched
-    watching_stopped = Signal(str)  # Path no longer watched
-    error = Signal(str)             # Error message
-
-    # File extensions to monitor (common data files)
-    WATCHED_EXTENSIONS = {
-        ".txt", ".csv", ".json", ".xml", ".yaml", ".yml",
-        ".log", ".md", ".doc", ".docx", ".xls", ".xlsx",
-        ".pdf", ".rtf", ".html", ".htm", ".sql", ".db",
-        ".env", ".ini", ".cfg", ".conf", ".config",
-    }
+    file_changed = Signal(str)
+    file_deleted = Signal(str)
+    watching_started = Signal(str)
+    watching_stopped = Signal(str)
+    error = Signal(str)
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -54,20 +33,18 @@ class FileWatcher(QObject):
         self._watcher.directoryChanged.connect(self._on_directory_changed)
         self._watcher.fileChanged.connect(self._on_file_changed)
 
-        # Track watched paths and their contents
         self._watched_dirs: Set[str] = set()
-        self._dir_contents: Dict[str, Dict[str, float]] = {}  # dir -> {file: mtime}
+        self._dir_contents: Dict[str, Dict[str, float]] = {}
+        self._extensions = DEFAULT_EXTENSIONS.copy()
 
-        # Debounce timer to batch rapid changes
         self._pending_changes: Set[str] = set()
         self._debounce_timer = QTimer(self)
         self._debounce_timer.setSingleShot(True)
-        self._debounce_timer.setInterval(500)  # 500ms debounce
+        self._debounce_timer.setInterval(500)
         self._debounce_timer.timeout.connect(self._process_pending_changes)
 
-        # Recursive scan timer for subdirectories
         self._rescan_timer = QTimer(self)
-        self._rescan_timer.setInterval(5000)  # Rescan every 5 seconds
+        self._rescan_timer.setInterval(5000)
         self._rescan_timer.timeout.connect(self._rescan_directories)
 
         self._enabled = False
@@ -83,16 +60,7 @@ class FileWatcher(QObject):
         return self._watched_dirs.copy()
 
     def start_watching(self, path: str, recursive: bool = True) -> bool:
-        """
-        Start watching a directory for changes.
-
-        Args:
-            path: Directory path to watch
-            recursive: Watch subdirectories as well
-
-        Returns:
-            True if watching started successfully
-        """
+        """Start watching a directory for changes."""
         path = os.path.abspath(path)
 
         if not os.path.isdir(path):
@@ -152,15 +120,10 @@ class FileWatcher(QObject):
         if filename.startswith("."):
             return False
         ext = os.path.splitext(filename)[1].lower()
-        return ext in self.WATCHED_EXTENSIONS
+        return ext in self._extensions
 
     def stop_watching(self, path: Optional[str] = None) -> None:
-        """
-        Stop watching a directory (or all directories if path is None).
-
-        Args:
-            path: Specific path to stop watching, or None for all
-        """
+        """Stop watching a directory (or all if path is None)."""
         if path is None:
             # Stop all
             paths_to_remove = list(self._watched_dirs)
@@ -262,8 +225,8 @@ class FileWatcher(QObject):
 
     def add_extension(self, ext: str) -> None:
         """Add a file extension to watch (include the dot)."""
-        self.WATCHED_EXTENSIONS.add(ext.lower())
+        self._extensions.add(ext.lower())
 
     def remove_extension(self, ext: str) -> None:
         """Remove a file extension from watch list."""
-        self.WATCHED_EXTENSIONS.discard(ext.lower())
+        self._extensions.discard(ext.lower())

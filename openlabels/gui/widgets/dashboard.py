@@ -1,14 +1,10 @@
 """
 Risk Dashboard with hierarchical drill-down heatmap.
-
-Displays entity type distribution across sources/buckets/folders
-with drill-down navigation.
 """
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Any, Optional
-from collections import defaultdict
+from typing import Dict, List, Any
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -19,7 +15,6 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QPushButton,
-    QScrollArea,
     QFrame,
     QMenu,
     QAbstractItemView,
@@ -29,7 +24,6 @@ from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QColor, QBrush, QPainter, QFont
 
 
-# Default top entity types to show
 DEFAULT_ENTITY_TYPES = [
     "SSN", "EMAIL", "PHONE", "CREDIT_CARD", "NAME",
     "DOB", "ADDRESS", "MRN", "AWS_ACCESS_KEY", "IP_ADDRESS",
@@ -220,9 +214,6 @@ class DashboardWidget(QWidget):
 
         layout.addWidget(header)
 
-        # Entity type column headers
-        self._setup_column_headers(layout)
-
         # Heatmap table
         self._table = QTableWidget()
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -241,55 +232,25 @@ class DashboardWidget(QWidget):
         self._update_breadcrumb()
         self._rebuild_table()
 
-    def _setup_column_headers(self, layout: QVBoxLayout):
-        """Setup entity type column headers with add button."""
-        header_widget = QWidget()
-        header_layout = QHBoxLayout(header_widget)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(0)
-
-        # Spacer for name column
-        spacer = QLabel()
-        spacer.setFixedWidth(200)
-        header_layout.addWidget(spacer)
-
-        # Entity type labels
-        self._entity_labels: List[QLabel] = []
-        for entity_type in self._entity_types:
-            label = QLabel(entity_type)
-            label.setAlignment(Qt.AlignCenter)
-            label.setFixedWidth(70)
-            label.setStyleSheet("font-weight: bold; font-size: 10px;")
-            self._entity_labels.append(label)
-            header_layout.addWidget(label)
-
-        # Add button
-        add_btn = QPushButton("+")
-        add_btn.setFixedSize(30, 24)
-        add_btn.setToolTip("Add entity type column")
-        add_btn.clicked.connect(self._on_add_entity_type)
-        header_layout.addWidget(add_btn)
-
-        header_layout.addStretch()
-
-        layout.addWidget(header_widget)
-
     def _setup_legend(self, layout: QVBoxLayout):
-        """Setup color legend."""
+        """Setup color legend and add-column button."""
         legend = QWidget()
         legend_layout = QHBoxLayout(legend)
         legend_layout.setContentsMargins(0, 4, 0, 0)
 
         legend_layout.addWidget(QLabel("Intensity:"))
 
-        # Gradient samples
-        for intensity, label in [(0, "None"), (0.25, "Low"), (0.5, "Medium"), (0.75, "High"), (1.0, "Critical")]:
+        for intensity, label in [(0, "None"), (0.25, "Low"), (0.5, "Med"), (0.75, "High"), (1.0, "Crit")]:
             cell = HeatmapCell(intensity, 0)
-            cell.setFixedSize(40, 20)
+            cell.setFixedSize(30, 18)
             legend_layout.addWidget(cell)
             legend_layout.addWidget(QLabel(label))
 
         legend_layout.addStretch()
+
+        self._add_col_btn = QPushButton("+ Column")
+        self._add_col_btn.clicked.connect(self._on_add_entity_type)
+        legend_layout.addWidget(self._add_col_btn)
 
         layout.addWidget(legend)
 
@@ -532,23 +493,20 @@ class DashboardWidget(QWidget):
         from openlabels.adapters.scanner.types import KNOWN_ENTITY_TYPES
 
         menu = QMenu(self)
-
-        # Get entity types not already shown
         available = sorted(set(KNOWN_ENTITY_TYPES) - set(self._entity_types))
 
-        # Also add entity types found in data
+        # Add entity types found in data
         for result in self._scan_results:
-            for entity_type in result.get("entities", {}).keys():
-                if entity_type not in self._entity_types and entity_type not in available:
-                    available.append(entity_type)
-
+            for et in result.get("entities", {}).keys():
+                if et not in self._entity_types and et not in available:
+                    available.append(et)
         available.sort()
 
-        for entity_type in available[:30]:  # Limit menu size
-            action = menu.addAction(entity_type)
-            action.triggered.connect(lambda checked, et=entity_type: self._add_entity_column(et))
+        for et in available[:30]:
+            action = menu.addAction(et)
+            action.triggered.connect(lambda checked, e=et: self._add_entity_column(e))
 
-        menu.exec(self.mapToGlobal(self.sender().pos()))
+        menu.exec(self._add_col_btn.mapToGlobal(self._add_col_btn.rect().bottomLeft()))
 
     def _add_entity_column(self, entity_type: str):
         """Add an entity type column."""
