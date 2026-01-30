@@ -29,6 +29,7 @@ class TestScoreText:
 
         assert isinstance(result, ScoringResult)
         assert result.score > 0
+        assert result.tier in RiskTier
 
     def test_no_pii(self):
         """Text without PII should have zero score."""

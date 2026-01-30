@@ -464,11 +464,12 @@ class TestEntitiesToCounts:
         assert result == {"SSN": 5}
 
     def test_normalizes_type(self):
-        """Should normalize entity type."""
+        """Should normalize entity type to uppercase."""
         entities = [Entity(type="ssn", count=1, confidence=0.9, source="a")]
         result = entities_to_counts(entities)
-        # Type should be normalized (uppercase)
-        assert "SSN" in result or "ssn" in result
+        # Type should be normalized to uppercase
+        assert "SSN" in result
+        assert result["SSN"] == 1
 
 
 class TestCountsToEntities:

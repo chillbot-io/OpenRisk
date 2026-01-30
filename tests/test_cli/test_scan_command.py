@@ -179,8 +179,9 @@ class TestScanCommandIntegration:
         result = scan_file(file_path, client, exposure="PRIVATE")
 
         assert result.error is None
-        # Email might be detected as EMAIL or PERSON_NAME (john.doe)
-        assert len(result.entities) > 0 or result.score >= 0
+        # Email should be detected - john.doe@example.com is a clear email address
+        assert "EMAIL" in result.entities, \
+            f"Expected EMAIL entity, got: {result.entities}"
 
     def test_scan_detects_credit_card_in_real_file(self, temp_dir):
         """Test that scanning ACTUALLY detects credit card in file content."""
@@ -228,9 +229,9 @@ class TestScanCommandIntegration:
         assert result_private.exposure == "PRIVATE"
         assert result_public.exposure == "PUBLIC"
 
-        # Public exposure should generally result in higher risk
-        # (though this depends on scoring implementation)
-        assert result_public.score >= result_private.score or True  # May be equal
+        # Both scores should be valid (non-negative)
+        assert result_public.score >= 0
+        assert result_private.score >= 0
 
 
 class TestOutputFormats:
