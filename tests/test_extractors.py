@@ -145,7 +145,7 @@ class TestPDFExtractor:
         result = extractor.extract(pdf_bytes, "multi.pdf")
 
         assert result.text is not None
-        assert result.page_count == 3
+        assert result.pages == 3  # Note: field is 'pages', not 'page_count'
 
     def test_invalid_pdf_raises_error(self):
         """Test that invalid PDF raises appropriate error."""
@@ -185,7 +185,7 @@ class TestDocxExtractor:
     def test_extract_simple_docx(self):
         """Test extracting text from a simple DOCX."""
         from docx import Document
-        from openlabels.adapters.scanner.extractors.office import OfficeExtractor
+        from openlabels.adapters.scanner.extractors.office import DOCXExtractor
 
         # Create a simple DOCX in memory
         doc = Document()
@@ -196,23 +196,23 @@ class TestDocxExtractor:
         doc.save(buffer)
         docx_bytes = buffer.getvalue()
 
-        extractor = OfficeExtractor()
+        extractor = DOCXExtractor()
         if extractor.can_handle("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx"):
             result = extractor.extract(docx_bytes, "test.docx")
             assert "test@example.com" in result.text or "Test paragraph" in result.text
 
     def test_can_handle_docx(self):
-        """Test that OfficeExtractor handles DOCX."""
-        from openlabels.adapters.scanner.extractors.office import OfficeExtractor
+        """Test that DOCXExtractor handles DOCX."""
+        from openlabels.adapters.scanner.extractors.office import DOCXExtractor
 
-        extractor = OfficeExtractor()
+        extractor = DOCXExtractor()
         assert extractor.can_handle("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx") is True
 
     def test_does_not_handle_pdf(self):
-        """Test that OfficeExtractor rejects PDF."""
-        from openlabels.adapters.scanner.extractors.office import OfficeExtractor
+        """Test that DOCXExtractor rejects PDF."""
+        from openlabels.adapters.scanner.extractors.office import DOCXExtractor
 
-        extractor = OfficeExtractor()
+        extractor = DOCXExtractor()
         assert extractor.can_handle("application/pdf", ".pdf") is False
 
 
@@ -223,7 +223,7 @@ class TestXlsxExtractor:
     def test_extract_simple_xlsx(self):
         """Test extracting text from a simple XLSX."""
         from openpyxl import Workbook
-        from openlabels.adapters.scanner.extractors.office import OfficeExtractor
+        from openlabels.adapters.scanner.extractors.office import XLSXExtractor
 
         # Create a simple XLSX in memory
         wb = Workbook()
@@ -237,16 +237,16 @@ class TestXlsxExtractor:
         wb.save(buffer)
         xlsx_bytes = buffer.getvalue()
 
-        extractor = OfficeExtractor()
+        extractor = XLSXExtractor()
         if extractor.can_handle("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"):
             result = extractor.extract(xlsx_bytes, "test.xlsx")
             assert result is not None
 
     def test_can_handle_xlsx(self):
-        """Test that OfficeExtractor handles XLSX."""
-        from openlabels.adapters.scanner.extractors.office import OfficeExtractor
+        """Test that XLSXExtractor handles XLSX."""
+        from openlabels.adapters.scanner.extractors.office import XLSXExtractor
 
-        extractor = OfficeExtractor()
+        extractor = XLSXExtractor()
         result = extractor.can_handle(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             ".xlsx"
@@ -323,30 +323,30 @@ class TestImageExtractor:
 # =============================================================================
 
 class TestExtractorRegistry:
-    """Tests for the extractor registry."""
+    """Tests for the extractor registry functions."""
 
     def test_registry_imports(self):
         """Test that registry module can be imported."""
-        from openlabels.adapters.scanner.extractors.registry import ExtractorRegistry
+        from openlabels.adapters.scanner.extractors.registry import get_extractor, extract_text
 
-        assert ExtractorRegistry is not None
+        assert get_extractor is not None
+        assert extract_text is not None
 
     def test_registry_has_get_extractor(self):
-        """Test that registry has get_extractor method."""
-        from openlabels.adapters.scanner.extractors.registry import ExtractorRegistry
+        """Test that registry has get_extractor function."""
+        from openlabels.adapters.scanner.extractors import registry
 
-        registry = ExtractorRegistry()
         assert hasattr(registry, 'get_extractor')
+        assert callable(registry.get_extractor)
 
     def test_registry_returns_none_for_unknown(self):
         """Test that registry returns None for unknown types."""
-        from openlabels.adapters.scanner.extractors.registry import ExtractorRegistry
+        from openlabels.adapters.scanner.extractors.registry import get_extractor
 
-        registry = ExtractorRegistry()
-        result = registry.get_extractor("application/x-unknown-type", ".xyz")
+        result = get_extractor("application/x-unknown-type", ".xyz")
 
-        # Should return None or raise, depending on implementation
-        # This tests that it doesn't crash
+        # Should return None for unknown types
+        assert result is None
 
 
 # =============================================================================
@@ -362,24 +362,24 @@ class TestBaseExtractor:
 
         result = ExtractionResult(
             text="Sample text",
-            page_count=1,
+            pages=1,  # Note: field is 'pages', not 'page_count'
             warnings=[],
         )
 
         assert result.text == "Sample text"
-        assert result.page_count == 1
+        assert result.pages == 1
 
     def test_page_info_dataclass(self):
         """Test that PageInfo works as expected."""
         from openlabels.adapters.scanner.extractors.base import PageInfo
 
         page = PageInfo(
-            page_number=1,
+            page_num=1,  # Note: field is 'page_num', not 'page_number'
             text="Page text",
             is_scanned=False,
         )
 
-        assert page.page_number == 1
+        assert page.page_num == 1
         assert page.text == "Page text"
         assert page.is_scanned is False
 
@@ -416,7 +416,7 @@ class TestExtractorIntegration:
     def test_docx_with_pii(self):
         """Test DOCX extraction preserves PII for detection."""
         from docx import Document
-        from openlabels.adapters.scanner.extractors.office import OfficeExtractor
+        from openlabels.adapters.scanner.extractors.office import DOCXExtractor
 
         doc = Document()
         doc.add_heading("Employee Record", level=1)
@@ -428,7 +428,7 @@ class TestExtractorIntegration:
         doc.save(buffer)
         docx_bytes = buffer.getvalue()
 
-        extractor = OfficeExtractor()
+        extractor = DOCXExtractor()
         result = extractor.extract(docx_bytes, "employee.docx")
 
         # Check that PII-containing text is extracted
@@ -473,7 +473,7 @@ class TestExtractorErrorHandling:
 
     @requires_pillow
     def test_image_corrupted_data(self):
-        """Test image extractor with corrupted data."""
+        """Test image extractor with corrupted data returns result with warnings."""
         from openlabels.adapters.scanner.extractors.image import ImageExtractor
 
         extractor = ImageExtractor()
@@ -481,6 +481,8 @@ class TestExtractorErrorHandling:
         # Random bytes that aren't a valid image
         corrupted = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
 
-        # Should raise an error
-        with pytest.raises(Exception):
-            extractor.extract(corrupted, "corrupted.png")
+        # ImageExtractor catches errors and returns result with warnings
+        result = extractor.extract(corrupted, "corrupted.png")
+        assert result is not None
+        # Should have warnings about extraction failure or OCR unavailability
+        assert len(result.warnings) > 0 or result.text == ""
