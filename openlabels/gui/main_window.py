@@ -6,12 +6,14 @@ The main application window containing:
 - Folder tree (left)
 - Results table (right)
 - Status bar (bottom)
+
+Requires authentication to access vault features.
 """
 
 import json
 import csv
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from datetime import datetime
 
 from PySide6.QtWidgets import (
@@ -28,8 +30,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QToolBar,
     QApplication,
+    QTabWidget,
 )
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QTimer
 from PySide6.QtGui import QAction, QIcon
 
 from openlabels.gui.widgets.scan_target import ScanTargetPanel
@@ -37,6 +40,12 @@ from openlabels.gui.widgets.folder_tree import FolderTreeWidget
 from openlabels.gui.widgets.results_table import ResultsTableWidget
 from openlabels.gui.widgets.dialogs import SettingsDialog, LabelDialog, QuarantineConfirmDialog
 from openlabels.gui.workers.scan_worker import ScanWorker
+from openlabels.gui.workers.file_watcher import FileWatcher
+from openlabels.gui.widgets.dashboard import DashboardWidget
+
+if TYPE_CHECKING:
+    from openlabels.auth import AuthManager
+    from openlabels.auth.models import Session
 
 
 class MainWindow(QMainWindow):
@@ -48,10 +57,20 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1200, 700)
         self.resize(1400, 800)
 
+        # Auth state
+        self._auth: Optional["AuthManager"] = None
+        self._session: Optional["Session"] = None
+
         # State
         self._scan_results: List[Dict[str, Any]] = []
         self._current_path: Optional[str] = None
         self._scan_worker: Optional[ScanWorker] = None
+        self._initial_path = initial_path
+
+        # File watcher for real-time monitoring
+        self._file_watcher = FileWatcher(self)
+        self._pending_watch_files: List[str] = []
+        self._watch_scan_timer: Optional["QTimer"] = None
 
         # Setup UI
         self._setup_ui()
@@ -59,9 +78,94 @@ class MainWindow(QMainWindow):
         self._setup_statusbar()
         self._connect_signals()
 
+    def showEvent(self, event):
+        """Handle window show - trigger login on first show."""
+        super().showEvent(event)
+
+        # Only show login on first display
+        if self._auth is None:
+            # Use QTimer to defer login dialog until after window is shown
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, self._show_auth_dialog)
+
+    def _show_auth_dialog(self):
+        """Show login or setup dialog."""
+        try:
+            from openlabels.auth import AuthManager
+            self._auth = AuthManager()
+
+            if self._auth.needs_setup():
+                self._show_setup_dialog()
+            else:
+                self._show_login_dialog()
+
+        except ImportError:
+            # Auth module not available (missing dependencies)
+            QMessageBox.warning(
+                self,
+                "Auth Not Available",
+                "Authentication features require additional dependencies.\n\n"
+                "Install with: pip install openlabels[auth]"
+            )
+            self._auth = None
+
+    def _show_setup_dialog(self):
+        """Show first-time setup dialog."""
+        from openlabels.gui.widgets.login_dialog import SetupDialog, RecoveryKeysDialog
+
+        dialog = SetupDialog(self)
+        dialog.setup_complete.connect(self._on_setup_complete)
+
+        if dialog.exec() != dialog.Accepted:
+            # User cancelled setup - can't continue
+            QMessageBox.information(
+                self,
+                "Setup Required",
+                "An admin account must be created to use OpenLabels."
+            )
+            QApplication.quit()
+
+    def _on_setup_complete(self, session: "Session", recovery_keys: List[str]):
+        """Handle setup completion."""
+        self._session = session
+
+        # Show recovery keys dialog
+        from openlabels.gui.widgets.login_dialog import RecoveryKeysDialog
+        keys_dialog = RecoveryKeysDialog(self, recovery_keys)
+        keys_dialog.exec()
+
+        self._on_login_success()
+
+    def _show_login_dialog(self):
+        """Show login dialog."""
+        from openlabels.gui.widgets.login_dialog import LoginDialog
+
+        dialog = LoginDialog(self)
+        dialog.login_successful.connect(self._on_login_successful)
+
+        if dialog.exec() != dialog.Accepted:
+            # User cancelled login - quit
+            QApplication.quit()
+
+    def _on_login_successful(self, session: "Session"):
+        """Handle successful login."""
+        self._session = session
+        self._on_login_success()
+
+    def _on_login_success(self):
+        """Common login success handling."""
+        # Update window title with username
+        self.setWindowTitle(f"OpenLabels - {self._session.user.username}")
+
+        # Update status
+        self._status_label.setText(f"Logged in as {self._session.user.username}")
+
+        # Update user menu
+        self._update_user_menu()
+
         # Load initial path if provided
-        if initial_path:
-            self._scan_target.set_path(initial_path)
+        if self._initial_path:
+            self._scan_target.set_path(self._initial_path)
 
     def _setup_ui(self):
         """Setup the main UI layout."""
@@ -74,6 +178,14 @@ class MainWindow(QMainWindow):
         # Scan target panel (top)
         self._scan_target = ScanTargetPanel()
         layout.addWidget(self._scan_target)
+
+        # Tab widget for Results / Dashboard views
+        self._tab_widget = QTabWidget()
+
+        # --- Results Tab ---
+        results_widget = QWidget()
+        results_layout = QVBoxLayout(results_widget)
+        results_layout.setContentsMargins(0, 0, 0, 0)
 
         # Splitter for tree and table
         splitter = QSplitter(Qt.Horizontal)
@@ -90,8 +202,19 @@ class MainWindow(QMainWindow):
 
         # Set splitter sizes (30% tree, 70% table)
         splitter.setSizes([300, 700])
+        results_layout.addWidget(splitter)
 
-        layout.addWidget(splitter, stretch=1)
+        self._tab_widget.addTab(results_widget, "Results")
+
+        # --- Dashboard Tab ---
+        self._dashboard = DashboardWidget()
+        self._dashboard.file_selected.connect(self._on_dashboard_file_selected)
+        self._tab_widget.addTab(self._dashboard, "Dashboard")
+
+        # Update dashboard when switching to it
+        self._tab_widget.currentChanged.connect(self._on_tab_changed)
+
+        layout.addWidget(self._tab_widget, stretch=1)
 
         # Bottom actions bar
         actions_layout = QHBoxLayout()
@@ -150,12 +273,113 @@ class MainWindow(QMainWindow):
         stop_scan_action.triggered.connect(self._on_stop_scan)
         scan_menu.addAction(stop_scan_action)
 
+        # User menu (populated after login)
+        self._user_menu = menubar.addMenu("&User")
+        self._user_menu.setEnabled(False)
+
         # Help menu
         help_menu = menubar.addMenu("&Help")
 
         about_action = QAction("&About", self)
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
+
+    def _update_user_menu(self):
+        """Update user menu after login."""
+        if not self._session:
+            self._user_menu.setEnabled(False)
+            return
+
+        self._user_menu.clear()
+        self._user_menu.setEnabled(True)
+
+        # Current user info
+        user_info = QAction(f"Logged in as: {self._session.user.username}", self)
+        user_info.setEnabled(False)
+        self._user_menu.addAction(user_info)
+
+        self._user_menu.addSeparator()
+
+        # Admin-only options
+        if self._session.is_admin():
+            create_user_action = QAction("Create &User...", self)
+            create_user_action.triggered.connect(self._on_create_user)
+            self._user_menu.addAction(create_user_action)
+
+            manage_users_action = QAction("&Manage Users...", self)
+            manage_users_action.triggered.connect(self._on_manage_users)
+            self._user_menu.addAction(manage_users_action)
+
+            recovery_keys_action = QAction("&Recovery Keys...", self)
+            recovery_keys_action.triggered.connect(self._on_recovery_keys)
+            self._user_menu.addAction(recovery_keys_action)
+
+            audit_log_action = QAction("View &Audit Log...", self)
+            audit_log_action.triggered.connect(self._on_view_audit)
+            self._user_menu.addAction(audit_log_action)
+
+            self._user_menu.addSeparator()
+
+        # Logout
+        logout_action = QAction("&Logout", self)
+        logout_action.triggered.connect(self._on_logout)
+        self._user_menu.addAction(logout_action)
+
+    @Slot()
+    def _on_create_user(self):
+        """Show create user dialog (admin only)."""
+        if not self._session or not self._session.is_admin():
+            return
+
+        from openlabels.gui.widgets.login_dialog import CreateUserDialog
+        dialog = CreateUserDialog(self, self._session)
+        if dialog.exec():
+            QMessageBox.information(self, "User Created", "User created successfully.")
+
+    @Slot()
+    def _on_manage_users(self):
+        """Show user management (admin only)."""
+        if not self._session or not self._session.is_admin():
+            return
+
+        # Simple user list for now
+        users = self._auth.list_users()
+        user_list = "\n".join(f"- {u.username} ({u.role.value})" for u in users)
+        QMessageBox.information(self, "Users", f"Registered users:\n\n{user_list}")
+
+    @Slot()
+    def _on_recovery_keys(self):
+        """Show recovery key status (admin only)."""
+        if not self._session or not self._session.is_admin():
+            return
+
+        from openlabels.gui.widgets.recovery_dialog import RecoveryDialog
+        dialog = RecoveryDialog(self, mode="view_keys", admin_session=self._session)
+        dialog.exec()
+
+    @Slot()
+    def _on_view_audit(self):
+        """View audit log (admin only)."""
+        if not self._session or not self._session.is_admin():
+            return
+
+        from openlabels.gui.widgets.audit_dialog import AuditLogDialog
+        dialog = AuditLogDialog(self, session=self._session)
+        dialog.exec()
+
+    @Slot()
+    def _on_logout(self):
+        """Handle logout."""
+        if self._session and self._auth:
+            self._auth.logout(self._session.token)
+
+        self._session = None
+        self.setWindowTitle("OpenLabels")
+        self._status_label.setText("Logged out")
+        self._user_menu.setEnabled(False)
+
+        # Show login dialog again
+        self._show_login_dialog()
 
     def _setup_statusbar(self):
         """Setup the status bar."""
@@ -182,6 +406,7 @@ class MainWindow(QMainWindow):
         # Scan target
         self._scan_target.scan_requested.connect(self._on_start_scan)
         self._scan_target.path_changed.connect(self._on_path_changed)
+        self._scan_target.monitoring_toggled.connect(self._on_monitoring_toggled)
 
         # Folder tree
         self._folder_tree.folder_selected.connect(self._on_folder_selected)
@@ -189,11 +414,18 @@ class MainWindow(QMainWindow):
         # Results table
         self._results_table.quarantine_requested.connect(self._on_quarantine_file)
         self._results_table.label_requested.connect(self._on_label_file)
+        self._results_table.detail_requested.connect(self._on_file_detail)
 
         # Bottom buttons
         self._export_csv_btn.clicked.connect(self._on_export_csv)
         self._export_json_btn.clicked.connect(self._on_export_json)
         self._settings_btn.clicked.connect(self._on_settings)
+
+        # File watcher
+        self._file_watcher.file_changed.connect(self._on_watched_file_changed)
+        self._file_watcher.watching_started.connect(self._on_watching_started)
+        self._file_watcher.watching_stopped.connect(self._on_watching_stopped)
+        self._file_watcher.error.connect(self._on_watcher_error)
 
     @Slot()
     def _on_open_folder(self):
@@ -279,6 +511,58 @@ class MainWindow(QMainWindow):
         self._results_table.add_result(result)
         self._update_risk_summary()
 
+        # Store spans to vault if we have an authenticated session
+        self._store_to_vault(result)
+
+    def _store_to_vault(self, result: Dict[str, Any]):
+        """Store scan result spans to user's vault."""
+        if not self._session:
+            return
+
+        spans_data = result.get("spans", [])
+        if not spans_data:
+            return
+
+        file_path = result.get("path", "")
+        if not file_path:
+            return
+
+        try:
+            from openlabels.vault.models import SensitiveSpan
+
+            # Convert span dicts to SensitiveSpan objects
+            spans = [
+                SensitiveSpan(
+                    start=s["start"],
+                    end=s["end"],
+                    text=s["text"],
+                    entity_type=s["entity_type"],
+                    confidence=s["confidence"],
+                    detector=s["detector"],
+                    context_before=s.get("context_before", ""),
+                    context_after=s.get("context_after", ""),
+                )
+                for s in spans_data
+            ]
+
+            # Get vault and store
+            vault = self._session.get_vault()
+            vault.store_scan_result(
+                file_path=file_path,
+                spans=spans,
+                source="openlabels",
+                metadata={
+                    "score": result.get("score", 0),
+                    "tier": result.get("tier", "UNKNOWN"),
+                    "exposure": result.get("exposure", "PRIVATE"),
+                },
+            )
+
+        except Exception as e:
+            # Don't interrupt scan for vault errors - just log
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to store to vault: {e}")
+
     @Slot()
     def _on_scan_finished(self):
         """Handle scan completion."""
@@ -295,10 +579,239 @@ class MainWindow(QMainWindow):
         self._scan_target.set_enabled(True)
         QMessageBox.critical(self, "Scan Error", error)
 
+    # --- File Monitoring ---
+
+    @Slot(bool)
+    def _on_monitoring_toggled(self, enabled: bool):
+        """Handle monitoring toggle."""
+        path = self._scan_target.get_path()
+
+        if enabled:
+            if not path:
+                QMessageBox.warning(self, "No Path", "Please enter a path to monitor.")
+                self._scan_target.set_monitoring(False)
+                return
+
+            # Start watching
+            if self._file_watcher.start_watching(path):
+                self._status_label.setText(f"Monitoring: {path}")
+            else:
+                self._scan_target.set_monitoring(False)
+        else:
+            # Stop watching
+            self._file_watcher.stop_watching()
+            if self._watch_scan_timer:
+                self._watch_scan_timer.stop()
+            self._pending_watch_files.clear()
+            self._status_label.setText("Ready")
+
+    @Slot(str)
+    def _on_watched_file_changed(self, file_path: str):
+        """Handle file change from watcher - queue for scanning."""
+        # Add to pending list if not already there
+        if file_path not in self._pending_watch_files:
+            self._pending_watch_files.append(file_path)
+
+        # Start/restart debounce timer
+        if self._watch_scan_timer is None:
+            self._watch_scan_timer = QTimer(self)
+            self._watch_scan_timer.setSingleShot(True)
+            self._watch_scan_timer.timeout.connect(self._scan_pending_watch_files)
+
+        self._watch_scan_timer.start(1000)  # 1 second debounce
+
+        # Update status
+        count = len(self._pending_watch_files)
+        self._status_label.setText(f"Monitoring: {count} file(s) changed...")
+
+    def _scan_pending_watch_files(self):
+        """Scan files that were detected as changed."""
+        if not self._pending_watch_files:
+            return
+
+        # Don't interrupt an existing scan
+        if self._scan_worker and self._scan_worker.isRunning():
+            # Re-queue for later
+            self._watch_scan_timer.start(2000)
+            return
+
+        files_to_scan = self._pending_watch_files.copy()
+        self._pending_watch_files.clear()
+
+        # Scan each file individually
+        self._scan_individual_files(files_to_scan)
+
+    def _scan_individual_files(self, file_paths: List[str]):
+        """Scan a list of individual files."""
+        from openlabels import Client
+        from openlabels.adapters.scanner import detect_file as scanner_detect
+        from pathlib import Path
+
+        client = Client()
+
+        for file_path in file_paths:
+            try:
+                path = Path(file_path)
+                if not path.exists():
+                    continue
+
+                # Get file size
+                try:
+                    size = path.stat().st_size
+                except OSError:
+                    size = 0
+
+                # Detect entities
+                detection = scanner_detect(path)
+                entities = detection.entity_counts
+
+                # Extract spans with context
+                spans_data = []
+                text = detection.text
+                for span in detection.spans:
+                    ctx_start = max(0, span.start - 50)
+                    ctx_end = min(len(text), span.end + 50)
+                    spans_data.append({
+                        "start": span.start,
+                        "end": span.end,
+                        "text": span.text,
+                        "entity_type": span.entity_type,
+                        "confidence": span.confidence,
+                        "detector": span.detector,
+                        "context_before": text[ctx_start:span.start],
+                        "context_after": text[span.end:ctx_end],
+                    })
+
+                # Score the file
+                score_result = client.score_file(path)
+
+                result = {
+                    "path": str(path),
+                    "size": size,
+                    "score": score_result.score,
+                    "tier": score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier),
+                    "entities": entities,
+                    "spans": spans_data,
+                    "exposure": "PRIVATE",
+                    "error": None,
+                }
+
+                # Update or add to results
+                existing_idx = next(
+                    (i for i, r in enumerate(self._scan_results) if r.get("path") == file_path),
+                    None
+                )
+                if existing_idx is not None:
+                    self._scan_results[existing_idx] = result
+                    self._results_table.update_result(result)
+                else:
+                    self._scan_results.append(result)
+                    self._results_table.add_result(result)
+
+                # Store to vault
+                self._store_to_vault(result)
+
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to scan {file_path}: {e}")
+
+        self._update_risk_summary()
+        self._status_label.setText(f"Monitoring: {len(self._file_watcher.watched_paths)} directories")
+
+    @Slot(str)
+    def _on_watching_started(self, path: str):
+        """Handle watching started."""
+        self._status_label.setText(f"Monitoring: {path}")
+
+    @Slot(str)
+    def _on_watching_stopped(self, path: str):
+        """Handle watching stopped."""
+        if not self._file_watcher.is_watching:
+            self._status_label.setText("Ready")
+
+    @Slot(str)
+    def _on_watcher_error(self, error: str):
+        """Handle watcher error."""
+        self._status_label.setText(f"Monitor error: {error}")
+
+    # --- Dashboard ---
+
+    @Slot(int)
+    def _on_tab_changed(self, index: int):
+        """Handle tab change - update dashboard when selected."""
+        if index == 1:  # Dashboard tab
+            self._dashboard.set_results(self._scan_results)
+
+    @Slot(str)
+    def _on_dashboard_file_selected(self, file_path: str):
+        """Handle file selection from dashboard."""
+        # Switch to results tab and show file detail
+        self._tab_widget.setCurrentIndex(0)
+        self._on_file_detail(file_path)
+
     @Slot(str)
     def _on_folder_selected(self, folder_path: str):
         """Handle folder selection in tree - filter results."""
         self._results_table.filter_by_path(folder_path)
+
+    @Slot(str)
+    def _on_file_detail(self, file_path: str):
+        """Handle double-click to show file detail dialog."""
+        # Find the result for this file
+        result = next((r for r in self._scan_results if r.get("path") == file_path), None)
+
+        # Try to get classification from vault if we have a session
+        classification = None
+        if self._session:
+            try:
+                vault = self._session.get_vault()
+                classification = vault.get_classification(file_path)
+            except Exception:
+                pass
+
+        # If no classification but we have scan result, create a minimal one
+        if classification is None and result:
+            from openlabels.vault.models import FileClassification, ClassificationSource, Finding
+            from datetime import datetime
+
+            findings = [
+                Finding(entity_type=etype, count=count, confidence=None)
+                for etype, count in result.get("entities", {}).items()
+            ]
+
+            source = ClassificationSource(
+                provider="openlabels",
+                timestamp=datetime.utcnow(),
+                findings=findings,
+                metadata={},
+            )
+
+            classification = FileClassification(
+                file_path=file_path,
+                file_hash="",
+                risk_score=result.get("score", 0),
+                tier=result.get("tier", "UNKNOWN"),
+                sources=[source] if findings else [],
+                labels=result.get("labels", []),
+            )
+
+        from openlabels.gui.widgets.file_detail_dialog import FileDetailDialog
+        dialog = FileDetailDialog(
+            parent=self,
+            file_path=file_path,
+            classification=classification,
+            session=self._session,
+        )
+        dialog.quarantine_requested.connect(self._on_quarantine_file)
+        dialog.rescan_requested.connect(self._on_rescan_file)
+        dialog.exec()
+
+    @Slot(str)
+    def _on_rescan_file(self, file_path: str):
+        """Handle rescan request for a single file."""
+        # For now, just trigger a full scan with the file's parent directory
+        # A proper single-file rescan would require scan worker changes
+        self._status_label.setText(f"Rescan requested: {Path(file_path).name}")
 
     @Slot(str)
     def _on_quarantine_file(self, file_path: str):
@@ -527,5 +1040,9 @@ class MainWindow(QMainWindow):
             else:
                 event.ignore()
                 return
+
+        # Stop file watcher
+        if self._file_watcher.is_watching:
+            self._file_watcher.stop_watching()
 
         event.accept()

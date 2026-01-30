@@ -41,14 +41,16 @@ class ResultsTableWidget(QWidget):
     # Signals
     quarantine_requested = Signal(str)  # file_path
     label_requested = Signal(str)       # file_path
+    detail_requested = Signal(str)      # file_path (double-click)
 
     COLUMNS = [
-        ("Name", 250),
-        ("Size", 80),
-        ("Score", 60),
-        ("Tier", 80),
-        ("Entities", 200),
-        ("Actions", 100),
+        ("Name", 200),
+        ("Directory", 250),
+        ("Size", 70),
+        ("Score", 55),
+        ("Tier", 75),
+        ("Entities", 180),
+        ("Actions", 90),
     ]
 
     def __init__(self, parent=None):
@@ -96,9 +98,20 @@ class ResultsTableWidget(QWidget):
         for i, (name, width) in enumerate(self.COLUMNS):
             self._table.setColumnWidth(i, width)
         header.setStretchLastSection(False)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)  # Entities column stretches
+        header.setSectionResizeMode(5, QHeaderView.Stretch)  # Entities column stretches
+
+        # Double-click to show details
+        self._table.cellDoubleClicked.connect(self._on_double_click)
 
         layout.addWidget(self._table)
+
+    def _on_double_click(self, row: int, column: int):
+        """Handle double-click on a row to show details."""
+        item = self._table.item(row, 0)  # Name column has path in UserRole
+        if item:
+            file_path = item.data(Qt.UserRole)
+            if file_path:
+                self.detail_requested.emit(file_path)
 
     def add_result(self, result: Dict[str, Any]):
         """Add a scan result to the table."""
@@ -116,33 +129,39 @@ class ResultsTableWidget(QWidget):
 
         path = result.get("path", "")
         name = Path(path).name if path else ""
+        directory = str(Path(path).parent) if path else ""
         size = result.get("size", 0)
         score = result.get("score", 0)
         tier = result.get("tier", "UNKNOWN")
         entities = result.get("entities", {})
         error = result.get("error")
 
-        # Name
+        # Name (col 0)
         name_item = QTableWidgetItem(name)
         name_item.setToolTip(path)
         name_item.setData(Qt.UserRole, path)  # Store full path
         self._table.setItem(row, 0, name_item)
 
-        # Size
+        # Directory (col 1)
+        dir_item = QTableWidgetItem(directory)
+        dir_item.setToolTip(directory)
+        self._table.setItem(row, 1, dir_item)
+
+        # Size (col 2)
         size_str = self._format_size(size)
         size_item = QTableWidgetItem(size_str)
         size_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._table.setItem(row, 1, size_item)
+        self._table.setItem(row, 2, size_item)
 
-        # Score
+        # Score (col 3)
         score_item = QTableWidgetItem(str(score) if not error else "--")
         score_item.setTextAlignment(Qt.AlignCenter)
         score_item.setData(Qt.UserRole, score)  # For sorting
         if tier in TIER_COLORS:
             score_item.setForeground(QBrush(TIER_COLORS[tier]))
-        self._table.setItem(row, 2, score_item)
+        self._table.setItem(row, 3, score_item)
 
-        # Tier
+        # Tier (col 4)
         tier_item = QTableWidgetItem(tier if not error else "ERROR")
         tier_item.setTextAlignment(Qt.AlignCenter)
         if tier in TIER_COLORS:
@@ -152,17 +171,17 @@ class ResultsTableWidget(QWidget):
                 tier_item.setForeground(QBrush(QColor(255, 255, 255)))
             else:
                 tier_item.setForeground(QBrush(QColor(0, 0, 0)))
-        self._table.setItem(row, 3, tier_item)
+        self._table.setItem(row, 4, tier_item)
 
-        # Entities
+        # Entities (col 5)
         if error:
             entities_str = f"Error: {error}"
         else:
             entities_str = ", ".join(f"{k}({v})" for k, v in entities.items()) if entities else "-"
         entities_item = QTableWidgetItem(entities_str)
-        self._table.setItem(row, 4, entities_item)
+        self._table.setItem(row, 5, entities_item)
 
-        # Actions - widget with buttons
+        # Actions (col 6) - widget with buttons
         actions_widget = QWidget()
         actions_layout = QHBoxLayout(actions_widget)
         actions_layout.setContentsMargins(4, 2, 4, 2)
@@ -182,7 +201,7 @@ class ResultsTableWidget(QWidget):
         actions_layout.addWidget(label_btn)
         actions_layout.addStretch()
 
-        self._table.setCellWidget(row, 5, actions_widget)
+        self._table.setCellWidget(row, 6, actions_widget)
 
     def _passes_filter(self, result: Dict[str, Any]) -> bool:
         """Check if a result passes current filters."""
@@ -239,6 +258,56 @@ class ResultsTableWidget(QWidget):
             item = self._table.item(row, 0)
             if item and item.data(Qt.UserRole) == file_path:
                 self._table.removeRow(row)
+                break
+
+    def update_result(self, result: Dict[str, Any]):
+        """Update an existing result in the table."""
+        file_path = result.get("path", "")
+
+        # Update in internal list
+        for i, r in enumerate(self._all_results):
+            if r.get("path") == file_path:
+                self._all_results[i] = result
+                break
+
+        # Find and update the row in the table
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, 0)
+            if item and item.data(Qt.UserRole) == file_path:
+                # Update the row in place
+                score = result.get("score", 0)
+                tier = result.get("tier", "UNKNOWN")
+                entities = result.get("entities", {})
+                error = result.get("error")
+
+                # Score (col 3)
+                score_item = self._table.item(row, 3)
+                if score_item:
+                    score_item.setText(str(score) if not error else "--")
+                    score_item.setData(Qt.UserRole, score)
+                    if tier in TIER_COLORS:
+                        score_item.setForeground(QBrush(TIER_COLORS[tier]))
+
+                # Tier (col 4)
+                tier_item = self._table.item(row, 4)
+                if tier_item:
+                    tier_item.setText(tier if not error else "ERROR")
+                    if tier in TIER_COLORS:
+                        tier_item.setBackground(QBrush(TIER_COLORS[tier]))
+                        if tier in ["CRITICAL", "HIGH", "MINIMAL", "UNKNOWN"]:
+                            tier_item.setForeground(QBrush(QColor(255, 255, 255)))
+                        else:
+                            tier_item.setForeground(QBrush(QColor(0, 0, 0)))
+
+                # Entities (col 5)
+                entities_item = self._table.item(row, 5)
+                if entities_item:
+                    if error:
+                        entities_str = f"Error: {error}"
+                    else:
+                        entities_str = ", ".join(f"{k}({v})" for k, v in entities.items()) if entities else "-"
+                    entities_item.setText(entities_str)
+
                 break
 
     def get_all_results(self) -> List[Dict[str, Any]]:
