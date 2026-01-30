@@ -32,6 +32,7 @@ from .crypto import CryptoProvider
 
 __all__ = [
     "AuthManager",
+    "AuthenticationError",
     "User",
     "Session",
     "UserRole",
@@ -92,7 +93,27 @@ class AuthManager:
         Raises:
             RuntimeError: If admin already exists
         """
-        raise NotImplementedError("Scaffold - to be implemented")
+        if self._users.admin_exists():
+            raise RuntimeError("Admin user already exists")
+
+        # Create admin user
+        user, dek = self._users.create_user(
+            username=username,
+            password=password,
+            role=UserRole.ADMIN,
+            email=email,
+            subscribe_updates=subscribe_updates,
+        )
+
+        # Generate recovery keys
+        recovery_keys = self._recovery.generate_keys(user, dek)
+
+        # Setup audit log encryption with admin's DEK
+        from openlabels.vault.audit import AuditLog
+        audit = AuditLog(self._data_dir, self._crypto)
+        audit.setup_admin_key(dek)
+
+        return recovery_keys
 
     def create_user(
         self,
@@ -117,7 +138,16 @@ class AuthManager:
             PermissionError: If session is not admin
             ValueError: If username already exists
         """
-        raise NotImplementedError("Scaffold - to be implemented")
+        if not admin_session.is_admin():
+            raise PermissionError("Only admin can create users")
+
+        user, _dek = self._users.create_user(
+            username=username,
+            password=password,
+            role=role,
+        )
+
+        return user
 
     def login(self, username: str, password: str) -> Session:
         """
@@ -133,7 +163,39 @@ class AuthManager:
         Raises:
             AuthenticationError: If credentials invalid
         """
-        raise NotImplementedError("Scaffold - to be implemented")
+        result = self._users.authenticate(username, password)
+        if result is None:
+            raise AuthenticationError("Invalid username or password")
+
+        user, dek = result
+
+        # Create JWT token
+        token = self._jwt.create_token(
+            user_id=user.id,
+            username=user.username,
+            role=user.role.value,
+        )
+
+        # Create session
+        session = Session(
+            token=token,
+            user=user,
+            _dek=dek,
+        )
+
+        # Track active session
+        self._active_sessions[token] = session
+
+        # If admin, flush any queued audit entries
+        if user.is_admin():
+            from openlabels.vault.audit import AuditLog
+            audit = AuditLog(self._data_dir, self._crypto)
+            try:
+                audit.flush_queue(dek)
+            except Exception:
+                pass  # Ignore flush errors
+
+        return session
 
     def logout(self, token: str) -> None:
         """
@@ -142,7 +204,8 @@ class AuthManager:
         Args:
             token: JWT token to invalidate
         """
-        raise NotImplementedError("Scaffold - to be implemented")
+        if token in self._active_sessions:
+            del self._active_sessions[token]
 
     def verify_session(self, token: str) -> Session | None:
         """
@@ -154,7 +217,27 @@ class AuthManager:
         Returns:
             Session if valid, None otherwise
         """
-        raise NotImplementedError("Scaffold - to be implemented")
+        # Check active sessions first
+        if token in self._active_sessions:
+            return self._active_sessions[token]
+
+        # Verify JWT
+        payload = self._jwt.verify_token(token)
+        if payload is None:
+            return None
+
+        # Get user
+        user = self._users.get_user_by_id(payload["sub"])
+        if user is None:
+            return None
+
+        # Note: We can't recover DEK without password, so this session
+        # won't have vault access. For full vault access, user must login again.
+        return Session(
+            token=token,
+            user=user,
+            _dek=None,  # No DEK - vault access limited
+        )
 
     def reset_user_vault(self, admin_session: Session, username: str) -> None:
         """
@@ -167,7 +250,19 @@ class AuthManager:
         Raises:
             PermissionError: If session is not admin
         """
-        raise NotImplementedError("Scaffold - to be implemented")
+        if not admin_session.is_admin():
+            raise PermissionError("Only admin can reset user vaults")
+
+        user = self._users.get_user(username)
+        if user is None:
+            raise ValueError(f"User not found: {username}")
+
+        # Clear the user's vault
+        from openlabels.vault import Vault
+        # We need a dummy DEK just to get the vault path
+        # The clear() method just deletes files, doesn't need real DEK
+        vault = Vault(user_id=user.id, dek=b"\x00" * 32, data_dir=self._data_dir)
+        vault.clear()
 
     def recover_with_key(self, recovery_key: str, new_password: str) -> bool:
         """
@@ -180,4 +275,34 @@ class AuthManager:
         Returns:
             True if recovery successful
         """
-        raise NotImplementedError("Scaffold - to be implemented")
+        # Find admin user
+        admin_user = None
+        for user in self._users.list_users():
+            if user.is_admin():
+                admin_user = user
+                break
+
+        if admin_user is None:
+            return False
+
+        # Attempt recovery
+        return self._recovery.recover_admin(
+            user_id=admin_user.id,
+            recovery_key=recovery_key,
+            new_password=new_password,
+            users_manager=self._users,
+        )
+
+    def list_users(self) -> list[User]:
+        """List all users."""
+        return list(self._users.list_users())
+
+    def get_current_user(self, token: str) -> User | None:
+        """Get the user for a token."""
+        session = self.verify_session(token)
+        return session.user if session else None
+
+
+class AuthenticationError(Exception):
+    """Raised when authentication fails."""
+    pass

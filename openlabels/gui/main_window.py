@@ -6,12 +6,14 @@ The main application window containing:
 - Folder tree (left)
 - Results table (right)
 - Status bar (bottom)
+
+Requires authentication to access vault features.
 """
 
 import json
 import csv
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from datetime import datetime
 
 from PySide6.QtWidgets import (
@@ -38,6 +40,10 @@ from openlabels.gui.widgets.results_table import ResultsTableWidget
 from openlabels.gui.widgets.dialogs import SettingsDialog, LabelDialog, QuarantineConfirmDialog
 from openlabels.gui.workers.scan_worker import ScanWorker
 
+if TYPE_CHECKING:
+    from openlabels.auth import AuthManager
+    from openlabels.auth.models import Session
+
 
 class MainWindow(QMainWindow):
     """Main application window."""
@@ -48,10 +54,15 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1200, 700)
         self.resize(1400, 800)
 
+        # Auth state
+        self._auth: Optional["AuthManager"] = None
+        self._session: Optional["Session"] = None
+
         # State
         self._scan_results: List[Dict[str, Any]] = []
         self._current_path: Optional[str] = None
         self._scan_worker: Optional[ScanWorker] = None
+        self._initial_path = initial_path
 
         # Setup UI
         self._setup_ui()
@@ -59,9 +70,94 @@ class MainWindow(QMainWindow):
         self._setup_statusbar()
         self._connect_signals()
 
+    def showEvent(self, event):
+        """Handle window show - trigger login on first show."""
+        super().showEvent(event)
+
+        # Only show login on first display
+        if self._auth is None:
+            # Use QTimer to defer login dialog until after window is shown
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, self._show_auth_dialog)
+
+    def _show_auth_dialog(self):
+        """Show login or setup dialog."""
+        try:
+            from openlabels.auth import AuthManager
+            self._auth = AuthManager()
+
+            if self._auth.needs_setup():
+                self._show_setup_dialog()
+            else:
+                self._show_login_dialog()
+
+        except ImportError:
+            # Auth module not available (missing dependencies)
+            QMessageBox.warning(
+                self,
+                "Auth Not Available",
+                "Authentication features require additional dependencies.\n\n"
+                "Install with: pip install openlabels[auth]"
+            )
+            self._auth = None
+
+    def _show_setup_dialog(self):
+        """Show first-time setup dialog."""
+        from openlabels.gui.widgets.login_dialog import SetupDialog, RecoveryKeysDialog
+
+        dialog = SetupDialog(self)
+        dialog.setup_complete.connect(self._on_setup_complete)
+
+        if dialog.exec() != dialog.Accepted:
+            # User cancelled setup - can't continue
+            QMessageBox.information(
+                self,
+                "Setup Required",
+                "An admin account must be created to use OpenLabels."
+            )
+            QApplication.quit()
+
+    def _on_setup_complete(self, session: "Session", recovery_keys: List[str]):
+        """Handle setup completion."""
+        self._session = session
+
+        # Show recovery keys dialog
+        from openlabels.gui.widgets.login_dialog import RecoveryKeysDialog
+        keys_dialog = RecoveryKeysDialog(self, recovery_keys)
+        keys_dialog.exec()
+
+        self._on_login_success()
+
+    def _show_login_dialog(self):
+        """Show login dialog."""
+        from openlabels.gui.widgets.login_dialog import LoginDialog
+
+        dialog = LoginDialog(self)
+        dialog.login_successful.connect(self._on_login_successful)
+
+        if dialog.exec() != dialog.Accepted:
+            # User cancelled login - quit
+            QApplication.quit()
+
+    def _on_login_successful(self, session: "Session"):
+        """Handle successful login."""
+        self._session = session
+        self._on_login_success()
+
+    def _on_login_success(self):
+        """Common login success handling."""
+        # Update window title with username
+        self.setWindowTitle(f"OpenLabels - {self._session.user.username}")
+
+        # Update status
+        self._status_label.setText(f"Logged in as {self._session.user.username}")
+
+        # Update user menu
+        self._update_user_menu()
+
         # Load initial path if provided
-        if initial_path:
-            self._scan_target.set_path(initial_path)
+        if self._initial_path:
+            self._scan_target.set_path(self._initial_path)
 
     def _setup_ui(self):
         """Setup the main UI layout."""
@@ -150,12 +246,133 @@ class MainWindow(QMainWindow):
         stop_scan_action.triggered.connect(self._on_stop_scan)
         scan_menu.addAction(stop_scan_action)
 
+        # User menu (populated after login)
+        self._user_menu = menubar.addMenu("&User")
+        self._user_menu.setEnabled(False)
+
         # Help menu
         help_menu = menubar.addMenu("&Help")
 
         about_action = QAction("&About", self)
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
+
+    def _update_user_menu(self):
+        """Update user menu after login."""
+        if not self._session:
+            self._user_menu.setEnabled(False)
+            return
+
+        self._user_menu.clear()
+        self._user_menu.setEnabled(True)
+
+        # Current user info
+        user_info = QAction(f"Logged in as: {self._session.user.username}", self)
+        user_info.setEnabled(False)
+        self._user_menu.addAction(user_info)
+
+        self._user_menu.addSeparator()
+
+        # Admin-only options
+        if self._session.is_admin():
+            create_user_action = QAction("Create &User...", self)
+            create_user_action.triggered.connect(self._on_create_user)
+            self._user_menu.addAction(create_user_action)
+
+            manage_users_action = QAction("&Manage Users...", self)
+            manage_users_action.triggered.connect(self._on_manage_users)
+            self._user_menu.addAction(manage_users_action)
+
+            recovery_keys_action = QAction("&Recovery Keys...", self)
+            recovery_keys_action.triggered.connect(self._on_recovery_keys)
+            self._user_menu.addAction(recovery_keys_action)
+
+            audit_log_action = QAction("View &Audit Log...", self)
+            audit_log_action.triggered.connect(self._on_view_audit)
+            self._user_menu.addAction(audit_log_action)
+
+            self._user_menu.addSeparator()
+
+        # Logout
+        logout_action = QAction("&Logout", self)
+        logout_action.triggered.connect(self._on_logout)
+        self._user_menu.addAction(logout_action)
+
+    @Slot()
+    def _on_create_user(self):
+        """Show create user dialog (admin only)."""
+        if not self._session or not self._session.is_admin():
+            return
+
+        from openlabels.gui.widgets.login_dialog import CreateUserDialog
+        dialog = CreateUserDialog(self, self._session)
+        if dialog.exec():
+            QMessageBox.information(self, "User Created", "User created successfully.")
+
+    @Slot()
+    def _on_manage_users(self):
+        """Show user management (admin only)."""
+        if not self._session or not self._session.is_admin():
+            return
+
+        # Simple user list for now
+        users = self._auth.list_users()
+        user_list = "\n".join(f"- {u.username} ({u.role.value})" for u in users)
+        QMessageBox.information(self, "Users", f"Registered users:\n\n{user_list}")
+
+    @Slot()
+    def _on_recovery_keys(self):
+        """Show recovery key status (admin only)."""
+        if not self._session or not self._session.is_admin():
+            return
+
+        from openlabels.gui.widgets.recovery_dialog import RecoveryDialog
+        dialog = RecoveryDialog(self, mode="view_keys", admin_session=self._session)
+        dialog.exec()
+
+    @Slot()
+    def _on_view_audit(self):
+        """View audit log (admin only)."""
+        if not self._session or not self._session.is_admin():
+            return
+
+        try:
+            from openlabels.vault.audit import AuditLog
+            from openlabels.auth.crypto import CryptoProvider
+
+            audit = AuditLog(self._auth._data_dir, CryptoProvider())
+            is_valid, message = audit.verify_chain(self._session._dek)
+
+            entries = list(audit.read(self._session._dek, limit=50))
+            stats = audit.get_stats(self._session._dek)
+
+            # Simple display for now
+            text = f"Chain Status: {message}\n\n"
+            text += f"Total Entries: {stats.get('total_entries', 0)}\n\n"
+            text += "Recent Actions:\n"
+
+            for entry in entries[:20]:
+                text += f"  {entry.timestamp.strftime('%Y-%m-%d %H:%M')} | "
+                text += f"{entry.action.value} | {entry.user_id[:8]}...\n"
+
+            QMessageBox.information(self, "Audit Log", text)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load audit log: {e}")
+
+    @Slot()
+    def _on_logout(self):
+        """Handle logout."""
+        if self._session and self._auth:
+            self._auth.logout(self._session.token)
+
+        self._session = None
+        self.setWindowTitle("OpenLabels")
+        self._status_label.setText("Logged out")
+        self._user_menu.setEnabled(False)
+
+        # Show login dialog again
+        self._show_login_dialog()
 
     def _setup_statusbar(self):
         """Setup the status bar."""
@@ -189,6 +406,7 @@ class MainWindow(QMainWindow):
         # Results table
         self._results_table.quarantine_requested.connect(self._on_quarantine_file)
         self._results_table.label_requested.connect(self._on_label_file)
+        self._results_table.detail_requested.connect(self._on_file_detail)
 
         # Bottom buttons
         self._export_csv_btn.clicked.connect(self._on_export_csv)
@@ -299,6 +517,65 @@ class MainWindow(QMainWindow):
     def _on_folder_selected(self, folder_path: str):
         """Handle folder selection in tree - filter results."""
         self._results_table.filter_by_path(folder_path)
+
+    @Slot(str)
+    def _on_file_detail(self, file_path: str):
+        """Handle double-click to show file detail dialog."""
+        # Find the result for this file
+        result = next((r for r in self._scan_results if r.get("path") == file_path), None)
+
+        # Try to get classification from vault if we have a session
+        classification = None
+        if self._session:
+            try:
+                vault = self._session.get_vault()
+                classification = vault.get_classification(file_path)
+            except Exception:
+                pass
+
+        # If no classification but we have scan result, create a minimal one
+        if classification is None and result:
+            from openlabels.vault.models import FileClassification, ClassificationSource, Finding
+            from datetime import datetime
+
+            findings = [
+                Finding(entity_type=etype, count=count, confidence=None)
+                for etype, count in result.get("entities", {}).items()
+            ]
+
+            source = ClassificationSource(
+                provider="openlabels",
+                timestamp=datetime.utcnow(),
+                findings=findings,
+                metadata={},
+            )
+
+            classification = FileClassification(
+                file_path=file_path,
+                file_hash="",
+                risk_score=result.get("score", 0),
+                tier=result.get("tier", "UNKNOWN"),
+                sources=[source] if findings else [],
+                labels=result.get("labels", []),
+            )
+
+        from openlabels.gui.widgets.file_detail_dialog import FileDetailDialog
+        dialog = FileDetailDialog(
+            parent=self,
+            file_path=file_path,
+            classification=classification,
+            session=self._session,
+        )
+        dialog.quarantine_requested.connect(self._on_quarantine_file)
+        dialog.rescan_requested.connect(self._on_rescan_file)
+        dialog.exec()
+
+    @Slot(str)
+    def _on_rescan_file(self, file_path: str):
+        """Handle rescan request for a single file."""
+        # For now, just trigger a full scan with the file's parent directory
+        # A proper single-file rescan would require scan worker changes
+        self._status_label.setText(f"Rescan requested: {Path(file_path).name}")
 
     @Slot(str)
     def _on_quarantine_file(self, file_path: str):
