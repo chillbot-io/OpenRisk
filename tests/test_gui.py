@@ -2,21 +2,24 @@
 GUI Tests using pytest-qt.
 
 Tests for PySide6 widgets including dialogs, dashboard, and workers.
-Run with: pytest tests/test_gui.py -v
+Run with: pytest -p pytest_qt tests/test_gui.py -v
 
 Requires:
-    pip install pytest-qt pytest-xvfb
+    pip install pytest-qt pytest-xvfb PySide6
+    apt install libegl1 (for headless systems)
 """
 
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
 
+# Skip entire module if Qt is not available
+pytest.importorskip("PySide6", reason="PySide6 not installed or Qt libs missing")
 
-# Skip all tests if PySide6 or pytest-qt not available
-pytest.importorskip("PySide6")
-pytest.importorskip("pytestqt")
+try:
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+except (ImportError, OSError) as e:
+    pytest.skip(f"Qt not available: {e}", allow_module_level=True)
 
 
 # =============================================================================
