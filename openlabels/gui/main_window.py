@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QToolBar,
     QApplication,
 )
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QTimer
 from PySide6.QtGui import QAction, QIcon
 
 from openlabels.gui.widgets.scan_target import ScanTargetPanel
@@ -39,6 +39,7 @@ from openlabels.gui.widgets.folder_tree import FolderTreeWidget
 from openlabels.gui.widgets.results_table import ResultsTableWidget
 from openlabels.gui.widgets.dialogs import SettingsDialog, LabelDialog, QuarantineConfirmDialog
 from openlabels.gui.workers.scan_worker import ScanWorker
+from openlabels.gui.workers.file_watcher import FileWatcher
 
 if TYPE_CHECKING:
     from openlabels.auth import AuthManager
@@ -63,6 +64,11 @@ class MainWindow(QMainWindow):
         self._current_path: Optional[str] = None
         self._scan_worker: Optional[ScanWorker] = None
         self._initial_path = initial_path
+
+        # File watcher for real-time monitoring
+        self._file_watcher = FileWatcher(self)
+        self._pending_watch_files: List[str] = []
+        self._watch_scan_timer: Optional["QTimer"] = None
 
         # Setup UI
         self._setup_ui()
@@ -379,6 +385,7 @@ class MainWindow(QMainWindow):
         # Scan target
         self._scan_target.scan_requested.connect(self._on_start_scan)
         self._scan_target.path_changed.connect(self._on_path_changed)
+        self._scan_target.monitoring_toggled.connect(self._on_monitoring_toggled)
 
         # Folder tree
         self._folder_tree.folder_selected.connect(self._on_folder_selected)
@@ -392,6 +399,12 @@ class MainWindow(QMainWindow):
         self._export_csv_btn.clicked.connect(self._on_export_csv)
         self._export_json_btn.clicked.connect(self._on_export_json)
         self._settings_btn.clicked.connect(self._on_settings)
+
+        # File watcher
+        self._file_watcher.file_changed.connect(self._on_watched_file_changed)
+        self._file_watcher.watching_started.connect(self._on_watching_started)
+        self._file_watcher.watching_stopped.connect(self._on_watching_stopped)
+        self._file_watcher.error.connect(self._on_watcher_error)
 
     @Slot()
     def _on_open_folder(self):
@@ -548,6 +561,161 @@ class MainWindow(QMainWindow):
         self._progress_bar.setVisible(False)
         self._scan_target.set_enabled(True)
         QMessageBox.critical(self, "Scan Error", error)
+
+    # --- File Monitoring ---
+
+    @Slot(bool)
+    def _on_monitoring_toggled(self, enabled: bool):
+        """Handle monitoring toggle."""
+        path = self._scan_target.get_path()
+
+        if enabled:
+            if not path:
+                QMessageBox.warning(self, "No Path", "Please enter a path to monitor.")
+                self._scan_target.set_monitoring(False)
+                return
+
+            # Start watching
+            if self._file_watcher.start_watching(path):
+                self._status_label.setText(f"Monitoring: {path}")
+            else:
+                self._scan_target.set_monitoring(False)
+        else:
+            # Stop watching
+            self._file_watcher.stop_watching()
+            if self._watch_scan_timer:
+                self._watch_scan_timer.stop()
+            self._pending_watch_files.clear()
+            self._status_label.setText("Ready")
+
+    @Slot(str)
+    def _on_watched_file_changed(self, file_path: str):
+        """Handle file change from watcher - queue for scanning."""
+        # Add to pending list if not already there
+        if file_path not in self._pending_watch_files:
+            self._pending_watch_files.append(file_path)
+
+        # Start/restart debounce timer
+        if self._watch_scan_timer is None:
+            self._watch_scan_timer = QTimer(self)
+            self._watch_scan_timer.setSingleShot(True)
+            self._watch_scan_timer.timeout.connect(self._scan_pending_watch_files)
+
+        self._watch_scan_timer.start(1000)  # 1 second debounce
+
+        # Update status
+        count = len(self._pending_watch_files)
+        self._status_label.setText(f"Monitoring: {count} file(s) changed...")
+
+    def _scan_pending_watch_files(self):
+        """Scan files that were detected as changed."""
+        if not self._pending_watch_files:
+            return
+
+        # Don't interrupt an existing scan
+        if self._scan_worker and self._scan_worker.isRunning():
+            # Re-queue for later
+            self._watch_scan_timer.start(2000)
+            return
+
+        files_to_scan = self._pending_watch_files.copy()
+        self._pending_watch_files.clear()
+
+        # Scan each file individually
+        self._scan_individual_files(files_to_scan)
+
+    def _scan_individual_files(self, file_paths: List[str]):
+        """Scan a list of individual files."""
+        from openlabels import Client
+        from openlabels.adapters.scanner import detect_file as scanner_detect
+        from pathlib import Path
+
+        client = Client()
+
+        for file_path in file_paths:
+            try:
+                path = Path(file_path)
+                if not path.exists():
+                    continue
+
+                # Get file size
+                try:
+                    size = path.stat().st_size
+                except OSError:
+                    size = 0
+
+                # Detect entities
+                detection = scanner_detect(path)
+                entities = detection.entity_counts
+
+                # Extract spans with context
+                spans_data = []
+                text = detection.text
+                for span in detection.spans:
+                    ctx_start = max(0, span.start - 50)
+                    ctx_end = min(len(text), span.end + 50)
+                    spans_data.append({
+                        "start": span.start,
+                        "end": span.end,
+                        "text": span.text,
+                        "entity_type": span.entity_type,
+                        "confidence": span.confidence,
+                        "detector": span.detector,
+                        "context_before": text[ctx_start:span.start],
+                        "context_after": text[span.end:ctx_end],
+                    })
+
+                # Score the file
+                score_result = client.score_file(path)
+
+                result = {
+                    "path": str(path),
+                    "size": size,
+                    "score": score_result.score,
+                    "tier": score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier),
+                    "entities": entities,
+                    "spans": spans_data,
+                    "exposure": "PRIVATE",
+                    "error": None,
+                }
+
+                # Update or add to results
+                existing_idx = next(
+                    (i for i, r in enumerate(self._scan_results) if r.get("path") == file_path),
+                    None
+                )
+                if existing_idx is not None:
+                    self._scan_results[existing_idx] = result
+                    self._results_table.update_result(result)
+                else:
+                    self._scan_results.append(result)
+                    self._results_table.add_result(result)
+
+                # Store to vault
+                self._store_to_vault(result)
+
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to scan {file_path}: {e}")
+
+        self._update_risk_summary()
+        self._status_label.setText(f"Monitoring: {len(self._file_watcher.watched_paths)} directories")
+
+    @Slot(str)
+    def _on_watching_started(self, path: str):
+        """Handle watching started."""
+        self._status_label.setText(f"Monitoring: {path}")
+
+    @Slot(str)
+    def _on_watching_stopped(self, path: str):
+        """Handle watching stopped."""
+        if not self._file_watcher.is_watching:
+            self._status_label.setText("Ready")
+
+    @Slot(str)
+    def _on_watcher_error(self, error: str):
+        """Handle watcher error."""
+        self._status_label.setText(f"Monitor error: {error}")
 
     @Slot(str)
     def _on_folder_selected(self, folder_path: str):
@@ -840,5 +1008,9 @@ class MainWindow(QMainWindow):
             else:
                 event.ignore()
                 return
+
+        # Stop file watcher
+        if self._file_watcher.is_watching:
+            self._file_watcher.stop_watching()
 
         event.accept()

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QFileDialog,
     QGroupBox,
+    QCheckBox,
 )
 from PySide6.QtCore import Signal
 
@@ -26,6 +27,7 @@ class ScanTargetPanel(QWidget):
     # Signals
     scan_requested = Signal()
     path_changed = Signal()
+    monitoring_toggled = Signal(bool)  # True when monitoring enabled
 
     TARGET_TYPES = [
         ("local", "Local Path"),
@@ -97,6 +99,11 @@ class ScanTargetPanel(QWidget):
         self._creds_btn.setVisible(False)
         layout.addWidget(self._creds_btn)
 
+        # Monitor checkbox (real-time file watching)
+        self._monitor_checkbox = QCheckBox("Monitor")
+        self._monitor_checkbox.setToolTip("Watch for file changes and auto-scan")
+        layout.addWidget(self._monitor_checkbox)
+
         # Scan button
         self._scan_btn = QPushButton("Scan")
         self._scan_btn.setMinimumWidth(80)
@@ -111,6 +118,11 @@ class ScanTargetPanel(QWidget):
         self._scan_btn.clicked.connect(self.scan_requested)
         self._path_input.textChanged.connect(self.path_changed)
         self._path_input.returnPressed.connect(self.scan_requested)
+        self._monitor_checkbox.toggled.connect(self._on_monitor_toggled)
+
+    def _on_monitor_toggled(self, checked: bool):
+        """Handle monitor checkbox toggle."""
+        self.monitoring_toggled.emit(checked)
 
     def _on_type_changed(self, index: int):
         """Handle target type change."""
@@ -128,6 +140,11 @@ class ScanTargetPanel(QWidget):
         self._prefix_label.setVisible(is_s3)
         self._prefix_input.setVisible(is_s3)
         self._creds_btn.setVisible(is_s3)
+
+        # Hide monitor for S3 (not supported)
+        self._monitor_checkbox.setVisible(not is_s3)
+        if is_s3 and self._monitor_checkbox.isChecked():
+            self._monitor_checkbox.setChecked(False)
 
         # Update placeholder text based on type
         if target_type == "local":
@@ -198,6 +215,14 @@ class ScanTargetPanel(QWidget):
         """Get S3 credentials."""
         return self._s3_credentials
 
+    def is_monitoring(self) -> bool:
+        """Check if monitoring is enabled."""
+        return self._monitor_checkbox.isChecked()
+
+    def set_monitoring(self, enabled: bool):
+        """Set monitoring state."""
+        self._monitor_checkbox.setChecked(enabled)
+
     def set_enabled(self, enabled: bool):
         """Enable or disable the panel."""
         self._type_combo.setEnabled(enabled)
@@ -207,3 +232,4 @@ class ScanTargetPanel(QWidget):
         self._browse_btn.setEnabled(enabled)
         self._creds_btn.setEnabled(enabled)
         self._scan_btn.setEnabled(enabled)
+        self._monitor_checkbox.setEnabled(enabled)

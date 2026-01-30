@@ -260,6 +260,56 @@ class ResultsTableWidget(QWidget):
                 self._table.removeRow(row)
                 break
 
+    def update_result(self, result: Dict[str, Any]):
+        """Update an existing result in the table."""
+        file_path = result.get("path", "")
+
+        # Update in internal list
+        for i, r in enumerate(self._all_results):
+            if r.get("path") == file_path:
+                self._all_results[i] = result
+                break
+
+        # Find and update the row in the table
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, 0)
+            if item and item.data(Qt.UserRole) == file_path:
+                # Update the row in place
+                score = result.get("score", 0)
+                tier = result.get("tier", "UNKNOWN")
+                entities = result.get("entities", {})
+                error = result.get("error")
+
+                # Score (col 3)
+                score_item = self._table.item(row, 3)
+                if score_item:
+                    score_item.setText(str(score) if not error else "--")
+                    score_item.setData(Qt.UserRole, score)
+                    if tier in TIER_COLORS:
+                        score_item.setForeground(QBrush(TIER_COLORS[tier]))
+
+                # Tier (col 4)
+                tier_item = self._table.item(row, 4)
+                if tier_item:
+                    tier_item.setText(tier if not error else "ERROR")
+                    if tier in TIER_COLORS:
+                        tier_item.setBackground(QBrush(TIER_COLORS[tier]))
+                        if tier in ["CRITICAL", "HIGH", "MINIMAL", "UNKNOWN"]:
+                            tier_item.setForeground(QBrush(QColor(255, 255, 255)))
+                        else:
+                            tier_item.setForeground(QBrush(QColor(0, 0, 0)))
+
+                # Entities (col 5)
+                entities_item = self._table.item(row, 5)
+                if entities_item:
+                    if error:
+                        entities_str = f"Error: {error}"
+                    else:
+                        entities_str = ", ".join(f"{k}({v})" for k, v in entities.items()) if entities else "-"
+                    entities_item.setText(entities_str)
+
+                break
+
     def get_all_results(self) -> List[Dict[str, Any]]:
         """Get all results."""
         return self._all_results.copy()
