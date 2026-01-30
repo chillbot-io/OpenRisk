@@ -535,6 +535,8 @@ class SevenZipExtractor:
                 # Note: py7zr doesn't support streaming extraction, so we must
                 # extract to memory first. For very large 7z files, consider
                 # using the command-line 7z tool instead.
+                all_files = sz.readall()
+
                 for filename in file_list:
                     stats.total_files += 1
 
@@ -544,12 +546,11 @@ class SevenZipExtractor:
                         stats.extraction_errors.append(f"Unsafe path: {filename}")
                         continue
 
-                    # Extract single file
-                    extracted = sz.read([filename])
-                    if not extracted or filename not in extracted:
+                    # Get file content from readall() result
+                    if filename not in all_files:
                         continue
 
-                    bio = extracted[filename]
+                    bio = all_files[filename]
                     file_content = bio.read()
 
                     if len(file_content) > MAX_SINGLE_FILE_SIZE:
