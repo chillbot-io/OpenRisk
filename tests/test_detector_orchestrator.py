@@ -67,7 +67,7 @@ class TestOrchestratorInit:
 
         detector_names = [d.name for d in orchestrator._detectors]
         assert "checksum" in detector_names
-        assert "patterns" in detector_names
+        assert "pattern" in detector_names  # PatternDetector.name = "pattern" (singular)
 
 
 # =============================================================================

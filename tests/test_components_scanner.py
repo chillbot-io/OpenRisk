@@ -485,11 +485,12 @@ class TestFileModifiedError:
 
         # This test is tricky because we need to modify file during scan
         # We'll test the error handling path instead
-        with patch('openlabels.components.scanner.quick_hash') as mock_hash:
+        # Patch where quick_hash is used (imported into scanner module)
+        with patch('openlabels.utils.hashing.quick_hash') as mock_hash:
             # First call returns one hash, second call returns different hash
             mock_hash.side_effect = ["hash1", "hash2"]
 
-            with patch('openlabels.components.scanner.detect_file') as mock_detect:
+            with patch('openlabels.adapters.scanner.detect_file') as mock_detect:
                 mock_detect.return_value = MagicMock(
                     entity_counts={},
                     spans=[],

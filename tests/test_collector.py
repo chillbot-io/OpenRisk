@@ -410,13 +410,15 @@ class TestMimeTypeDetection:
 
     def test_unknown_extension_fallback(self, tmp_path):
         """Should use application/octet-stream for unknown types."""
-        test_file = tmp_path / "test.xyz"
+        # Use a truly unknown extension (not .xyz which maps to chemical/x-xyz)
+        test_file = tmp_path / "test.qzx123"
         test_file.write_bytes(b"binary content")
 
         collector = FileCollector()
         metadata = collector.collect(str(test_file))
 
-        assert metadata.file_type in ("application/octet-stream", None) or metadata.file_type is not None
+        # Unknown types should return octet-stream or None
+        assert metadata.file_type in ("application/octet-stream", "application/x-octet-stream", None)
 
 
 class TestCollectMetadataConvenience:

@@ -35,7 +35,7 @@ from openlabels.adapters.scanner.pipeline.span_filters import (
     is_tracking_number,
     filter_ml_mrn_on_id_cards,
 )
-from openlabels.adapters.scanner.types import Span
+from openlabels.adapters.scanner.types import Span, Tier
 
 
 # =============================================================================
@@ -284,7 +284,7 @@ class TestValidatePhone:
 
     def test_valid_phone(self):
         """Test valid phone numbers."""
-        assert validate_phone("555-123-4567") is True  # Wait, 555 is invalid!
+        assert validate_phone("212-555-4567") is True  # 212 (NYC) is valid
 
     def test_invalid_area_code_555(self):
         """Test phone with 555 area code fails."""
@@ -554,7 +554,7 @@ class TestFilterMLMRNOnIDCards:
         text = "DRIVER'S LICENSE DLN: 12345 CLASS: C"
         spans = [
             Span(start=20, end=25, text="12345", entity_type="MRN",
-                 confidence=0.9, detector="phi_bert"),
+                 confidence=0.9, detector="phi_bert", tier=Tier.ML),
         ]
 
         filtered = filter_ml_mrn_on_id_cards(spans, text)
@@ -565,7 +565,7 @@ class TestFilterMLMRNOnIDCards:
         text = "DRIVER'S LICENSE DLN: 12345 CLASS: C MRN: 12345678"
         spans = [
             Span(start=40, end=48, text="12345678", entity_type="MRN",
-                 confidence=0.9, detector="pattern"),  # Rule-based
+                 confidence=0.9, detector="pattern", tier=Tier.PATTERN),  # Rule-based
         ]
 
         filtered = filter_ml_mrn_on_id_cards(spans, text)
@@ -576,7 +576,7 @@ class TestFilterMLMRNOnIDCards:
         text = "Patient MRN: 12345678"
         spans = [
             Span(start=13, end=21, text="12345678", entity_type="MRN",
-                 confidence=0.9, detector="phi_bert"),
+                 confidence=0.9, detector="phi_bert", tier=Tier.ML),
         ]
 
         filtered = filter_ml_mrn_on_id_cards(spans, text)
