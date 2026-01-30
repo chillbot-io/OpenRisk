@@ -710,3 +710,197 @@ class TestEdgeCases:
             cell = HeatmapCell(intensity=intensity, count=1)
             qtbot.addWidget(cell)
             cell.repaint()  # Should not crash
+
+
+# =============================================================================
+# S3CredentialsDialog Tests
+# =============================================================================
+
+class TestS3CredentialsDialog:
+    """Tests for the S3CredentialsDialog widget."""
+
+    def test_dialog_creates(self, qtbot):
+        """Test that S3CredentialsDialog initializes correctly."""
+        from openlabels.gui.widgets.dialogs import S3CredentialsDialog
+
+        dialog = S3CredentialsDialog()
+        qtbot.addWidget(dialog)
+
+        assert dialog.windowTitle() == "AWS Credentials"
+        assert dialog._profile_radio is not None
+        assert dialog._manual_radio is not None
+
+    def test_profile_mode_is_default(self, qtbot):
+        """Test that profile mode is selected by default."""
+        from openlabels.gui.widgets.dialogs import S3CredentialsDialog
+
+        dialog = S3CredentialsDialog()
+        qtbot.addWidget(dialog)
+
+        assert dialog._profile_radio.isChecked()
+        assert not dialog._manual_radio.isChecked()
+
+    def test_manual_inputs_disabled_in_profile_mode(self, qtbot):
+        """Test that manual credential inputs are disabled in profile mode."""
+        from openlabels.gui.widgets.dialogs import S3CredentialsDialog
+
+        dialog = S3CredentialsDialog()
+        qtbot.addWidget(dialog)
+
+        assert not dialog._access_key_input.isEnabled()
+        assert not dialog._secret_key_input.isEnabled()
+
+    def test_secret_key_is_hidden(self, qtbot):
+        """Test that secret key field uses password echo mode."""
+        from openlabels.gui.widgets.dialogs import S3CredentialsDialog
+        from PySide6.QtWidgets import QLineEdit
+
+        dialog = S3CredentialsDialog()
+        qtbot.addWidget(dialog)
+
+        assert dialog._secret_key_input.echoMode() == QLineEdit.Password
+
+
+# =============================================================================
+# ResultsTableWidget Tests
+# =============================================================================
+
+class TestResultsTableWidget:
+    """Tests for the ResultsTableWidget."""
+
+    def test_widget_creates(self, qtbot):
+        """Test that ResultsTableWidget initializes correctly."""
+        from openlabels.gui.widgets.results_table import ResultsTableWidget
+
+        widget = ResultsTableWidget()
+        qtbot.addWidget(widget)
+
+        assert widget._table is not None
+        assert widget._filter_input is not None
+        assert widget._tier_filter is not None
+
+    def test_tier_filter_has_all_tiers(self, qtbot):
+        """Test that tier filter has all tier options."""
+        from openlabels.gui.widgets.results_table import ResultsTableWidget
+
+        widget = ResultsTableWidget()
+        qtbot.addWidget(widget)
+
+        # Should have "All Tiers" plus 5 tier levels
+        assert widget._tier_filter.count() >= 6
+
+    def test_columns_defined(self, qtbot):
+        """Test that result columns are properly defined."""
+        from openlabels.gui.widgets.results_table import ResultsTableWidget
+
+        widget = ResultsTableWidget()
+        qtbot.addWidget(widget)
+
+        expected_columns = ["Name", "Directory", "Size", "Score", "Tier", "Entities", "Actions"]
+        column_names = [col[0] for col in widget.COLUMNS]
+
+        for col in expected_columns:
+            assert col in column_names
+
+    def test_signals_defined(self, qtbot):
+        """Test that required signals are defined."""
+        from openlabels.gui.widgets.results_table import ResultsTableWidget
+
+        widget = ResultsTableWidget()
+        qtbot.addWidget(widget)
+
+        # Verify signals exist
+        assert hasattr(widget, 'quarantine_requested')
+        assert hasattr(widget, 'label_requested')
+        assert hasattr(widget, 'detail_requested')
+
+
+# =============================================================================
+# ScanTargetPanel Tests
+# =============================================================================
+
+class TestScanTargetPanel:
+    """Tests for the ScanTargetPanel widget."""
+
+    def test_widget_creates(self, qtbot):
+        """Test that ScanTargetPanel initializes correctly."""
+        from openlabels.gui.widgets.scan_target import ScanTargetPanel
+
+        panel = ScanTargetPanel()
+        qtbot.addWidget(panel)
+
+        assert panel._type_combo is not None
+        assert panel._path_input is not None
+
+    def test_has_all_target_types(self, qtbot):
+        """Test that all target types are available."""
+        from openlabels.gui.widgets.scan_target import ScanTargetPanel
+
+        panel = ScanTargetPanel()
+        qtbot.addWidget(panel)
+
+        # Check for expected target types
+        target_types = []
+        for i in range(panel._type_combo.count()):
+            target_types.append(panel._type_combo.itemData(i))
+
+        assert "local" in target_types
+        assert "smb" in target_types
+        assert "nfs" in target_types
+        assert "s3" in target_types
+
+    def test_s3_inputs_hidden_by_default(self, qtbot):
+        """Test that S3-specific inputs are hidden by default."""
+        from openlabels.gui.widgets.scan_target import ScanTargetPanel
+
+        panel = ScanTargetPanel()
+        qtbot.addWidget(panel)
+
+        assert not panel._bucket_input.isVisible()
+
+    def test_signals_defined(self, qtbot):
+        """Test that required signals are defined."""
+        from openlabels.gui.widgets.scan_target import ScanTargetPanel
+
+        panel = ScanTargetPanel()
+        qtbot.addWidget(panel)
+
+        assert hasattr(panel, 'scan_requested')
+        assert hasattr(panel, 'path_changed')
+        assert hasattr(panel, 'monitoring_toggled')
+
+
+# =============================================================================
+# FileWatcher Tests
+# =============================================================================
+
+class TestFileWatcher:
+    """Tests for the FileWatcher worker."""
+
+    def test_watcher_creates(self, qtbot):
+        """Test that FileWatcher initializes correctly."""
+        from openlabels.gui.workers.file_watcher import FileWatcher
+
+        watcher = FileWatcher(watch_path="/tmp")
+
+        assert watcher._watch_path == "/tmp"
+        assert not watcher._stop_event.is_set()
+
+    def test_stop_sets_event(self, qtbot):
+        """Test that stop() sets the stop event."""
+        from openlabels.gui.workers.file_watcher import FileWatcher
+
+        watcher = FileWatcher(watch_path="/tmp")
+        watcher.stop()
+
+        assert watcher._stop_event.is_set()
+
+    def test_signals_defined(self, qtbot):
+        """Test that required signals are defined."""
+        from openlabels.gui.workers.file_watcher import FileWatcher
+
+        watcher = FileWatcher(watch_path="/tmp")
+
+        assert hasattr(watcher, 'file_changed')
+        assert hasattr(watcher, 'file_created')
+        assert hasattr(watcher, 'file_deleted')
