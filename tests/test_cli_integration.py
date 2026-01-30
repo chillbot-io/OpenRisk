@@ -224,17 +224,26 @@ class TestScanCommand:
         assert result.returncode == 0
 
     def test_scan_with_json_output(self, temp_dir):
-        """Test scan with JSON output."""
+        """Test scan with JSON output (single JSON object, not JSONL)."""
         result = run_cli("scan", str(temp_dir), "--format", "json")
 
         assert result.returncode == 0
-        # JSON lines should be parseable (output might include non-JSON status lines)
-        json_lines = []
+        # --format json outputs a single JSON object with summary and results
+        output = json.loads(result.stdout)
+        assert "summary" in output
+        assert "results" in output
+        assert isinstance(output["results"], list)
+
+    def test_scan_with_jsonl_output(self, temp_dir):
+        """Test scan with JSONL output (one JSON object per line)."""
+        result = run_cli("scan", str(temp_dir), "--format", "jsonl")
+
+        assert result.returncode == 0
+        # --format jsonl outputs one JSON object per line
         for line in result.stdout.strip().split('\n'):
-            if line and line.strip().startswith('{'):
-                json_lines.append(json.loads(line))
-        # At least some output should be valid JSON
-        # (empty dir or scan with no results is still valid)
+            if line:
+                parsed = json.loads(line)
+                assert "path" in parsed
 
     def test_scan_nonexistent_path(self):
         """Test error handling for nonexistent path."""
