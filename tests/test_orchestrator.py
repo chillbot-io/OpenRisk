@@ -122,25 +122,35 @@ class TestOrchestratorScannerProperty:
 
     def test_scanner_lazy_loads(self):
         """Scanner should be created on first access when enabled."""
-        with patch('openlabels.adapters.scanner.scanner_adapter.ScannerAdapter') as mock_class:
-            mock_adapter = MagicMock()
-            mock_class.return_value = mock_adapter
+        orchestrator = Orchestrator(enable_classification=True)
 
-            orchestrator = Orchestrator(enable_classification=True)
+        # Before accessing, _scanner should be None (lazy loading)
+        assert orchestrator._scanner is None
 
-            # Access scanner property - this will import and create
-            # We can't easily test lazy loading due to import structure
-            # Just test that scanner property works when disabled
-            pass
+        # Access scanner property - should create instance
+        scanner = orchestrator.scanner
+
+        # Scanner should now be created
+        assert scanner is not None
+        assert orchestrator._scanner is not None
+
+        # Verify it's actually a ScannerAdapter
+        from openlabels.adapters.scanner.scanner_adapter import ScannerAdapter
+        assert isinstance(scanner, ScannerAdapter)
 
     def test_scanner_cached(self):
         """Scanner should be cached after first access."""
-        # Due to lazy import inside property, test caching behavior
         orchestrator = Orchestrator(enable_classification=True)
 
-        # Cache behavior - accessing multiple times should return same instance
-        # Can't easily test with mocks due to import structure
-        pass
+        # Access scanner property twice
+        scanner1 = orchestrator.scanner
+        scanner2 = orchestrator.scanner
+
+        # Should return exact same instance (identity check)
+        assert scanner1 is scanner2
+
+        # Verify _scanner was set
+        assert orchestrator._scanner is scanner1
 
     def test_scanner_none_when_disabled(self):
         """Scanner should be None when classification disabled."""

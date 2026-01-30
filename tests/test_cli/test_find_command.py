@@ -105,8 +105,24 @@ class TestFindOutputFormats:
 
     def test_default_output_format(self):
         """Test default (text) output format."""
-        # The default format should produce human-readable output
-        pass  # Format tested via integration tests
+        from openlabels.cli.commands.find import format_find_result
+        from openlabels.cli.commands.scan import ScanResult
+
+        result = ScanResult(
+            path="/test/file.txt",
+            score=75,
+            tier="HIGH",
+            entities={"SSN": 2, "EMAIL": 5},
+            exposure="PRIVATE",
+        )
+
+        # Text format should be tab-separated, human-readable
+        output = format_find_result(result, "text")
+
+        assert "/test/file.txt" in output
+        assert "Score: 75" in output
+        assert "SSN(2)" in output or "EMAIL(5)" in output
+        assert "\t" in output  # Tab-separated
 
     def test_json_output_format(self):
         """Test JSON output format."""
@@ -168,17 +184,83 @@ class TestFindIntegration:
         shutil.rmtree(temp)
 
     def test_find_with_min_score(self, temp_dir_with_index):
-        """Test finding files with minimum score."""
-        # Would need full integration with scanner/index
-        pass
+        """Test finding files with minimum score using REAL scanner."""
+        from openlabels import Client
+        from openlabels.cli.commands.find import find_matching
+
+        client = Client()
+        path = Path(temp_dir_with_index)
+
+        # Find files with score > 0 (files with PII should have positive score)
+        results = list(find_matching(
+            path, client,
+            filter_expr="score > 0",
+            recursive=True,
+            exposure="PRIVATE",
+        ))
+
+        # high_risk.txt and medium_risk.txt should have scores > 0
+        # low_risk.txt ("Hello world") should have score ~0
+        paths = [r.path for r in results]
+
+        # At least one file with PII should be found
+        assert len(results) >= 1, f"Expected at least 1 file with score > 0, got {len(results)}"
+
+        # Files with PII content should be in results
+        matching_names = [Path(p).name for p in paths]
+        assert "high_risk.txt" in matching_names or any(r.score > 0 for r in results)
 
     def test_find_with_tier_filter(self, temp_dir_with_index):
-        """Test finding files by tier."""
-        pass
+        """Test finding files by tier using REAL scanner."""
+        from openlabels import Client
+        from openlabels.cli.commands.find import find_matching
+
+        client = Client()
+        path = Path(temp_dir_with_index)
+
+        # Find files that are NOT minimal risk
+        results = list(find_matching(
+            path, client,
+            filter_expr="tier = high OR tier = critical OR tier = medium",
+            recursive=True,
+            exposure="PRIVATE",
+        ))
+
+        # All returned results should have non-minimal tier
+        for result in results:
+            assert result.tier.upper() in ("HIGH", "CRITICAL", "MEDIUM"), \
+                f"Expected HIGH/CRITICAL/MEDIUM tier, got {result.tier}"
 
     def test_find_with_limit(self, temp_dir_with_index):
-        """Test limiting number of results."""
-        pass
+        """Test that find correctly applies result limits."""
+        from openlabels import Client
+        from openlabels.cli.commands.find import find_matching
+        import itertools
+
+        client = Client()
+        path = Path(temp_dir_with_index)
+
+        # Get all results first (no filter, so all files)
+        all_results = list(find_matching(
+            path, client,
+            filter_expr=None,  # No filter - find all
+            recursive=True,
+            exposure="PRIVATE",
+        ))
+
+        # Now get limited results using itertools.islice (simulates --limit)
+        limited = list(itertools.islice(find_matching(
+            path, client,
+            filter_expr=None,
+            recursive=True,
+            exposure="PRIVATE",
+        ), 2))
+
+        # Limited should have at most 2 results
+        assert len(limited) <= 2
+        # If there were more than 2 files total, limited should have exactly 2
+        if len(all_results) > 2:
+            assert len(limited) == 2
 
 
 class TestFindErrorHandling:
