@@ -264,15 +264,69 @@ class TestReportErrorHandling:
     """Test error handling in report command."""
 
     def test_empty_directory(self):
-        """Test report on empty directory."""
+        """Test report on empty directory produces valid report with zero files."""
+        from openlabels.cli.commands.report import generate_summary, results_to_json
+
         with tempfile.TemporaryDirectory() as temp:
-            # Should produce report with zero files
-            pass
+            # Empty results list (no files in directory)
+            results = []
+
+            # Summary should handle empty results gracefully
+            summary = generate_summary(results)
+
+            assert summary["total_files"] == 0
+            assert summary["files_at_risk"] == 0
+            assert summary["by_tier"] == {}
+            assert summary["by_entity"] == {}
+
+            # JSON output should also work
+            json_output = results_to_json(results, summary)
+            parsed = json.loads(json_output)
+
+            assert parsed["summary"]["total_files"] == 0
+            assert parsed["results"] == []
 
     def test_no_matching_files(self):
-        """Test report when no files match criteria."""
-        pass
+        """Test report when filter matches no files."""
+        from openlabels.cli.commands.report import generate_summary
+        from openlabels.cli.commands.scan import ScanResult
+
+        # Create results where none match a high score filter
+        results = [
+            ScanResult(path="/a.txt", score=10, tier="LOW", entities={}, exposure="PRIVATE"),
+            ScanResult(path="/b.txt", score=5, tier="MINIMAL", entities={}, exposure="PRIVATE"),
+            ScanResult(path="/c.txt", score=0, tier="MINIMAL", entities={}, exposure="PRIVATE"),
+        ]
+
+        # Filter for high score (simulating filter that matches nothing)
+        filtered_results = [r for r in results if r.score > 90]
+
+        assert len(filtered_results) == 0
+
+        # Summary should work with empty filtered results
+        summary = generate_summary(filtered_results)
+        assert summary["total_files"] == 0
 
     def test_partial_scan_failure(self):
-        """Test report when some files fail to scan."""
-        pass
+        """Test report includes results with errors."""
+        from openlabels.cli.commands.report import generate_summary, results_to_csv
+        from openlabels.cli.commands.scan import ScanResult
+
+        # Mix of successful scans and errors
+        results = [
+            ScanResult(path="/good1.txt", score=50, tier="MEDIUM", entities={"EMAIL": 2}, exposure="PRIVATE"),
+            ScanResult(path="/error.txt", score=0, tier="UNKNOWN", entities={}, exposure="PRIVATE", error="Permission denied"),
+            ScanResult(path="/good2.txt", score=80, tier="HIGH", entities={"SSN": 1}, exposure="PRIVATE"),
+        ]
+
+        # Summary should count all files including errors
+        summary = generate_summary(results)
+        assert summary["total_files"] == 3
+
+        # CSV should include error column
+        csv_output = results_to_csv(results)
+        lines = csv_output.strip().split("\n")
+
+        assert len(lines) == 4  # header + 3 results
+        assert "error" in lines[0].lower()  # Header has error column
+        assert "Permission denied" in csv_output  # Error is in output

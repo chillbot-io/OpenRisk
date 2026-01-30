@@ -271,3 +271,64 @@ tests/test_health.py::TestDatabaseCheck - 4 passed
 ```
 
 All tests now verify real behavior and can fail when code is broken.
+
+---
+
+## Phase 2 Remediation (Deep Dive)
+
+After the initial critical fixes, a comprehensive deep dive revealed **13 additional empty tests** in CLI command tests:
+
+### 5. test_cli/test_find_command.py - Fixed 4 Empty Tests
+
+**Before:** Tests had only `pass` statements with comments like "Would need full integration"
+**After:** Real integration tests with REAL scanner:
+- `test_default_output_format` - Verifies text format output structure
+- `test_find_with_min_score` - Uses real Client to find files with score > 0
+- `test_find_with_tier_filter` - Tests tier filtering with real scanner
+- `test_find_with_limit` - Verifies limit functionality works correctly
+
+### 6. test_cli/test_quarantine_command.py - Fixed 6 Empty Tests
+
+**Before:** Tests had only `pass` statements
+**After:** Real assertions testing:
+- `test_audit_log_created` - Verifies audit logger is called during quarantine
+- `test_audit_log_contains_required_fields` - Verifies audit log parameters
+- `test_permission_denied_error` - Tests move_file handles permission errors
+- `test_disk_full_error` - Tests OSError handling for disk space issues
+- `test_partial_failure_handling` - Tests batch operations with mixed success/failure
+- `test_verbose_output` - Tests manifest writing and content verification
+
+### 7. test_cli/test_report_command.py - Fixed 3 Empty Tests
+
+**Before:** Tests had only `pass` statements
+**After:** Proper assertions:
+- `test_empty_directory` - Verifies generate_summary handles empty results
+- `test_no_matching_files` - Tests filter that matches nothing
+- `test_partial_scan_failure` - Tests report includes error information in CSV output
+
+### Test Results After Phase 2
+
+```
+tests/test_cli/test_find_command.py - 16 passed
+tests/test_cli/test_quarantine_command.py - 17 passed
+tests/test_cli/test_report_command.py - 18 passed
+Total: 51 tests in CLI commands, all passing with real assertions
+```
+
+---
+
+## Remaining Low-Priority Issues
+
+1. **test_adapters/test_cloud_adapters.py** - Contains `print("PASSED")` statements and custom `main()` runner. Tests work correctly with pytest but have non-standard cosmetic output. Actual assertions are good.
+
+---
+
+## Summary
+
+| Phase | Tests Fixed | Type |
+|-------|-------------|------|
+| Phase 1 (Critical) | 11 | Empty bodies, trivial assertions |
+| Phase 2 (Deep Dive) | 13 | Empty CLI tests |
+| **Total** | **24** | Tests now have real assertions |
+
+All tests now verify real behavior rather than just passing unconditionally.
