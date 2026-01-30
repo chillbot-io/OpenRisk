@@ -332,8 +332,9 @@ class TestDetectorCheck:
         """Detector check should FAIL when detector raises an exception."""
         checker = HealthChecker()
 
-        # Mock the Scanner class to raise when instantiated
-        with patch('openlabels.health.Scanner', side_effect=RuntimeError("Detector init failed")):
+        # Mock the Detector class to raise when instantiated
+        # Note: health.py imports Detector from openlabels.adapters.scanner
+        with patch('openlabels.adapters.scanner.Detector', side_effect=RuntimeError("Detector init failed")):
             result = checker._check_detector()
 
         assert result.status == CheckStatus.FAIL
