@@ -18,5 +18,9 @@ intervaltree>=3.1.0      # Efficient span overlap detection
 # Performance (optional - faster pattern matching)
 pyahocorasick>=2.0.0     # Aho-Corasick automaton for dictionary matching
 
+# Authentication & encryption (required for vault/auth features)
+argon2-cffi>=23.1.0      # Argon2id password hashing
+cryptography>=41.0.0     # AES-256-GCM encryption, X25519 key exchange
+
 # Uncommon format support (optional)
 # pillow-heif>=0.13.0    # HEIF/HEIC image support
