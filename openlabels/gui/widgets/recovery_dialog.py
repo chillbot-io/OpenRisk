@@ -4,7 +4,11 @@ Recovery dialog for admin account recovery.
 Allows admin to recover account using recovery key when password is forgotten.
 """
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from openlabels.auth.models import Session
+
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,

@@ -5,12 +5,14 @@ Provides:
 - Password hashing (Argon2id)
 - Key derivation (Argon2id)
 - Symmetric encryption (AES-256-GCM)
+- Asymmetric encryption (X25519 + AES-256-GCM)
 - Secure random generation
 
 Security notes:
 - Uses Argon2id for password hashing (resistant to GPU/ASIC attacks)
 - Uses AES-256-GCM for authenticated encryption
-- All keys are 256 bits
+- Uses X25519 for asymmetric key agreement (sealed box pattern)
+- All symmetric keys are 256 bits
 - Nonces are randomly generated, never reused
 """
 
@@ -294,3 +296,133 @@ class CryptoProvider:
         AESGCM = self._get_aesgcm()
         aesgcm = AESGCM(key)
         return aesgcm.decrypt(nonce, ciphertext, associated_data=None)
+
+    # =========================================================================
+    # Asymmetric Encryption (X25519 + AES-256-GCM "Sealed Box" pattern)
+    # =========================================================================
+
+    def _get_x25519(self):
+        """Lazy load X25519 primitives."""
+        try:
+            from cryptography.hazmat.primitives.asymmetric.x25519 import (
+                X25519PrivateKey,
+                X25519PublicKey,
+            )
+            from cryptography.hazmat.primitives import serialization
+            return {
+                "PrivateKey": X25519PrivateKey,
+                "PublicKey": X25519PublicKey,
+                "serialization": serialization,
+            }
+        except ImportError:
+            raise ImportError(
+                "cryptography is required for asymmetric encryption. "
+                "Install with: pip install openlabels[auth]"
+            )
+
+    def generate_keypair(self) -> tuple[bytes, bytes]:
+        """
+        Generate an X25519 keypair for asymmetric encryption.
+
+        Returns:
+            Tuple of (private_key_bytes, public_key_bytes)
+        """
+        x25519 = self._get_x25519()
+        private_key = x25519["PrivateKey"].generate()
+        public_key = private_key.public_key()
+
+        private_bytes = private_key.private_bytes(
+            encoding=x25519["serialization"].Encoding.Raw,
+            format=x25519["serialization"].PrivateFormat.Raw,
+            encryption_algorithm=x25519["serialization"].NoEncryption(),
+        )
+        public_bytes = public_key.public_bytes(
+            encoding=x25519["serialization"].Encoding.Raw,
+            format=x25519["serialization"].PublicFormat.Raw,
+        )
+
+        return private_bytes, public_bytes
+
+    def seal(self, plaintext: bytes, public_key: bytes) -> bytes:
+        """
+        Encrypt data using asymmetric encryption (sealed box pattern).
+
+        Uses X25519 key agreement with an ephemeral keypair, then AES-256-GCM.
+        Only the holder of the corresponding private key can decrypt.
+
+        Args:
+            plaintext: Data to encrypt
+            public_key: Recipient's X25519 public key (32 bytes)
+
+        Returns:
+            Sealed data: ephemeral_public (32) || nonce (12) || ciphertext
+        """
+        import hashlib
+
+        x25519 = self._get_x25519()
+
+        # Generate ephemeral keypair
+        ephemeral_private = x25519["PrivateKey"].generate()
+        ephemeral_public = ephemeral_private.public_key()
+
+        # Load recipient's public key
+        recipient_public = x25519["PublicKey"].from_public_bytes(public_key)
+
+        # X25519 key agreement
+        shared_secret = ephemeral_private.exchange(recipient_public)
+
+        # Derive symmetric key from shared secret
+        symmetric_key = hashlib.sha256(shared_secret).digest()
+
+        # Encrypt with AES-GCM
+        encrypted = self.encrypt(plaintext, symmetric_key)
+
+        # Serialize ephemeral public key
+        ephemeral_public_bytes = ephemeral_public.public_bytes(
+            encoding=x25519["serialization"].Encoding.Raw,
+            format=x25519["serialization"].PublicFormat.Raw,
+        )
+
+        # Return: ephemeral_public || nonce || ciphertext
+        return ephemeral_public_bytes + encrypted.nonce + encrypted.ciphertext
+
+    def unseal(self, sealed_data: bytes, private_key: bytes) -> bytes:
+        """
+        Decrypt data using asymmetric encryption (sealed box pattern).
+
+        Args:
+            sealed_data: Output from seal() - ephemeral_public || nonce || ciphertext
+            private_key: Recipient's X25519 private key (32 bytes)
+
+        Returns:
+            Decrypted plaintext
+
+        Raises:
+            ValueError: If sealed_data is too short
+            InvalidTag: If decryption fails
+        """
+        import hashlib
+
+        x25519 = self._get_x25519()
+
+        # Parse sealed data
+        if len(sealed_data) < 32 + AES_NONCE_LEN + 16:  # min: pubkey + nonce + tag
+            raise ValueError("Sealed data too short")
+
+        ephemeral_public_bytes = sealed_data[:32]
+        nonce = sealed_data[32:32 + AES_NONCE_LEN]
+        ciphertext = sealed_data[32 + AES_NONCE_LEN:]
+
+        # Load keys
+        ephemeral_public = x25519["PublicKey"].from_public_bytes(ephemeral_public_bytes)
+        recipient_private = x25519["PrivateKey"].from_private_bytes(private_key)
+
+        # X25519 key agreement
+        shared_secret = recipient_private.exchange(ephemeral_public)
+
+        # Derive symmetric key from shared secret
+        symmetric_key = hashlib.sha256(shared_secret).digest()
+
+        # Decrypt with AES-GCM
+        encrypted = EncryptedData(ciphertext=ciphertext, nonce=nonce)
+        return self.decrypt(encrypted, symmetric_key)

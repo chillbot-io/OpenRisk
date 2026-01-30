@@ -8,7 +8,7 @@ Audit log is stored outside the vault, encrypted with admin key.
 import json
 import uuid
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator
 
@@ -30,9 +30,12 @@ class AuditLog:
 
     Storage:
         audit/
-        ├── audit.enc           # Encrypted audit entries
+        ├── audit.enc           # Encrypted audit entries (symmetric)
         ├── chain_head.txt      # Hash of the latest entry (for verification)
-        └── admin_key.enc       # Admin's DEK encrypted for audit access
+        ├── admin_key.enc       # Audit symmetric key (encrypted with admin DEK)
+        ├── queue_public.key    # Queue public key (plaintext, for sealing)
+        ├── queue_private.enc   # Queue private key (encrypted with admin DEK)
+        └── queue.enc           # Encrypted queued entries (sealed with public key)
 
     Example:
         audit = AuditLog(data_dir, crypto)
@@ -90,19 +93,35 @@ class AuditLog:
         """Path to admin audit key."""
         return self._audit_dir / "admin_key.enc"
 
+    @property
+    def _queue_public_key_file(self) -> Path:
+        """Path to queue public key (plaintext)."""
+        return self._audit_dir / "queue_public.key"
+
+    @property
+    def _queue_private_key_file(self) -> Path:
+        """Path to queue private key (encrypted with admin DEK)."""
+        return self._audit_dir / "queue_private.enc"
+
+    @property
+    def _queue_file(self) -> Path:
+        """Path to encrypted queue file."""
+        return self._audit_dir / "queue.enc"
+
     def setup_admin_key(self, admin_dek: bytes) -> None:
         """
         Set up admin key for audit log encryption.
 
-        Called during admin account creation. Generates a separate
-        key for audit encryption, stored encrypted with admin's DEK.
+        Called during admin account creation. Generates:
+        1. A symmetric key for audit log encryption
+        2. An asymmetric keypair for queue encryption
 
         Args:
             admin_dek: Admin's data encryption key
         """
         self._ensure_dirs()
 
-        # Generate dedicated audit encryption key
+        # Generate dedicated audit encryption key (symmetric)
         audit_key = self._crypto.generate_key()
 
         # Encrypt with admin's DEK
@@ -110,6 +129,16 @@ class AuditLog:
         self._admin_key_file.write_bytes(encrypted.to_bytes())
 
         self._admin_audit_key = audit_key
+
+        # Generate queue keypair (asymmetric) for encrypted queuing
+        private_key, public_key = self._crypto.generate_keypair()
+
+        # Store public key in plaintext (anyone can encrypt to the queue)
+        self._queue_public_key_file.write_bytes(public_key)
+
+        # Store private key encrypted with admin's DEK (only admin can decrypt queue)
+        encrypted_private = self._crypto.encrypt(private_key, admin_dek)
+        self._queue_private_key_file.write_bytes(encrypted_private.to_bytes())
 
     def _get_audit_key(self, admin_dek: bytes) -> bytes:
         """Get the audit encryption key using admin's DEK."""
@@ -125,6 +154,22 @@ class AuditLog:
         self._admin_audit_key = self._crypto.decrypt(encrypted, admin_dek)
 
         return self._admin_audit_key
+
+    def _get_queue_public_key(self) -> bytes | None:
+        """Get the queue public key for encrypting queued entries."""
+        if not self._queue_public_key_file.exists():
+            return None
+        return self._queue_public_key_file.read_bytes()
+
+    def _get_queue_private_key(self, admin_dek: bytes) -> bytes:
+        """Get the queue private key for decrypting queued entries."""
+        if not self._queue_private_key_file.exists():
+            raise RuntimeError("Queue keypair not initialized. Run setup_admin_key first.")
+
+        from openlabels.auth.crypto import EncryptedData
+        encrypted_data = self._queue_private_key_file.read_bytes()
+        encrypted = EncryptedData.from_bytes(encrypted_data)
+        return self._crypto.decrypt(encrypted, admin_dek)
 
     def _load_entries(self, admin_dek: bytes) -> list[AuditEntry]:
         """Load and decrypt audit entries."""
@@ -193,7 +238,7 @@ class AuditLog:
         # Create entry
         entry = AuditEntry(
             id=str(uuid.uuid4()),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             user_id=user_id,
             action=action,
             details=details,
@@ -216,12 +261,32 @@ class AuditLog:
         return entry
 
     def _queue_entry(self, entry: AuditEntry) -> None:
-        """Queue an entry for later write (when admin DEK available)."""
-        self._ensure_dirs()
-        queue_file = self._audit_dir / "queue.jsonl"
+        """Queue an entry for later write (when admin DEK available).
 
-        with open(queue_file, "a") as f:
-            f.write(json.dumps(entry.to_dict()) + "\n")
+        Entries are encrypted with the queue public key (asymmetric encryption)
+        so that only the admin can decrypt them when flushing the queue.
+        """
+        self._ensure_dirs()
+
+        # Serialize entry
+        entry_json = json.dumps(entry.to_dict()).encode("utf-8")
+
+        # Try to encrypt with public key if available
+        public_key = self._get_queue_public_key()
+        if public_key is not None:
+            # Seal the entry with asymmetric encryption
+            sealed = self._crypto.seal(entry_json, public_key)
+
+            # Append to encrypted queue (length-prefixed for parsing)
+            with open(self._queue_file, "ab") as f:
+                # Write 4-byte length prefix + sealed data
+                f.write(len(sealed).to_bytes(4, "big") + sealed)
+        else:
+            # Fallback: no keypair yet (shouldn't happen after setup)
+            # Write plaintext for backwards compatibility during migration
+            queue_file = self._audit_dir / "queue.jsonl"
+            with open(queue_file, "a") as f:
+                f.write(json.dumps(entry.to_dict()) + "\n")
 
         # Update chain head (even for queued entries)
         self._chain_head_file.write_text(entry.entry_hash)
@@ -230,7 +295,9 @@ class AuditLog:
         """
         Flush queued entries to the encrypted audit log.
 
-        Called when admin logs in.
+        Called when admin logs in. Decrypts entries from the encrypted queue
+        using the queue private key, then re-encrypts with the symmetric
+        audit key.
 
         Args:
             admin_dek: Admin's DEK
@@ -238,19 +305,49 @@ class AuditLog:
         Returns:
             Number of entries flushed
         """
-        queue_file = self._audit_dir / "queue.jsonl"
-        if not queue_file.exists():
-            return 0
-
-        # Read queued entries
         queued = []
-        with open(queue_file, "r") as f:
-            for line in f:
-                if line.strip():
-                    queued.append(AuditEntry.from_dict(json.loads(line)))
+
+        # Try encrypted queue first (new format)
+        if self._queue_file.exists():
+            try:
+                private_key = self._get_queue_private_key(admin_dek)
+
+                with open(self._queue_file, "rb") as f:
+                    data = f.read()
+
+                # Parse length-prefixed sealed entries
+                offset = 0
+                while offset < len(data):
+                    if offset + 4 > len(data):
+                        break
+                    length = int.from_bytes(data[offset:offset + 4], "big")
+                    offset += 4
+                    if offset + length > len(data):
+                        break
+                    sealed = data[offset:offset + length]
+                    offset += length
+
+                    # Unseal and parse entry
+                    entry_json = self._crypto.unseal(sealed, private_key)
+                    entry_dict = json.loads(entry_json.decode("utf-8"))
+                    queued.append(AuditEntry.from_dict(entry_dict))
+
+                # Remove encrypted queue
+                self._queue_file.unlink()
+
+            except Exception:
+                pass  # Fall through to check legacy queue
+
+        # Also check legacy plaintext queue (for backwards compatibility)
+        legacy_queue = self._audit_dir / "queue.jsonl"
+        if legacy_queue.exists():
+            with open(legacy_queue, "r") as f:
+                for line in f:
+                    if line.strip():
+                        queued.append(AuditEntry.from_dict(json.loads(line)))
+            legacy_queue.unlink()
 
         if not queued:
-            queue_file.unlink()
             return 0
 
         # Load existing entries
@@ -259,12 +356,9 @@ class AuditLog:
         # Append queued entries
         entries.extend(queued)
 
-        # Save
+        # Save with symmetric encryption
         audit_key = self._get_audit_key(admin_dek)
         self._save_entries(entries, audit_key)
-
-        # Clear queue
-        queue_file.unlink()
 
         return len(queued)
 

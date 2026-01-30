@@ -18,7 +18,7 @@ Usage:
 
     # Access vault
     vault = session.get_vault()
-    vault.store_spans(file_hash, spans)
+    vault.store_scan_result(file_path, spans, source="openlabels")
 
     # Logout
     auth.logout(session.token)

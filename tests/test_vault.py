@@ -64,7 +64,7 @@ class TestVault:
         )
 
         # Raw file should not contain plaintext
-        vault_dir = temp_dir / "vault" / "test-user"
+        vault_dir = temp_dir / "vaults" / "test-user"
         for f in vault_dir.rglob("*.enc"):
             content = f.read_bytes()
             assert b"123-45-6789" not in content

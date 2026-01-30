@@ -5,7 +5,12 @@ Defines User, Session, and related dataclasses.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_now() -> datetime:
+    """Get current UTC time (timezone-aware)."""
+    return datetime.now(timezone.utc)
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -31,7 +36,7 @@ class User:
     username: str                    # Unique username
     role: UserRole                   # Permission level
     email: str | None = None         # Optional email for updates
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utc_now)
     last_login: datetime | None = None
     subscribe_updates: bool = False  # Opted into email updates
 
@@ -74,7 +79,7 @@ class Session:
     """
     token: str                       # JWT token
     user: User                       # Authenticated user
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utc_now)
 
     # Internal: decrypted data encryption key (held in memory only)
     _dek: bytes | None = field(default=None, repr=False)
@@ -146,7 +151,7 @@ class RecoveryKey:
     key_hash: bytes                  # Hash of the full recovery key
     dek_encrypted: bytes             # DEK wrapped with this recovery key
     dek_nonce: bytes                 # Nonce for DEK encryption
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utc_now)
     used: bool = False               # True if this key has been used for recovery
 
     def to_dict(self) -> dict:

@@ -7,7 +7,7 @@ Designed for future client-server architecture.
 
 import json
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -104,7 +104,7 @@ class JWTManager:
         jwt = self._get_jwt()
         secret = self._get_secret()
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         payload = {
             "sub": user_id,          # Subject (user ID)
             "username": username,

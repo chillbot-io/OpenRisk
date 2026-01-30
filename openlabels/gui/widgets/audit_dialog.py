@@ -4,7 +4,7 @@ Audit Log Viewer Dialog.
 
 import csv
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List
 
 from PySide6.QtWidgets import (
@@ -415,7 +415,7 @@ class AuditLogDialog(QDialog):
 
         try:
             export_data = {
-                "exported_at": datetime.utcnow().isoformat(),
+                "exported_at": datetime.now(timezone.utc).isoformat(),
                 "total_entries": len(self._filtered_entries),
                 "entries": [entry.to_dict() for entry in self._filtered_entries],
             }
