@@ -96,6 +96,11 @@ class TestAuthManager:
         keys = auth.setup_admin("admin", "password123", email="a@b.com")
         assert not auth.needs_setup()
         assert len(keys) == 2  # 2 recovery keys
+        # Verify recovery key format: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
+        for key in keys:
+            parts = key.split("-")
+            assert len(parts) == 8
+            assert all(len(p) == 4 for p in parts)
 
     def test_setup_admin_twice_fails(self, auth):
         auth.setup_admin("admin", "password123")
@@ -107,7 +112,7 @@ class TestAuthManager:
         session = auth.login("admin", "password123")
         assert session.user.username == "admin"
         assert session.user.role == UserRole.ADMIN
-        assert session.token is not None
+        assert isinstance(session.token, str) and len(session.token) > 0
 
     def test_login_wrong_password(self, auth):
         auth.setup_admin("admin", "password123")
@@ -150,7 +155,7 @@ class TestAuthManager:
     def test_session_has_dek(self, auth):
         auth.setup_admin("admin", "password123")
         session = auth.login("admin", "password123")
-        assert session._dek is not None
+        assert isinstance(session._dek, bytes)
         assert len(session._dek) == 32
 
     def test_recovery_key_works(self, auth):
@@ -167,4 +172,5 @@ class TestAuthManager:
 
         # New password works
         session = auth.login("admin", "newpassword")
-        assert session is not None
+        assert session.user.username == "admin"
+        assert isinstance(session.token, str) and len(session.token) > 0
