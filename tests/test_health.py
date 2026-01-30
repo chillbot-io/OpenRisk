@@ -327,23 +327,17 @@ class TestDetectorCheck:
             # FAIL means detector couldn't run at all
             assert result.error is not None or "failed" in result.message.lower()
 
-    def test_detector_check_fails_on_import_error(self):
-        """Detector check should FAIL when detector module can't be imported."""
+    def test_detector_check_handles_detector_exception(self):
+        """Detector check should FAIL when detector raises an exception."""
         checker = HealthChecker()
 
-        with patch.dict('sys.modules', {'openlabels.adapters.scanner': None}):
-            with patch('openlabels.health.HealthChecker._check_detector') as mock_check:
-                mock_check.return_value = CheckResult(
-                    name="detector",
-                    status=CheckStatus.FAIL,
-                    message="Failed to import detector",
-                    duration_ms=0,
-                    error="ImportError: No module named 'openlabels.adapters.scanner'"
-                )
-                result = mock_check()
+        # Mock the Detector class to raise when instantiated
+        # Note: health.py imports Detector from openlabels.adapters.scanner
+        with patch('openlabels.adapters.scanner.Detector', side_effect=RuntimeError("Detector init failed")):
+            result = checker._check_detector()
 
         assert result.status == CheckStatus.FAIL
-        assert result.error is not None
+        assert result.error is not None or "failed" in result.message.lower()
 
     def test_detector_check_includes_processing_time(self):
         """Detector check should include processing time in details when successful."""
