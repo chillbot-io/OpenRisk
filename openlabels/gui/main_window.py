@@ -497,6 +497,62 @@ class MainWindow(QMainWindow):
         self._results_table.add_result(result)
         self._update_risk_summary()
 
+        # Store spans to vault if we have an authenticated session
+        self._store_to_vault(result)
+
+    def _store_to_vault(self, result: Dict[str, Any]):
+        """Store scan result spans to user's vault.
+
+        Args:
+            result: Scan result dict containing path, spans, score, etc.
+        """
+        if not self._session:
+            return  # No session, can't store to vault
+
+        spans_data = result.get("spans", [])
+        if not spans_data:
+            return  # No spans to store
+
+        file_path = result.get("path", "")
+        if not file_path:
+            return
+
+        try:
+            from openlabels.vault.models import SensitiveSpan
+
+            # Convert span dicts to SensitiveSpan objects
+            spans = [
+                SensitiveSpan(
+                    start=s["start"],
+                    end=s["end"],
+                    text=s["text"],
+                    entity_type=s["entity_type"],
+                    confidence=s["confidence"],
+                    detector=s["detector"],
+                    context_before=s.get("context_before", ""),
+                    context_after=s.get("context_after", ""),
+                )
+                for s in spans_data
+            ]
+
+            # Get vault and store
+            vault = self._session.get_vault()
+            vault.store_scan_result(
+                file_path=file_path,
+                spans=spans,
+                source="openlabels",
+                metadata={
+                    "score": result.get("score", 0),
+                    "tier": result.get("tier", "UNKNOWN"),
+                    "exposure": result.get("exposure", "PRIVATE"),
+                },
+            )
+
+        except Exception as e:
+            # Don't interrupt scan for vault errors - just log
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to store to vault: {e}")
+
     @Slot()
     def _on_scan_finished(self):
         """Handle scan completion."""

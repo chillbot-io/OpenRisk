@@ -58,6 +58,41 @@ class ScanWorker(QThread):
             self._client = Client()
         return self._client
 
+    def _extract_spans_with_context(self, detection, context_chars: int = 50) -> List[Dict[str, Any]]:
+        """Extract spans from detection result with surrounding context.
+
+        Args:
+            detection: DetectionResult from scanner
+            context_chars: Number of characters to include before/after span
+
+        Returns:
+            List of span dictionaries suitable for vault storage
+        """
+        spans_data = []
+        text = detection.text
+
+        for span in detection.spans:
+            # Extract context before
+            ctx_start = max(0, span.start - context_chars)
+            context_before = text[ctx_start:span.start]
+
+            # Extract context after
+            ctx_end = min(len(text), span.end + context_chars)
+            context_after = text[span.end:ctx_end]
+
+            spans_data.append({
+                "start": span.start,
+                "end": span.end,
+                "text": span.text,
+                "entity_type": span.entity_type,
+                "confidence": span.confidence,
+                "detector": span.detector,
+                "context_before": context_before,
+                "context_after": context_after,
+            })
+
+        return spans_data
+
     def _scan_local(self):
         """Scan local/SMB/NFS path."""
         from openlabels.adapters.scanner import detect_file as scanner_detect
@@ -126,6 +161,9 @@ class ScanWorker(QThread):
             detection = scanner_detect(file_path)
             entities = detection.entity_counts
 
+            # Convert spans to serializable format with context
+            spans_data = self._extract_spans_with_context(detection)
+
             # Score the file
             score_result = client.score_file(file_path)
 
@@ -135,6 +173,7 @@ class ScanWorker(QThread):
                 "score": score_result.score,
                 "tier": score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier),
                 "entities": entities,
+                "spans": spans_data,  # Include spans for vault storage
                 "exposure": "PRIVATE",
                 "error": None,
             }
@@ -146,6 +185,7 @@ class ScanWorker(QThread):
                 "score": 0,
                 "tier": "UNKNOWN",
                 "entities": {},
+                "spans": [],
                 "exposure": "PRIVATE",
                 "error": str(e),
             }
@@ -291,6 +331,9 @@ class ScanWorker(QThread):
                 detection = scanner_detect(tmp_path)
                 entities = detection.entity_counts
 
+                # Convert spans to serializable format with context
+                spans_data = self._extract_spans_with_context(detection)
+
                 score_result = client.score_file(tmp_path)
 
                 return {
@@ -299,6 +342,7 @@ class ScanWorker(QThread):
                     "score": score_result.score,
                     "tier": score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier),
                     "entities": entities,
+                    "spans": spans_data,  # Include spans for vault storage
                     "exposure": exposure,
                     "error": None,
                 }
@@ -313,6 +357,7 @@ class ScanWorker(QThread):
                 "score": 0,
                 "tier": "UNKNOWN",
                 "entities": {},
+                "spans": [],
                 "exposure": exposure,
                 "error": str(e),
             }

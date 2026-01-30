@@ -268,13 +268,23 @@ class Vault:
 
         classification = self.get_classification(file_path)
         if classification is None:
+            # Use score/tier from metadata if provided
             classification = FileClassification(
                 file_path=file_path,
                 file_hash=file_hash,
-                risk_score=0,  # Will be computed
-                tier="UNKNOWN",
+                risk_score=metadata.get("score", 0),
+                tier=metadata.get("tier", "UNKNOWN"),
                 sources=[],
             )
+        else:
+            # Update score/tier if new scan provides them
+            if "score" in metadata:
+                classification.risk_score = max(classification.risk_score, metadata["score"])
+            if "tier" in metadata and metadata["tier"] != "UNKNOWN":
+                # Use the more severe tier
+                tier_order = {"CRITICAL": 5, "HIGH": 4, "MEDIUM": 3, "LOW": 2, "MINIMAL": 1, "UNKNOWN": 0}
+                if tier_order.get(metadata["tier"], 0) > tier_order.get(classification.tier, 0):
+                    classification.tier = metadata["tier"]
 
         # Add new source
         new_source = ClassificationSource(
