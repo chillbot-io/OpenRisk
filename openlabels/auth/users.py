@@ -341,44 +341,6 @@ class UserManager:
 
         return True
 
-    def reset_user_vault(self, user_id: str, admin_dek: bytes) -> bytes:
-        """
-        Reset a user's vault by generating a new DEK.
-
-        The user keeps their password but gets a fresh vault.
-
-        Args:
-            user_id: User's ID
-            admin_dek: Admin's DEK (for audit logging)
-
-        Returns:
-            New DEK for the user
-
-        Raises:
-            ValueError: If user not found
-        """
-        user = self.get_user_by_id(user_id)
-        if user is None:
-            raise ValueError(f"User not found: {user_id}")
-
-        # Load existing credentials (we need the password hash and salt)
-        credentials = AuthCredentials.from_dict(
-            json.loads(self._credentials_path(user_id).read_text())
-        )
-
-        # Generate new DEK
-        new_dek = self._crypto.generate_key()
-
-        # Re-encrypt DEK (we can't derive KEK without password, so we need to
-        # prompt user to re-authenticate after reset)
-        # For now, we'll mark the account as needing password reset
-        # This is a placeholder - full implementation needs more thought
-
-        raise NotImplementedError(
-            "Vault reset requires user to re-authenticate. "
-            "Full implementation pending."
-        )
-
     def get_credentials(self, user_id: str) -> AuthCredentials | None:
         """
         Get a user's credentials (for recovery operations).
