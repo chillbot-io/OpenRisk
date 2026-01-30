@@ -600,7 +600,11 @@ class TestManifestHandling:
 
 
 class TestTOCTOUProtection:
-    """Tests for Time-of-Check to Time-of-Use protection."""
+    """Tests for Time-of-Check to Time-of-Use protection.
+
+    Note: Symlink rejection is tested in the main test classes above.
+    These tests verify regular file operations work correctly.
+    """
 
     @pytest.fixture
     def fileops(self):
@@ -609,40 +613,38 @@ class TestTOCTOUProtection:
         mock_scanner = MagicMock()
         return FileOps(mock_ctx, mock_scanner)
 
-    def test_move_uses_lstat(self, fileops, tmp_path):
-        """Move should use lstat to detect symlinks atomically."""
-        # Create a regular file
+    def test_move_regular_file_succeeds(self, fileops, tmp_path):
+        """Move should succeed for regular files (symlinks rejected elsewhere)."""
         source = tmp_path / "source.txt"
         source.write_text("content")
         dest = tmp_path / "dest.txt"
 
-        # The move method should use lstat internally
-        # If it used stat() instead, symlinks would be followed
         result = fileops.move(source, dest)
 
         assert result.success is True
+        assert not source.exists()
+        assert dest.exists()
 
-    def test_idempotent_move_uses_lstat(self, fileops, tmp_path):
-        """Idempotent move should use lstat for TOCTOU protection."""
+    def test_idempotent_move_regular_file_succeeds(self, fileops, tmp_path):
+        """Idempotent move should succeed for regular files."""
         source = tmp_path / "source.txt"
         source.write_text("content")
         dest = tmp_path / "dest.txt"
         manifest_path = tmp_path / QUARANTINE_MANIFEST
 
-        # This should internally use lstat
         success, error = fileops._idempotent_move(source, dest, manifest_path)
 
         assert success is True
+        assert error is None
+        assert dest.exists()
 
-    def test_delete_uses_lstat(self, fileops, tmp_path):
-        """Delete should use lstat to detect symlinks atomically."""
-        ops, scanner = fileops, MagicMock()
-
-        # Create a regular file
+    def test_delete_regular_file_succeeds(self, fileops, tmp_path):
+        """Delete should succeed for regular files (symlinks rejected elsewhere)."""
         test_file = tmp_path / "test.txt"
         test_file.write_text("content")
 
-        # The delete method should use lstat internally
         result = fileops.delete(test_file, dry_run=False)
 
         assert result.deleted_count == 1
+        assert result.error_count == 0
+        assert not test_file.exists()
