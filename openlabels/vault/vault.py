@@ -8,7 +8,7 @@ Vault is only accessible when user is authenticated.
 import json
 import uuid
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -201,7 +201,7 @@ class Vault:
         """
         from .audit import AuditLog
 
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         file_hash = self._compute_file_hash(file_path, timestamp)
         entry_id = str(uuid.uuid4())
 
@@ -289,7 +289,7 @@ class Vault:
         # Add new source
         new_source = ClassificationSource(
             provider=source,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             findings=findings,
             metadata=metadata,
             vault_entry_id=vault_entry_id,

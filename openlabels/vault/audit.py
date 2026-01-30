@@ -8,7 +8,7 @@ Audit log is stored outside the vault, encrypted with admin key.
 import json
 import uuid
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator
 
@@ -193,7 +193,7 @@ class AuditLog:
         # Create entry
         entry = AuditEntry(
             id=str(uuid.uuid4()),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             user_id=user_id,
             action=action,
             details=details,

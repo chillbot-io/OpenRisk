@@ -14,7 +14,7 @@ import json
 import csv
 from pathlib import Path
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
-from datetime import datetime
+from datetime import datetime, timezone
 
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -772,7 +772,6 @@ class MainWindow(QMainWindow):
         # If no classification but we have scan result, create a minimal one
         if classification is None and result:
             from openlabels.vault.models import FileClassification, ClassificationSource, Finding
-            from datetime import datetime
 
             findings = [
                 Finding(entity_type=etype, count=count, confidence=None)
@@ -781,7 +780,7 @@ class MainWindow(QMainWindow):
 
             source = ClassificationSource(
                 provider="openlabels",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 findings=findings,
                 metadata={},
             )
@@ -855,6 +854,8 @@ class MainWindow(QMainWindow):
                 pass  # Destination doesn't exist, use original name
 
             # Use Client.move() for TOCTOU-safe file operation
+            from openlabels import Client
+            client = Client()
             result = client.move(file_path, str(dest))
             if not result.success:
                 raise RuntimeError(result.error or "Move operation failed")

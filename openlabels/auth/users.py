@@ -6,7 +6,7 @@ Handles user CRUD operations, credential storage, and authentication.
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -261,7 +261,7 @@ class UserManager:
             return None
 
         # Update last login
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now(timezone.utc)
         self._profile_path(user.id).write_text(json.dumps(user.to_dict(), indent=2))
 
         return user, dek

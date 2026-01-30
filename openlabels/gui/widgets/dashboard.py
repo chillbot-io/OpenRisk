@@ -3,7 +3,7 @@ Risk Dashboard with hierarchical drill-down heatmap.
 """
 
 from pathlib import Path
-from typing import List, Any
+from typing import List, Dict, Any
 
 from PySide6.QtWidgets import (
     QWidget,
