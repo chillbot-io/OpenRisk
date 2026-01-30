@@ -336,29 +336,9 @@ class MainWindow(QMainWindow):
         if not self._session or not self._session.is_admin():
             return
 
-        try:
-            from openlabels.vault.audit import AuditLog
-            from openlabels.auth.crypto import CryptoProvider
-
-            audit = AuditLog(self._auth._data_dir, CryptoProvider())
-            is_valid, message = audit.verify_chain(self._session._dek)
-
-            entries = list(audit.read(self._session._dek, limit=50))
-            stats = audit.get_stats(self._session._dek)
-
-            # Simple display for now
-            text = f"Chain Status: {message}\n\n"
-            text += f"Total Entries: {stats.get('total_entries', 0)}\n\n"
-            text += "Recent Actions:\n"
-
-            for entry in entries[:20]:
-                text += f"  {entry.timestamp.strftime('%Y-%m-%d %H:%M')} | "
-                text += f"{entry.action.value} | {entry.user_id[:8]}...\n"
-
-            QMessageBox.information(self, "Audit Log", text)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load audit log: {e}")
+        from openlabels.gui.widgets.audit_dialog import AuditLogDialog
+        dialog = AuditLogDialog(self, session=self._session)
+        dialog.exec()
 
     @Slot()
     def _on_logout(self):
