@@ -60,6 +60,10 @@ archives = [
 database = [
     "psycopg[binary]>=3.1.0,<4.0.0",  # PostgreSQL support (async + connection pooling)
 ]
+# GUI (large dependency - install only if needed)
+gui = [
+    "PySide6>=6.5.0,<7.0.0",  # Qt6 GUI framework (~150MB)
+]
 # Security-hardened production deployment (includes all security-critical deps)
 security = [
     "regex>=2023.0.0,<2025.0.0",  # ReDoS timeout protection (also in base deps)
