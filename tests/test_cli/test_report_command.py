@@ -57,207 +57,207 @@ class TestSetupParser:
 class TestReportFormats:
     """Test different report output formats."""
 
-    def test_text_format(self):
-        """Test plain text report format."""
-        report_data = {
-            "summary": {
-                "total_files": 100,
-                "files_with_risk": 25,
-                "max_score": 95,
-            },
-            "tier_distribution": {
-                "CRITICAL": 5,
-                "HIGH": 10,
-                "MEDIUM": 10,
-                "LOW": 50,
-                "MINIMAL": 25,
-            }
-        }
-
-        # Text format should be human-readable
-        assert report_data["summary"]["total_files"] == 100
-
     def test_json_format(self):
-        """Test JSON report format."""
-        report_data = {
-            "generated_at": "2026-01-27T12:00:00Z",
-            "summary": {
-                "total_files": 100,
-                "files_with_risk": 25,
-            },
-            "high_risk_files": [
-                {"path": "/a.txt", "score": 95},
-                {"path": "/b.txt", "score": 88},
-            ]
-        }
+        """Test results_to_json produces valid JSON with summary and results."""
+        from openlabels.cli.commands.report import generate_summary, results_to_json
+        from openlabels.cli.commands.scan import ScanResult
 
-        json_str = json.dumps(report_data, indent=2)
-        parsed = json.loads(json_str)
+        results = [
+            ScanResult(path="/a.txt", score=95, tier="CRITICAL", entities={"SSN": 2}, exposure="PRIVATE"),
+            ScanResult(path="/b.txt", score=50, tier="MEDIUM", entities={"EMAIL": 5}, exposure="PRIVATE"),
+        ]
 
-        assert parsed["summary"]["total_files"] == 100
-        assert len(parsed["high_risk_files"]) == 2
+        summary = generate_summary(results)
+        json_output = results_to_json(results, summary)
+        parsed = json.loads(json_output)
 
-    def test_html_format(self):
-        """Test HTML report format."""
-        # HTML format should produce valid HTML
-        html_content = """<!DOCTYPE html>
-<html>
-<head><title>Risk Report</title></head>
-<body>
-<h1>Risk Report</h1>
-<p>Total files: 100</p>
-</body>
-</html>"""
-
-        assert "<!DOCTYPE html>" in html_content
-        assert "<title>Risk Report</title>" in html_content
+        assert parsed["summary"]["total_files"] == 2
+        assert len(parsed["results"]) == 2
+        assert parsed["results"][0]["path"] == "/a.txt"
+        assert parsed["results"][0]["score"] == 95
 
     def test_csv_format(self):
-        """Test CSV report format."""
+        """Test results_to_csv produces valid CSV with all fields."""
         import csv
         from io import StringIO
+        from openlabels.cli.commands.report import results_to_csv
+        from openlabels.cli.commands.scan import ScanResult
 
-        csv_content = "path,score,tier,entities\n"
-        csv_content += "/a.txt,95,CRITICAL,SSN:2\n"
-        csv_content += "/b.txt,50,MEDIUM,EMAIL:5\n"
+        results = [
+            ScanResult(path="/a.txt", score=95, tier="CRITICAL", entities={"SSN": 2}, exposure="PRIVATE"),
+            ScanResult(path="/b.txt", score=50, tier="MEDIUM", entities={"EMAIL": 5}, exposure="INTERNAL"),
+        ]
 
-        reader = csv.DictReader(StringIO(csv_content))
+        csv_output = results_to_csv(results)
+        reader = csv.DictReader(StringIO(csv_output))
         rows = list(reader)
 
         assert len(rows) == 2
+        assert rows[0]["path"] == "/a.txt"
         assert rows[0]["score"] == "95"
+        assert rows[0]["tier"] == "CRITICAL"
         assert rows[1]["tier"] == "MEDIUM"
 
-    def test_markdown_format(self):
-        """Test Markdown report format."""
-        md_content = """# Risk Report
+    def test_html_format(self):
+        """Test results_to_html produces valid HTML structure."""
+        from openlabels.cli.commands.report import generate_summary, results_to_html
+        from openlabels.cli.commands.scan import ScanResult
 
-## Summary
-- Total files: 100
-- High risk files: 15
+        results = [
+            ScanResult(path="/test.txt", score=80, tier="HIGH", entities={"SSN": 1}, exposure="PRIVATE"),
+        ]
 
-## Critical Risk Files
-| Path | Score | Entities |
-|------|-------|----------|
-| /a.txt | 95 | SSN: 2 |
-"""
+        summary = generate_summary(results)
+        html_output = results_to_html(results, summary)
 
-        assert "# Risk Report" in md_content
-        assert "| Path |" in md_content
+        assert "<!DOCTYPE html>" in html_output
+        assert "/test.txt" in html_output
+        assert "HIGH" in html_output
 
 
 class TestReportContent:
     """Test report content generation."""
 
-    def test_summary_section(self):
-        """Test summary section contains expected data."""
-        summary = {
-            "total_files": 1000,
-            "total_size_bytes": 1024 * 1024 * 500,  # 500 MB
-            "files_scanned": 980,
-            "files_skipped": 20,
-            "files_with_risk": 150,
-            "max_score": 98,
-            "avg_score": 35.5,
-        }
+    def test_generate_summary_counts_files(self):
+        """Test generate_summary correctly counts files."""
+        from openlabels.cli.commands.report import generate_summary
+        from openlabels.cli.commands.scan import ScanResult
 
-        assert summary["total_files"] == 1000
-        assert summary["files_with_risk"] == 150
-        assert summary["max_score"] == 98
-
-    def test_tier_distribution_section(self):
-        """Test tier distribution breakdown."""
-        distribution = {
-            "CRITICAL": 10,
-            "HIGH": 40,
-            "MEDIUM": 100,
-            "LOW": 350,
-            "MINIMAL": 500,
-        }
-
-        total = sum(distribution.values())
-        assert total == 1000
-
-        # Percentages
-        critical_pct = distribution["CRITICAL"] / total * 100
-        assert critical_pct == 1.0
-
-    def test_entity_breakdown_section(self):
-        """Test entity type breakdown."""
-        entities = {
-            "SSN": {"count": 50, "files": 25},
-            "CREDIT_CARD": {"count": 30, "files": 15},
-            "EMAIL": {"count": 500, "files": 200},
-            "PHONE": {"count": 300, "files": 150},
-        }
-
-        assert entities["SSN"]["count"] == 50
-        assert entities["EMAIL"]["files"] == 200
-
-    def test_high_risk_files_section(self):
-        """Test high risk files listing."""
-        high_risk_files = [
-            {"path": "/data/pii.csv", "score": 98, "tier": "CRITICAL", "entities": {"SSN": 100}},
-            {"path": "/data/users.json", "score": 92, "tier": "CRITICAL", "entities": {"EMAIL": 50}},
+        results = [
+            ScanResult(path="/a.txt", score=95, tier="CRITICAL", entities={"SSN": 2}, exposure="PRIVATE"),
+            ScanResult(path="/b.txt", score=50, tier="MEDIUM", entities={"EMAIL": 5}, exposure="PRIVATE"),
+            ScanResult(path="/c.txt", score=0, tier="MINIMAL", entities={}, exposure="PRIVATE"),
         ]
 
-        assert len(high_risk_files) == 2
-        assert all(f["score"] >= 90 for f in high_risk_files)
+        summary = generate_summary(results)
+
+        assert summary["total_files"] == 3
+        assert summary["files_at_risk"] == 2  # files with score > 0
+        assert "CRITICAL" in summary["by_tier"]
+        assert summary["by_tier"]["CRITICAL"] == 1
+
+    def test_generate_summary_tracks_entities(self):
+        """Test generate_summary aggregates entity counts correctly."""
+        from openlabels.cli.commands.report import generate_summary
+        from openlabels.cli.commands.scan import ScanResult
+
+        results = [
+            ScanResult(path="/a.txt", score=95, tier="CRITICAL", entities={"SSN": 2, "EMAIL": 1}, exposure="PRIVATE"),
+            ScanResult(path="/b.txt", score=50, tier="MEDIUM", entities={"EMAIL": 5}, exposure="PRIVATE"),
+        ]
+
+        summary = generate_summary(results)
+
+        assert "SSN" in summary["by_entity"]
+        assert "EMAIL" in summary["by_entity"]
+        assert summary["by_entity"]["SSN"] == 2
+        assert summary["by_entity"]["EMAIL"] == 6  # 1 + 5
+
+    def test_generate_summary_tier_distribution(self):
+        """Test generate_summary produces accurate tier distribution."""
+        from openlabels.cli.commands.report import generate_summary
+        from openlabels.cli.commands.scan import ScanResult
+
+        results = [
+            ScanResult(path="/a.txt", score=95, tier="CRITICAL", entities={}, exposure="PRIVATE"),
+            ScanResult(path="/b.txt", score=85, tier="HIGH", entities={}, exposure="PRIVATE"),
+            ScanResult(path="/c.txt", score=80, tier="HIGH", entities={}, exposure="PRIVATE"),
+            ScanResult(path="/d.txt", score=50, tier="MEDIUM", entities={}, exposure="PRIVATE"),
+        ]
+
+        summary = generate_summary(results)
+
+        assert summary["by_tier"]["CRITICAL"] == 1
+        assert summary["by_tier"]["HIGH"] == 2
+        assert summary["by_tier"]["MEDIUM"] == 1
 
 
 class TestReportFilters:
     """Test report filtering options."""
 
-    def test_filter_by_min_score(self):
-        """Test filtering report by minimum score."""
-        all_files = [
-            {"path": "/a.txt", "score": 95},
-            {"path": "/b.txt", "score": 50},
-            {"path": "/c.txt", "score": 30},
+    def test_filter_results_by_min_score(self):
+        """Test filtering ScanResults by minimum score."""
+        from openlabels.cli.commands.report import generate_summary
+        from openlabels.cli.commands.scan import ScanResult
+
+        all_results = [
+            ScanResult(path="/a.txt", score=95, tier="CRITICAL", entities={}, exposure="PRIVATE"),
+            ScanResult(path="/b.txt", score=50, tier="MEDIUM", entities={}, exposure="PRIVATE"),
+            ScanResult(path="/c.txt", score=30, tier="LOW", entities={}, exposure="PRIVATE"),
         ]
 
         min_score = 50
-        filtered = [f for f in all_files if f["score"] >= min_score]
+        filtered = [r for r in all_results if r.score >= min_score]
 
         assert len(filtered) == 2
+        assert all(r.score >= 50 for r in filtered)
+        # Verify summary works with filtered results
+        summary = generate_summary(filtered)
+        assert summary["total_files"] == 2
 
-    def test_filter_by_tier(self):
-        """Test filtering report by tier."""
-        all_files = [
-            {"path": "/a.txt", "tier": "CRITICAL"},
-            {"path": "/b.txt", "tier": "HIGH"},
-            {"path": "/c.txt", "tier": "LOW"},
+    def test_filter_results_by_tier(self):
+        """Test filtering ScanResults by tier."""
+        from openlabels.cli.commands.report import generate_summary
+        from openlabels.cli.commands.scan import ScanResult
+
+        all_results = [
+            ScanResult(path="/a.txt", score=95, tier="CRITICAL", entities={}, exposure="PRIVATE"),
+            ScanResult(path="/b.txt", score=80, tier="HIGH", entities={}, exposure="PRIVATE"),
+            ScanResult(path="/c.txt", score=20, tier="LOW", entities={}, exposure="PRIVATE"),
         ]
 
-        filtered = [f for f in all_files if f["tier"] in ("CRITICAL", "HIGH")]
+        high_risk_tiers = ("CRITICAL", "HIGH")
+        filtered = [r for r in all_results if r.tier in high_risk_tiers]
 
         assert len(filtered) == 2
+        assert all(r.tier in high_risk_tiers for r in filtered)
 
 
 class TestReportOutput:
     """Test report output options."""
 
-    def test_output_to_file(self):
-        """Test writing report to file."""
+    def test_json_output_to_file(self):
+        """Test writing JSON report to file."""
+        from openlabels.cli.commands.report import generate_summary, results_to_json
+        from openlabels.cli.commands.scan import ScanResult
+
+        results = [
+            ScanResult(path="/a.txt", score=75, tier="HIGH", entities={"SSN": 1}, exposure="PRIVATE"),
+        ]
+        summary = generate_summary(results)
+        json_output = results_to_json(results, summary)
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            report_data = {"summary": {"total": 100}}
-            json.dump(report_data, f)
+            f.write(json_output)
             f.flush()
 
-            # Read back
+            # Read back and verify structure
             with open(f.name, 'r') as rf:
                 loaded = json.load(rf)
 
-            assert loaded["summary"]["total"] == 100
+            assert loaded["summary"]["total_files"] == 1
+            assert loaded["results"][0]["path"] == "/a.txt"
+            assert loaded["results"][0]["score"] == 75
 
             Path(f.name).unlink()
 
-    def test_output_to_stdout(self):
-        """Test writing report to stdout."""
-        report_data = {"summary": {"total": 100}}
-        json_str = json.dumps(report_data)
+    def test_csv_output_has_header(self):
+        """Test CSV output includes header row."""
+        from openlabels.cli.commands.report import results_to_csv
+        from openlabels.cli.commands.scan import ScanResult
 
-        assert len(json_str) > 0
+        results = [
+            ScanResult(path="/test.txt", score=50, tier="MEDIUM", entities={}, exposure="PRIVATE"),
+        ]
+
+        csv_output = results_to_csv(results)
+        lines = csv_output.strip().split("\n")
+
+        assert len(lines) >= 2  # header + at least one data row
+        header = lines[0].lower()
+        assert "path" in header
+        assert "score" in header
+        assert "tier" in header
 
 
 class TestReportErrorHandling:

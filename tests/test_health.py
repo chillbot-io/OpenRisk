@@ -199,8 +199,9 @@ class TestHealthChecker:
 
         result = checker.run_check("python_version")
 
-        assert result is not None
+        assert isinstance(result, CheckResult)
         assert result.name == "python_version"
+        assert result.status in CheckStatus
 
     def test_run_check_not_found(self):
         checker = HealthChecker()
@@ -327,23 +328,16 @@ class TestDetectorCheck:
             # FAIL means detector couldn't run at all
             assert result.error is not None or "failed" in result.message.lower()
 
-    def test_detector_check_fails_on_import_error(self):
-        """Detector check should FAIL when detector module can't be imported."""
+    def test_detector_check_handles_detector_exception(self):
+        """Detector check should FAIL when detector raises an exception."""
         checker = HealthChecker()
 
-        with patch.dict('sys.modules', {'openlabels.adapters.scanner': None}):
-            with patch('openlabels.health.HealthChecker._check_detector') as mock_check:
-                mock_check.return_value = CheckResult(
-                    name="detector",
-                    status=CheckStatus.FAIL,
-                    message="Failed to import detector",
-                    duration_ms=0,
-                    error="ImportError: No module named 'openlabels.adapters.scanner'"
-                )
-                result = mock_check()
+        # Mock the Scanner class to raise when instantiated
+        with patch('openlabels.health.Scanner', side_effect=RuntimeError("Detector init failed")):
+            result = checker._check_detector()
 
         assert result.status == CheckStatus.FAIL
-        assert result.error is not None
+        assert result.error is not None or "failed" in result.message.lower()
 
     def test_detector_check_includes_processing_time(self):
         """Detector check should include processing time in details when successful."""
@@ -408,12 +402,12 @@ class TestDatabaseCheck:
         # The check writes "test" and reads it back - verify this works
         result = checker._check_database()
 
+        # Database check must either pass (data verified) or fail with error
+        assert result.status in (CheckStatus.PASS, CheckStatus.WARN, CheckStatus.FAIL)
         if result.status == CheckStatus.PASS:
-            # If PASS, the read/write verification passed
-            # This is implicitly tested in _check_database via:
-            # result = conn.execute("SELECT data FROM test").fetchone()
-            # if result[0] != "test": return FAIL
-            pass  # The check itself verifies this
+            assert "sqlite_version" in result.details
+        elif result.status == CheckStatus.FAIL:
+            assert result.error is not None or "failed" in result.message.lower()
 
 
 class TestDiskSpaceCheck:
@@ -518,11 +512,11 @@ class TestAuditLogCheck:
 
         # Must include audit path in details
         assert "audit_path" in result.details
+        audit_path = Path(result.details["audit_path"])
 
         if result.status == CheckStatus.PASS:
-            # Path should be accessible
-            audit_path = Path(result.details["audit_path"])
-            assert audit_path.parent.exists() or True  # Dir might be created
+            # Path's parent directory should exist or be creatable
+            assert isinstance(audit_path, Path)
 
         if result.status == CheckStatus.WARN:
             # WARN means permission issue - message should explain

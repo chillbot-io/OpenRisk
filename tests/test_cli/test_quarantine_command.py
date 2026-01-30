@@ -180,13 +180,29 @@ class TestQuarantineFileOperations:
         assert not source_file.exists()
         assert dest_file.exists()
 
-    def test_original_path_preserved(self, temp_source_dir, temp_dest_dir):
-        """Test original path metadata is preserved."""
-        source_file = Path(temp_source_dir) / "high_risk.txt"
-        original_path = str(source_file)
+    def test_original_path_preserved_in_structure(self, temp_source_dir, temp_dest_dir):
+        """Test directory structure is preserved when moving files."""
+        from openlabels.cli.commands.quarantine import move_file
 
-        # In real implementation, original path is stored in xattr or manifest
-        assert original_path.endswith("high_risk.txt")
+        # Create a nested file
+        nested_dir = Path(temp_source_dir) / "subdir"
+        nested_dir.mkdir()
+        source_file = nested_dir / "nested_file.txt"
+        source_file.write_text("test content")
+
+        # Move with structure preservation
+        new_path = move_file(
+            source_file,
+            Path(temp_dest_dir),
+            preserve_structure=True,
+            base_path=Path(temp_source_dir)
+        )
+
+        # Verify the file was moved and structure preserved
+        assert new_path.exists()
+        assert "subdir" in str(new_path)
+        assert new_path.name == "nested_file.txt"
+        assert not source_file.exists()
 
 
 class TestQuarantineAuditLogging:
@@ -323,30 +339,51 @@ class TestQuarantineErrorHandling:
 class TestQuarantineOutputFormats:
     """Test different output formats."""
 
-    def test_summary_output(self):
-        """Test summary output after quarantine."""
-        summary = {
-            "files_quarantined": 5,
-            "files_skipped": 2,
-            "errors": 1,
-            "total_size_bytes": 1024000,
-        }
+    def test_write_manifest_creates_valid_json(self):
+        """Test write_manifest creates a valid JSON manifest file."""
+        from openlabels.cli.commands.quarantine import write_manifest
 
-        assert summary["files_quarantined"] == 5
-        assert summary["errors"] == 1
+        with tempfile.TemporaryDirectory() as dest_dir:
+            moved_files = [
+                {
+                    "original_path": "/source/file1.txt",
+                    "new_path": f"{dest_dir}/file1.txt",
+                    "score": 85,
+                    "tier": "HIGH",
+                    "entities": {"SSN": 2},
+                },
+            ]
 
-    def test_json_output(self):
-        """Test JSON output format."""
-        results = [
-            {"source": "/a.txt", "destination": "/quarantine/a.txt", "success": True},
-            {"source": "/b.txt", "destination": "/quarantine/b.txt", "success": True},
-        ]
+            manifest_path = write_manifest(Path(dest_dir), moved_files, "score > 75")
 
-        json_str = json.dumps(results)
-        parsed = json.loads(json_str)
+            assert manifest_path.exists()
+            with open(manifest_path) as f:
+                manifest = json.load(f)
 
-        assert len(parsed) == 2
-        assert all(r["success"] for r in parsed)
+            assert manifest["file_count"] == 1
+            assert manifest["filter"] == "score > 75"
+            assert len(manifest["files"]) == 1
+            assert manifest["files"][0]["score"] == 85
+
+    def test_list_quarantined_files_reads_manifest(self):
+        """Test list_quarantined_files reads manifest correctly."""
+        from openlabels.cli.commands.quarantine import write_manifest, list_quarantined_files
+
+        with tempfile.TemporaryDirectory() as dest_dir:
+            # Create a manifest with moved files
+            moved_files = [
+                {"original_path": "/a.txt", "new_path": f"{dest_dir}/a.txt", "score": 90, "tier": "CRITICAL", "entities": {}},
+                {"original_path": "/b.txt", "new_path": f"{dest_dir}/b.txt", "score": 75, "tier": "HIGH", "entities": {}},
+            ]
+            write_manifest(Path(dest_dir), moved_files, "score > 70")
+
+            # List should return the quarantined files
+            listed = list_quarantined_files(Path(dest_dir))
+
+            assert len(listed) == 2
+            paths = [f["original_path"] for f in listed]
+            assert "/a.txt" in paths
+            assert "/b.txt" in paths
 
     def test_verbose_output(self):
         """Test verbose output shows details."""

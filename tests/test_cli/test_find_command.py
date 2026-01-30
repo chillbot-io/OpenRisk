@@ -99,6 +99,14 @@ class TestFilterExpressions:
         filter_obj = parse_filter("has(SSN)")
         assert filter_obj is not None
 
+        # Test evaluation against results with and without SSN
+        # Filter expects entities as list of dicts with 'type' key
+        result_with_ssn = {"entities": [{"type": "SSN"}, {"type": "EMAIL"}]}
+        assert filter_obj.evaluate(result_with_ssn) is True
+
+        result_without_ssn = {"entities": [{"type": "EMAIL"}]}
+        assert filter_obj.evaluate(result_without_ssn) is False
+
 
 class TestFindOutputFormats:
     """Test different output formats for find command."""
@@ -125,42 +133,59 @@ class TestFindOutputFormats:
         assert "\t" in output  # Tab-separated
 
     def test_json_output_format(self):
-        """Test JSON output format."""
-        result = {
-            "path": "/test/file.txt",
-            "score": 75,
-            "tier": "HIGH",
-            "entities": {"SSN": 2},
-        }
+        """Test JSON output format via format_find_result."""
+        from openlabels.cli.commands.find import format_find_result
+        from openlabels.cli.commands.scan import ScanResult
 
-        json_str = json.dumps(result)
-        parsed = json.loads(json_str)
+        result = ScanResult(
+            path="/test/file.txt",
+            score=75,
+            tier="HIGH",
+            entities={"SSN": 2},
+            exposure="PRIVATE",
+        )
+
+        json_output = format_find_result(result, "json")
+        parsed = json.loads(json_output)
 
         assert parsed["path"] == "/test/file.txt"
         assert parsed["score"] == 75
+        assert parsed["tier"] == "HIGH"
+        assert parsed["entities"] == {"SSN": 2}
 
     def test_paths_only_output(self):
-        """Test paths-only output for piping."""
-        results = [
-            {"path": "/a.txt", "score": 50},
-            {"path": "/b.txt", "score": 80},
-        ]
+        """Test paths-only output format via format_find_result."""
+        from openlabels.cli.commands.find import format_find_result
+        from openlabels.cli.commands.scan import ScanResult
 
-        paths = [r["path"] for r in results]
+        result = ScanResult(
+            path="/test/data.csv",
+            score=50,
+            tier="MEDIUM",
+            entities={"EMAIL": 3},
+            exposure="INTERNAL",
+        )
 
-        assert paths == ["/a.txt", "/b.txt"]
+        output = format_find_result(result, "paths")
+        # Paths output should contain the path
+        assert "/test/data.csv" in output
 
     def test_count_output(self):
-        """Test count-only output."""
-        results = [
-            {"path": "/a.txt"},
-            {"path": "/b.txt"},
-            {"path": "/c.txt"},
-        ]
+        """Test count format via format_find_result."""
+        from openlabels.cli.commands.find import format_find_result
+        from openlabels.cli.commands.scan import ScanResult
 
-        count = len(results)
+        result = ScanResult(
+            path="/a.txt",
+            score=30,
+            tier="LOW",
+            entities={},
+            exposure="PRIVATE",
+        )
 
-        assert count == 3
+        # Count format typically returns "1" for each result
+        output = format_find_result(result, "count")
+        assert output is not None
 
 
 class TestFindIntegration:
