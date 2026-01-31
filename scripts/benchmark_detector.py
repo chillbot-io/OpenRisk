@@ -120,10 +120,10 @@ def load_ai4privacy_format(path: Path) -> List[Dict[str, Any]]:
 
 def run_detector(text: str) -> List[Dict[str, Any]]:
     """Run OpenLabels detector on text and return detected entities."""
-    from openlabels.adapters.scanner import detect_text
+    from openlabels.adapters.scanner import detect
 
     try:
-        result = detect_text(text)
+        result = detect(text)
         detected = []
         for span in result.spans:
             detected.append({
@@ -148,6 +148,7 @@ def normalize_entity_type(entity_type: str) -> str:
         "SOCIAL_SECURITY": "SSN",
         "SOCIAL_SECURITY_NUMBER": "SSN",
         "US_SSN": "SSN",
+        "SOCIALSECURITYNUMBER": "SSN",
 
         # Email variations
         "EMAIL": "EMAIL",
@@ -159,29 +160,85 @@ def normalize_entity_type(entity_type: str) -> str:
         "PHONE_NUMBER": "PHONE",
         "PHONENUMBER": "PHONE",
         "TELEPHONE": "PHONE",
+        "TEL": "PHONE",
+        "MOBILE": "PHONE",
+        "MOBILE_NUMBER": "PHONE",
 
         # Credit card variations
         "CREDIT_CARD": "CREDIT_CARD",
         "CREDITCARD": "CREDIT_CARD",
         "CC": "CREDIT_CARD",
         "CARD_NUMBER": "CREDIT_CARD",
+        "CREDITCARDNUMBER": "CREDIT_CARD",
 
         # IP variations
         "IP": "IP_ADDRESS",
         "IP_ADDRESS": "IP_ADDRESS",
         "IPADDRESS": "IP_ADDRESS",
+        "IPV4": "IP_ADDRESS",
+        "IPV6": "IP_ADDRESS",
 
-        # Name variations
+        # Name variations (AI4Privacy uses many)
         "NAME": "NAME",
         "PERSON": "NAME",
         "PERSON_NAME": "NAME",
         "FIRSTNAME": "NAME",
         "LASTNAME": "NAME",
+        "FIRST_NAME": "NAME",
+        "LAST_NAME": "NAME",
+        "GIVENNAME": "NAME",
+        "SURNAME": "NAME",
+        "FULLNAME": "NAME",
+        "FULL_NAME": "NAME",
+        "USERNAME": "NAME",
+        "USER_NAME": "NAME",
+        "NAME_PATIENT": "NAME",
+        "PATIENT_NAME": "NAME",
+        "DOCTOR_NAME": "NAME",
+        "NAME_DOCTOR": "NAME",
 
         # Address variations
         "ADDRESS": "ADDRESS",
         "STREET_ADDRESS": "ADDRESS",
         "LOCATION": "ADDRESS",
+        "STREET": "ADDRESS",
+        "CITY": "ADDRESS",
+        "STATE": "ADDRESS",
+        "ZIPCODE": "ADDRESS",
+        "ZIP_CODE": "ADDRESS",
+        "ZIP": "ADDRESS",
+        "POSTCODE": "ADDRESS",
+        "POSTAL_CODE": "ADDRESS",
+
+        # Date variations
+        "DATE": "DATE",
+        "DOB": "DATE",
+        "DATE_OF_BIRTH": "DATE",
+        "DATEOFBIRTH": "DATE",
+        "BIRTHDATE": "DATE",
+        "BIRTH_DATE": "DATE",
+
+        # Account/ID variations
+        "ACCOUNT": "ACCOUNT",
+        "ACCOUNT_NUMBER": "ACCOUNT",
+        "ACCOUNTNUMBER": "ACCOUNT",
+        "BANK_ACCOUNT": "ACCOUNT",
+        "IBAN": "IBAN",
+
+        # URL variations
+        "URL": "URL",
+        "WEBSITE": "URL",
+        "WEB_ADDRESS": "URL",
+
+        # Password variations
+        "PASSWORD": "PASSWORD",
+        "PASS": "PASSWORD",
+        "SECRET": "PASSWORD",
+
+        # Medical variations
+        "MEDICAL_RECORD": "MEDICAL_ID",
+        "MRN": "MEDICAL_ID",
+        "MEDICAL_RECORD_NUMBER": "MEDICAL_ID",
     }
 
     upper = entity_type.upper().replace("-", "_").replace(" ", "_")
