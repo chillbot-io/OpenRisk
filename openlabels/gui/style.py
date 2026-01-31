@@ -56,13 +56,13 @@ COLORS = {
 }
 
 # Monospace font stack for technical data (hashes, IDs, code)
-MONO_FONT = '"JetBrains Mono", "Fira Code", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace'
+MONO_FONT = '"IBM Plex Mono", "JetBrains Mono", "Fira Code", Consolas, monospace'
 
-# UI font - Inter for clean, professional look (falls back to system fonts)
-UI_FONT = 'Inter, "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+# UI font - IBM Plex Sans for solid, technical look (falls back to system fonts)
+UI_FONT = '"IBM Plex Sans", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 
 # Font weights
-FONT_WEIGHT_NORMAL = 400
+FONT_WEIGHT_NORMAL = 450  # Slightly heavier than typical 400
 FONT_WEIGHT_MEDIUM = 500
 FONT_WEIGHT_SEMIBOLD = 600
 
@@ -76,6 +76,7 @@ def get_stylesheet() -> str:
 QWidget {{
     font-family: {UI_FONT};
     font-size: 12px;
+    font-weight: {FONT_WEIGHT_MEDIUM};
     color: {COLORS["text_primary"]};
     background-color: {COLORS["bg_base"]};
 }}
