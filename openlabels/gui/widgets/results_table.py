@@ -57,6 +57,7 @@ class ResultsTableWidget(QWidget):
         super().__init__(parent)
         self._all_results: List[Dict[str, Any]] = []
         self._filter_path: Optional[str] = None
+        self._batch_mode = False  # Disable sorting during batch inserts
         self._setup_ui()
 
     def _setup_ui(self):
@@ -113,10 +114,31 @@ class ResultsTableWidget(QWidget):
             if file_path:
                 self.detail_requested.emit(file_path)
 
+    def begin_batch(self):
+        """Begin batch insert mode - disables sorting for performance."""
+        self._batch_mode = True
+        self._table.setSortingEnabled(False)
+        self._table.setUpdatesEnabled(False)
+
+    def end_batch(self):
+        """End batch insert mode - re-enables sorting."""
+        self._batch_mode = False
+        self._table.setUpdatesEnabled(True)
+        self._table.setSortingEnabled(True)
+
     def add_result(self, result: Dict[str, Any]):
         """Add a scan result to the table."""
         self._all_results.append(result)
+
+        # Temporarily disable sorting if not in batch mode (for single adds)
+        if not self._batch_mode:
+            self._table.setSortingEnabled(False)
+
         self._add_row(result)
+
+        # Re-enable sorting if not in batch mode
+        if not self._batch_mode:
+            self._table.setSortingEnabled(True)
 
     def _add_row(self, result: Dict[str, Any]):
         """Add a row to the table for a result."""

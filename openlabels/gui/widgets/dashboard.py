@@ -165,6 +165,7 @@ class DashboardWidget(QWidget):
         self._path_stack: List[HeatmapNode] = [self._root]
         self._entity_types: List[str] = DEFAULT_ENTITY_TYPES.copy()
         self._scan_results: List[Dict[str, Any]] = []
+        self._last_results_hash: int = 0  # Track if results changed
 
         self._setup_ui()
 
@@ -229,7 +230,17 @@ class DashboardWidget(QWidget):
         layout.addWidget(legend)
 
     def set_results(self, results: List[Dict[str, Any]]):
-        """Set scan results and rebuild the heatmap."""
+        """Set scan results and rebuild the heatmap (only if changed)."""
+        # Quick check: if same length and same paths, skip rebuild
+        results_hash = len(results)
+        if results:
+            # Include first and last path in hash for change detection
+            results_hash = hash((len(results), results[0].get("path"), results[-1].get("path")))
+
+        if results_hash == self._last_results_hash and len(results) == len(self._scan_results):
+            return  # No change, skip expensive rebuild
+
+        self._last_results_hash = results_hash
         self._scan_results = results
         self._build_hierarchy()
         self._navigate_to(self._root)

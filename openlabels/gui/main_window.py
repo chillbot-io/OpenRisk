@@ -471,6 +471,9 @@ class MainWindow(QMainWindow):
         self._scan_results.clear()
         self._results_table.clear()
 
+        # Enable batch mode for faster inserts
+        self._results_table.begin_batch()
+
         # Update UI
         self._status_label.setText("Scanning...")
         self._progress_bar.setVisible(True)
@@ -566,6 +569,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_scan_finished(self):
         """Handle scan completion."""
+        self._results_table.end_batch()  # Re-enable sorting
         self._status_label.setText("Scan complete")
         self._progress_bar.setVisible(False)
         self._scan_target.set_enabled(True)
@@ -574,6 +578,7 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_scan_error(self, error: str):
         """Handle scan error."""
+        self._results_table.end_batch()  # Re-enable sorting
         self._status_label.setText("Error")
         self._progress_bar.setVisible(False)
         self._scan_target.set_enabled(True)
