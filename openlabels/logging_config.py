@@ -239,12 +239,13 @@ def setup_logging(
     set_correlation_id(session_id)
 
     # Determine log level
+    # Default is WARNING (quiet for users), --verbose shows INFO/DEBUG
     if quiet:
         level = logging.ERROR
     elif verbose:
         level = logging.DEBUG
     else:
-        level = logging.INFO
+        level = logging.WARNING  # Default: only show warnings and errors
 
     # Get root logger for openlabels
     root_logger = logging.getLogger("openlabels")
