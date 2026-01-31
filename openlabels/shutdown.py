@@ -122,7 +122,7 @@ class ShutdownCoordinator:
     def _signal_handler(self, signum: int, frame) -> None:
         """Handle shutdown signals."""
         sig_name = signal.Signals(signum).name
-        logger.info(f"Received {sig_name}, initiating graceful shutdown...")
+        logger.debug(f"Received {sig_name}, initiating graceful shutdown...")
 
         # Set shutdown event for any waiting threads
         self._shutdown_event.set()
@@ -217,7 +217,7 @@ class ShutdownCoordinator:
                 return
             self._shutdown_in_progress = True
 
-        logger.info(f"Starting graceful shutdown (reason: {reason})")
+        logger.debug(f"Starting graceful shutdown (reason: {reason})")
         self._shutdown_event.set()
 
         # Sort by priority (higher first)
@@ -245,7 +245,7 @@ class ShutdownCoordinator:
                 logger.warning(f"Error in shutdown callback {cb.name}: {e}")
 
         elapsed = time.monotonic() - start
-        logger.info(f"Graceful shutdown complete ({elapsed:.2f}s)")
+        logger.debug(f"Graceful shutdown complete ({elapsed:.2f}s)")
 
     @contextmanager
     def managed_resource(self, resource: Any, name: str = ""):

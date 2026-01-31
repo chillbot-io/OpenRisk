@@ -427,12 +427,33 @@ Examples:
         parser.print_help()
         sys.exit(1)
 
-    # Execute command
-    result = args.func(args)
+    # Execute command with error handling
+    try:
+        result = args.func(args)
 
-    # Handle return code
-    if isinstance(result, int):
-        sys.exit(result)
+        # Handle return code
+        if isinstance(result, int):
+            sys.exit(result)
+
+    except KeyboardInterrupt:
+        # User pressed Ctrl+C - exit quietly
+        sys.exit(130)
+
+    except PermissionError as e:
+        error(f"Permission denied: {e.filename or e}")
+        sys.exit(1)
+
+    except FileNotFoundError as e:
+        error(f"File not found: {e.filename or e}")
+        sys.exit(1)
+
+    except Exception as e:
+        # Unexpected error - show message without stack trace for users
+        # Stack trace is available with --verbose
+        if getattr(args, "verbose", False):
+            logger.exception("Unexpected error")
+        error(f"{type(e).__name__}: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -125,7 +125,7 @@ class Client:
             if default_exposure.upper() != "PRIVATE":
                 context = Context(default_exposure=default_exposure.upper())
             else:
-                context = get_default_context()
+                context = get_default_context(warn=False)
         # If context was provided, use it as-is (don't override its exposure)
 
         self._ctx = context
