@@ -24,9 +24,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal
 
-from openlabels.gui.widgets.advanced_options import AdvancedOptionsWidget
-
-
 class ScanTargetPanel(QWidget):
     """Panel for selecting scan target with advanced options."""
 
@@ -120,10 +117,6 @@ class ScanTargetPanel(QWidget):
         self._scan_btn.setDefault(True)
         layout.addWidget(self._scan_btn)
 
-        # Advanced options (collapsible)
-        self._advanced_options = AdvancedOptionsWidget()
-        main_layout.addWidget(self._advanced_options)
-
     def _connect_signals(self):
         """Connect signals."""
         self._type_combo.currentIndexChanged.connect(self._on_type_changed)
@@ -133,7 +126,6 @@ class ScanTargetPanel(QWidget):
         self._path_input.textChanged.connect(self.path_changed)
         self._path_input.returnPressed.connect(self.scan_requested)
         self._monitor_checkbox.toggled.connect(self._on_monitor_toggled)
-        self._advanced_options.options_changed.connect(self.options_changed)
 
     def _on_monitor_toggled(self, checked: bool):
         """Handle monitor checkbox toggle."""
@@ -302,12 +294,17 @@ class ScanTargetPanel(QWidget):
         self._monitor_checkbox.setEnabled(enabled)
 
     def get_advanced_options(self) -> Dict[str, Any]:
-        """Get advanced scanner options."""
-        return self._advanced_options.get_options()
+        """Get advanced scanner options (defaults for now)."""
+        return {
+            "max_file_size": 100 * 1024 * 1024,  # 100MB
+            "scan_archives": True,
+            "follow_symlinks": False,
+            "include_hidden": False,
+        }
 
     def set_advanced_options(self, options: Dict[str, Any]):
-        """Set advanced scanner options."""
-        self._advanced_options.set_options(options)
+        """Set advanced scanner options (no-op for now)."""
+        pass
 
     def get_scan_config(self) -> Dict[str, Any]:
         """Get complete scan configuration including target and advanced options."""

@@ -185,6 +185,19 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(12)
 
+        # Logo header
+        logo_label = QLabel("< OpenLabels >")
+        logo_label.setStyleSheet("""
+            QLabel {
+                font-family: "IBM Plex Mono", "JetBrains Mono", Consolas, monospace;
+                font-size: 20px;
+                font-weight: 600;
+                color: #58a6ff;
+                padding: 4px 0;
+            }
+        """)
+        layout.addWidget(logo_label)
+
         # Scan target panel (top)
         self._scan_target = ScanTargetPanel()
         layout.addWidget(self._scan_target)
