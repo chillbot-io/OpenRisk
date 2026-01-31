@@ -3,11 +3,13 @@ Background scan worker.
 
 Performs file scanning in a separate thread to keep the UI responsive.
 Uses parallel processing for improved performance on multi-core systems.
+Implements batched signal emission to prevent UI thread flooding.
 """
 
 import os
 import stat as stat_module
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -17,13 +19,23 @@ from PySide6.QtCore import QThread, Signal
 # Default number of parallel workers (use CPU count, capped at 8)
 DEFAULT_WORKERS = min(os.cpu_count() or 4, 8)
 
+# Batching configuration
+BATCH_SIZE = 50  # Emit results in batches of this size
+BATCH_INTERVAL_MS = 100  # Or emit after this many milliseconds
+PROGRESS_THROTTLE_MS = 50  # Minimum interval between progress updates (20 fps max)
+
 
 class ScanWorker(QThread):
-    """Background worker for scanning files with parallel processing."""
+    """Background worker for scanning files with parallel processing.
+
+    Uses batched signal emission to keep the UI responsive during large scans.
+    Results are collected and emitted in batches rather than one at a time.
+    """
 
     # Signals
-    progress = Signal(int, int)      # current, total
-    result = Signal(dict)            # single scan result
+    progress = Signal(int, int)      # current, total (throttled)
+    result = Signal(dict)            # single scan result (legacy, for small scans)
+    batch_results = Signal(list)     # batched results for better performance
     finished = Signal()              # scan complete
     error = Signal(str)              # error message
 
@@ -46,6 +58,12 @@ class ScanWorker(QThread):
         self._client = None
         # Thread pool for parallel scanning
         self._executor: Optional[ThreadPoolExecutor] = None
+
+        # Batching state for UI responsiveness
+        self._result_batch: List[Dict[str, Any]] = []
+        self._batch_lock = threading.Lock()
+        self._last_batch_time = 0.0
+        self._last_progress_time = 0.0
 
     def stop(self):
         """Request the worker to stop (thread-safe)."""
@@ -70,6 +88,49 @@ class ScanWorker(QThread):
             from openlabels import Client
             self._client = Client()
         return self._client
+
+    def _queue_result(self, result: Dict[str, Any]):
+        """Queue a result for batched emission.
+
+        Results are collected and emitted in batches to prevent
+        flooding the UI thread with individual signal emissions.
+        """
+        with self._batch_lock:
+            self._result_batch.append(result)
+            current_time = time.time() * 1000  # ms
+
+            # Emit batch if size threshold reached or time elapsed
+            should_emit = (
+                len(self._result_batch) >= BATCH_SIZE or
+                (current_time - self._last_batch_time) >= BATCH_INTERVAL_MS
+            )
+
+            if should_emit and self._result_batch:
+                batch = self._result_batch
+                self._result_batch = []
+                self._last_batch_time = current_time
+                self.batch_results.emit(batch)
+
+    def _flush_results(self):
+        """Flush any remaining results in the batch."""
+        with self._batch_lock:
+            if self._result_batch:
+                batch = self._result_batch
+                self._result_batch = []
+                self.batch_results.emit(batch)
+
+    def _throttled_progress(self, current: int, total: int):
+        """Emit progress signal with throttling to prevent UI flooding.
+
+        Limits progress updates to ~20 per second max.
+        """
+        current_time = time.time() * 1000  # ms
+
+        # Always emit on first update, last update, or if enough time elapsed
+        if (current == 1 or current == total or
+                (current_time - self._last_progress_time) >= PROGRESS_THROTTLE_MS):
+            self._last_progress_time = current_time
+            self.progress.emit(current, total)
 
     def _extract_spans_with_context(self, detection, context_chars: int = 50) -> List[Dict[str, Any]]:
         """Extract spans with surrounding context for vault storage."""
@@ -128,7 +189,10 @@ class ScanWorker(QThread):
         self.finished.emit()
 
     def _scan_sequential(self, files: List[Path], total: int):
-        """Scan files sequentially (fallback mode)."""
+        """Scan files sequentially (fallback mode).
+
+        Still uses batching for UI responsiveness even in sequential mode.
+        """
         client = self._get_client()
 
         for i, file_path in enumerate(files):
@@ -136,11 +200,17 @@ class ScanWorker(QThread):
                 break
 
             result = self._scan_file(file_path, client)
-            self.result.emit(result)
-            self.progress.emit(i + 1, total)
+            self._queue_result(result)
+            self._throttled_progress(i + 1, total)
+
+        self._flush_results()
 
     def _scan_parallel(self, files: List[Path], total: int):
-        """Scan files in parallel using ThreadPoolExecutor."""
+        """Scan files in parallel using ThreadPoolExecutor.
+
+        Uses batched result emission to prevent UI thread flooding.
+        Progress updates are throttled to ~20 fps max.
+        """
         completed = 0
         completed_lock = threading.Lock()
 
@@ -180,16 +250,17 @@ class ScanWorker(QThread):
                 try:
                     result = future.result()
                     if result is not None:
-                        self.result.emit(result)
+                        # Queue result for batched emission
+                        self._queue_result(result)
 
                         with completed_lock:
                             completed += 1
-                            self.progress.emit(completed, total)
+                            self._throttled_progress(completed, total)
 
                 except Exception as e:
                     # Handle individual file errors
                     file_path = futures[future]
-                    self.result.emit({
+                    self._queue_result({
                         "path": str(file_path),
                         "size": 0,
                         "label_id": None,
@@ -205,7 +276,10 @@ class ScanWorker(QThread):
 
                     with completed_lock:
                         completed += 1
-                        self.progress.emit(completed, total)
+                        self._throttled_progress(completed, total)
+
+            # Flush any remaining results
+            self._flush_results()
 
         finally:
             self._executor.shutdown(wait=True)
@@ -407,13 +481,14 @@ class ScanWorker(QThread):
 
             # Use parallel processing for S3 objects
             if total == 1 or self._max_workers == 1:
-                # Sequential mode
+                # Sequential mode - still use batching for consistency
                 for i, obj in enumerate(objects):
                     if self._stop_event.is_set():
                         break
                     result = self._scan_s3_object(s3, bucket, obj, client, bucket_exposure)
-                    self.result.emit(result)
-                    self.progress.emit(i + 1, total)
+                    self._queue_result(result)
+                    self._throttled_progress(i + 1, total)
+                self._flush_results()
             else:
                 # Parallel mode
                 self._scan_s3_parallel(s3, bucket, objects, client, bucket_exposure, total)
@@ -426,7 +501,7 @@ class ScanWorker(QThread):
 
     def _scan_s3_parallel(self, s3_client, bucket: str, objects: List[Dict],
                           client, exposure: str, total: int):
-        """Scan S3 objects in parallel."""
+        """Scan S3 objects in parallel with batched result emission."""
         completed = 0
         completed_lock = threading.Lock()
 
@@ -451,15 +526,15 @@ class ScanWorker(QThread):
                 try:
                     result = future.result()
                     if result is not None:
-                        self.result.emit(result)
+                        self._queue_result(result)
 
                         with completed_lock:
                             completed += 1
-                            self.progress.emit(completed, total)
+                            self._throttled_progress(completed, total)
 
                 except Exception as e:
                     obj = futures[future]
-                    self.result.emit({
+                    self._queue_result({
                         "path": f"s3://{bucket}/{obj['Key']}",
                         "size": obj.get("Size", 0),
                         "label_id": None,
@@ -475,7 +550,10 @@ class ScanWorker(QThread):
 
                     with completed_lock:
                         completed += 1
-                        self.progress.emit(completed, total)
+                        self._throttled_progress(completed, total)
+
+            # Flush any remaining results
+            self._flush_results()
 
         finally:
             self._executor.shutdown(wait=True)

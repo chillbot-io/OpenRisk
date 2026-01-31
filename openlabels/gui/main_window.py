@@ -522,6 +522,7 @@ class MainWindow(QMainWindow):
         )
         self._scan_worker.progress.connect(self._on_scan_progress)
         self._scan_worker.result.connect(self._on_scan_result)
+        self._scan_worker.batch_results.connect(self._on_batch_results)
         self._scan_worker.finished.connect(self._on_scan_finished)
         self._scan_worker.error.connect(self._on_scan_error)
         self._scan_worker.start()
@@ -543,13 +544,30 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _on_scan_result(self, result: Dict[str, Any]):
-        """Handle single scan result."""
+        """Handle single scan result (legacy, for backward compatibility)."""
         self._scan_results.append(result)
         self._results_table.add_result(result)
+        # Don't update summary on every result - wait for batch or finish
+        self._store_to_vault(result)
+
+    @Slot(list)
+    def _on_batch_results(self, results: List[Dict[str, Any]]):
+        """Handle batched scan results for better UI performance.
+
+        Processes multiple results at once, reducing UI update overhead.
+        """
+        # Add all results to internal storage
+        self._scan_results.extend(results)
+
+        # Batch add to table
+        self._results_table.add_results_batch(results)
+
+        # Update risk summary once for the whole batch
         self._update_risk_summary()
 
-        # Store spans to vault if we have an authenticated session
-        self._store_to_vault(result)
+        # Store spans to vault
+        for result in results:
+            self._store_to_vault(result)
 
     def _store_to_vault(self, result: Dict[str, Any]):
         """Store scan result spans to user's vault."""
