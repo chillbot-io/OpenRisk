@@ -4,6 +4,9 @@ Scan target panel widget.
 Allows selecting target type (Local, SMB, NFS, S3) and entering the path.
 """
 
+import os
+import platform
+from pathlib import Path
 from typing import Optional, Dict, Any
 
 from PySide6.QtWidgets import (
@@ -158,11 +161,63 @@ class ScanTargetPanel(QWidget):
 
     def _on_browse(self):
         """Open folder browser."""
+        start_dir = self._path_input.text().strip()
+
+        # If no path set, pick a sensible default
+        if not start_dir:
+            start_dir = self._get_default_browse_dir()
+
         folder = QFileDialog.getExistingDirectory(
-            self, "Select Folder", self._path_input.text() or ""
+            self, "Select Folder", start_dir
         )
         if folder:
             self._path_input.setText(folder)
+
+    def _get_default_browse_dir(self) -> str:
+        """Get a sensible default directory for browsing.
+
+        Handles WSL by starting at /mnt/ where Windows drives are mounted.
+        """
+        # Check for WSL (Windows Subsystem for Linux)
+        if self._is_wsl():
+            # In WSL, Windows drives are at /mnt/c, /mnt/d, etc.
+            mnt_path = Path("/mnt")
+            if mnt_path.exists():
+                # Try to find a common Windows drive
+                for drive in ["c", "d", "e"]:
+                    drive_path = mnt_path / drive
+                    if drive_path.exists():
+                        return str(drive_path)
+                return str(mnt_path)
+
+        # On Windows, start at user's home
+        if platform.system() == "Windows":
+            return str(Path.home())
+
+        # On Linux/Mac, use home directory
+        return str(Path.home())
+
+    def _is_wsl(self) -> bool:
+        """Detect if running under Windows Subsystem for Linux."""
+        if platform.system() != "Linux":
+            return False
+
+        # Check for WSL-specific indicators
+        try:
+            # /proc/version contains "microsoft" or "WSL" in WSL
+            version_file = Path("/proc/version")
+            if version_file.exists():
+                content = version_file.read_text().lower()
+                if "microsoft" in content or "wsl" in content:
+                    return True
+        except (OSError, IOError):
+            pass
+
+        # Check for WSL interop
+        if Path("/proc/sys/fs/binfmt_misc/WSLInterop").exists():
+            return True
+
+        return False
 
     def _on_credentials(self):
         """Open S3 credentials dialog."""
