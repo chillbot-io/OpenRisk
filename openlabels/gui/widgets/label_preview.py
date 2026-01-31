@@ -189,29 +189,37 @@ class LabelPreviewWidget(QWidget):
         row2.addStretch()
         props_layout.addLayout(row2)
 
-        # Row 3: Scanned / Entities
+        # Row 3: Scanned
         row3 = QHBoxLayout()
         row3.addWidget(self._create_property_label("Scanned"))
         self._timestamp = self._create_value_label("--")
         row3.addWidget(self._timestamp)
-        row3.addSpacing(16)
-        row3.addWidget(self._create_property_label("Entities"))
-        self._entity_count = self._create_value_label("--")
-        row3.addWidget(self._entity_count)
         row3.addStretch()
         props_layout.addLayout(row3)
 
-        # Row 4: Source / Embedded
+        # Row 4: Entities
         row4 = QHBoxLayout()
-        row4.addWidget(self._create_property_label("Source"))
-        self._source = self._create_value_label("openlabels")
-        row4.addWidget(self._source)
-        row4.addSpacing(16)
-        row4.addWidget(self._create_property_label("Embedded"))
-        self._embedded_status = self._create_value_label("--")
-        row4.addWidget(self._embedded_status)
+        row4.addWidget(self._create_property_label("Entities"))
+        self._entity_count = self._create_value_label("--")
+        row4.addWidget(self._entity_count)
         row4.addStretch()
         props_layout.addLayout(row4)
+
+        # Row 5: Source
+        row5 = QHBoxLayout()
+        row5.addWidget(self._create_property_label("Source"))
+        self._source = self._create_value_label("openlabels")
+        row5.addWidget(self._source)
+        row5.addStretch()
+        props_layout.addLayout(row5)
+
+        # Row 6: Embedded
+        row6 = QHBoxLayout()
+        row6.addWidget(self._create_property_label("Embedded"))
+        self._embedded_status = self._create_value_label("--")
+        row6.addWidget(self._embedded_status)
+        row6.addStretch()
+        props_layout.addLayout(row6)
 
         layout.addLayout(props_layout)
 
