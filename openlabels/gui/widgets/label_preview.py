@@ -195,11 +195,10 @@ class LabelPreviewWidget(QWidget):
         self._entity_count = self._create_value_label("--")
         grid.addWidget(self._entity_count, 1, 3)
 
-        # Portable
-        grid.addWidget(self._create_property_label("Format"), 2, 2)
-        portable = self._create_value_label("OpenLabels v1")
-        portable.setStyleSheet(f"color: {COLORS['success']}; font-weight: 500; background: transparent;")
-        grid.addWidget(portable, 2, 3)
+        # Embedded status
+        grid.addWidget(self._create_property_label("Embedded"), 2, 2)
+        self._embedded_status = self._create_value_label("--")
+        grid.addWidget(self._embedded_status, 2, 3)
 
         layout.addLayout(grid)
 
@@ -474,6 +473,7 @@ class LabelPreviewWidget(QWidget):
         entities = result.get("entities", {})
         score = result.get("score", 0)
         tier = result.get("tier", "UNKNOWN")
+        label_embedded = result.get("label_embedded", False)
 
         # Use label_id and content_hash from scan result (already generated during scan)
         label_id = result.get("label_id") or "ol_____________"
@@ -488,6 +488,14 @@ class LabelPreviewWidget(QWidget):
             timestamp=int(time.time()),
             file_path=file_path,
         )
+
+        # Update embedded status
+        if label_embedded:
+            self._embedded_status.setText("Yes")
+            self._embedded_status.setStyleSheet(f"color: {COLORS['success']}; font-weight: 600; background: transparent;")
+        else:
+            self._embedded_status.setText("No")
+            self._embedded_status.setStyleSheet(f"color: {COLORS['text_muted']}; font-weight: 500; background: transparent;")
 
     def clear(self):
         """Clear the label preview."""
