@@ -86,7 +86,7 @@ class LabelPreviewWidget(QWidget):
 
         # Logo/icon
         logo = QLabel("<OL>")
-        logo.setFont(create_font("IBM Plex Mono", 18, weight=700, monospace=True))
+        logo.setFont(create_font("IBM Plex Mono", 22, weight=700, monospace=True))
         logo.setStyleSheet("color: white; background: transparent;")
         layout.addWidget(logo)
 
@@ -95,13 +95,13 @@ class LabelPreviewWidget(QWidget):
         title_layout.setSpacing(2)
 
         title = QLabel("OpenLabels")
-        title.setFont(create_font("IBM Plex Sans", 18, weight=700))
+        title.setFont(create_font("IBM Plex Sans", 22, weight=700))
         title.setStyleSheet("color: white; background: transparent;")
         title_layout.addWidget(title)
 
         subtitle = QLabel("Portable Risk Label")
-        subtitle.setFont(create_font("IBM Plex Sans", 13, weight=500))
-        subtitle.setStyleSheet("color: rgba(255,255,255,0.8); background: transparent;")
+        subtitle.setFont(create_font("IBM Plex Sans", 15, weight=600))
+        subtitle.setStyleSheet("color: rgba(255,255,255,0.9); background: transparent;")
         title_layout.addWidget(subtitle)
 
         layout.addLayout(title_layout)
