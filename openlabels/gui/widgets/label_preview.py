@@ -469,21 +469,15 @@ class LabelPreviewWidget(QWidget):
     def set_from_scan_result(self, result: Dict[str, Any]):
         """Set label from a scan result dictionary."""
         import time
-        from openlabels.core.labels import generate_label_id, compute_content_hash_file
 
         file_path = result.get("path", "")
         entities = result.get("entities", {})
         score = result.get("score", 0)
         tier = result.get("tier", "UNKNOWN")
 
-        # Generate or retrieve label ID
-        label_id = result.get("label_id") or generate_label_id()
-
-        # Compute content hash if we have file access
-        try:
-            content_hash = compute_content_hash_file(file_path)
-        except Exception:
-            content_hash = "____________"
+        # Use label_id and content_hash from scan result (already generated during scan)
+        label_id = result.get("label_id") or "ol_____________"
+        content_hash = result.get("content_hash") or "____________"
 
         self.set_label(
             label_id=label_id,

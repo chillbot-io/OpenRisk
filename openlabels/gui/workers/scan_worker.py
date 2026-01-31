@@ -139,8 +139,9 @@ class ScanWorker(QThread):
         return files
 
     def _scan_file(self, file_path: Path, client) -> Dict[str, Any]:
-        """Scan a single file."""
+        """Scan a single file and generate its OpenLabels label."""
         from openlabels.adapters.scanner import detect_file as scanner_detect  # noqa: F811
+        from openlabels.core.labels import generate_label_id, compute_content_hash_file
 
         try:
             # Get file size
@@ -148,6 +149,13 @@ class ScanWorker(QThread):
                 size = file_path.stat().st_size
             except OSError:
                 size = 0
+
+            # Generate label ID and content hash ONCE during scan
+            label_id = generate_label_id()
+            try:
+                content_hash = compute_content_hash_file(str(file_path))
+            except Exception:
+                content_hash = None
 
             # Detect entities
             detection = scanner_detect(file_path)
@@ -162,6 +170,8 @@ class ScanWorker(QThread):
             return {
                 "path": str(file_path),
                 "size": size,
+                "label_id": label_id,           # Persistent label ID
+                "content_hash": content_hash,   # Content hash for versioning
                 "score": score_result.score,
                 "tier": score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier),
                 "entities": entities,
@@ -174,6 +184,8 @@ class ScanWorker(QThread):
             return {
                 "path": str(file_path),
                 "size": 0,
+                "label_id": None,
+                "content_hash": None,
                 "score": 0,
                 "tier": "UNKNOWN",
                 "entities": {},
@@ -303,9 +315,10 @@ class ScanWorker(QThread):
     def _scan_s3_object(
         self, s3_client, bucket: str, obj: Dict, client, exposure: str = "PRIVATE"
     ) -> Dict[str, Any]:
-        """Scan a single S3 object."""
+        """Scan a single S3 object and generate its OpenLabels label."""
         import tempfile
         from pathlib import Path
+        from openlabels.core.labels import generate_label_id, compute_content_hash_file
 
         key = obj["Key"]
         size = obj.get("Size", 0)
@@ -317,6 +330,13 @@ class ScanWorker(QThread):
                 tmp_path = Path(tmp.name)
 
             try:
+                # Generate label ID and content hash
+                label_id = generate_label_id()
+                try:
+                    content_hash = compute_content_hash_file(str(tmp_path))
+                except Exception:
+                    content_hash = None
+
                 # Scan the temp file
                 from openlabels.adapters.scanner import detect_file as scanner_detect
 
@@ -331,6 +351,8 @@ class ScanWorker(QThread):
                 return {
                     "path": f"s3://{bucket}/{key}",
                     "size": size,
+                    "label_id": label_id,
+                    "content_hash": content_hash,
                     "score": score_result.score,
                     "tier": score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier),
                     "entities": entities,
@@ -346,6 +368,8 @@ class ScanWorker(QThread):
             return {
                 "path": f"s3://{bucket}/{key}",
                 "size": size,
+                "label_id": None,
+                "content_hash": None,
                 "score": 0,
                 "tier": "UNKNOWN",
                 "entities": {},
