@@ -46,6 +46,7 @@ class ScanWorker(QThread):
         s3_credentials: Optional[Dict[str, str]] = None,
         parent=None,
         max_workers: int = DEFAULT_WORKERS,
+        options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(parent)
         self._target_type = target_type
@@ -64,6 +65,17 @@ class ScanWorker(QThread):
         self._batch_lock = threading.Lock()
         self._last_batch_time = 0.0
         self._last_progress_time = 0.0
+
+        # Advanced options
+        opts = options or {}
+        self._recursive = opts.get("recursive", True)
+        self._follow_symlinks = opts.get("follow_symlinks", False)
+        self._include_hidden = opts.get("include_hidden", False)
+        self._extensions = opts.get("extensions")  # List or None (all)
+        self._exclude_patterns = opts.get("exclude_patterns", ["node_modules", "__pycache__", ".git"])
+        self._max_file_size_bytes = (opts.get("max_file_size_mb") or 0) * 1024 * 1024
+        self._auto_embed = opts.get("auto_embed", True)
+        self._exposure = opts.get("exposure", "PRIVATE")
 
     def stop(self):
         """Request the worker to stop (thread-safe)."""
@@ -286,23 +298,49 @@ class ScanWorker(QThread):
             self._executor = None
 
     def _collect_files(self, path: Path) -> List[Path]:
-        """Collect all files to scan."""
+        """Collect all files to scan based on options."""
         files = []
 
         if path.is_file():
             return [path]
 
         try:
-            for item in path.rglob("*"):
+            # Use rglob for recursive, glob for non-recursive
+            iterator = path.rglob("*") if self._recursive else path.glob("*")
+
+            for item in iterator:
                 if self._stop_event.is_set():
                     break
                 try:
                     st = item.lstat()
+
+                    # Skip symlinks unless explicitly following them
+                    if stat_module.S_ISLNK(st.st_mode) and not self._follow_symlinks:
+                        continue
+
                     if stat_module.S_ISREG(st.st_mode):
-                        # Skip hidden files and common excludes
-                        if not any(part.startswith(".") for part in item.parts):
-                            if not any(excl in str(item) for excl in ["node_modules", "__pycache__", ".git"]):
-                                files.append(item)
+                        # Skip hidden files unless including them
+                        if not self._include_hidden:
+                            if any(part.startswith(".") for part in item.parts):
+                                continue
+
+                        # Skip files matching exclude patterns
+                        item_str = str(item)
+                        if any(excl in item_str for excl in self._exclude_patterns):
+                            continue
+
+                        # Filter by extension if specified
+                        if self._extensions:
+                            ext = item.suffix.lower()
+                            if not any(ext == e.lower() if e.startswith('.') else ext == f'.{e.lower()}'
+                                       for e in self._extensions):
+                                continue
+
+                        # Skip files larger than max size (if set)
+                        if self._max_file_size_bytes > 0 and st.st_size > self._max_file_size_bytes:
+                            continue
+
+                        files.append(item)
                 except OSError:
                     continue
         except PermissionError:
@@ -380,11 +418,24 @@ class ScanWorker(QThread):
                 timestamp=int(time.time()),
             )
 
-            # Auto-embed label if file type supports it
+            # Auto-embed label if enabled and file type supports it
+            # Check for existing label first to avoid duplicates
             label_embedded = False
-            if supports_embedded_labels(file_path):
+            if self._auto_embed and supports_embedded_labels(file_path):
                 try:
-                    label_embedded = write_embedded_label(file_path, label_set)
+                    from openlabels.output.embed import read_embedded_label
+                    existing_label = read_embedded_label(file_path)
+
+                    # Only write if no existing label or content changed
+                    if existing_label is None:
+                        label_embedded = write_embedded_label(file_path, label_set)
+                    elif existing_label.content_hash != content_hash:
+                        # Content changed, update the label
+                        label_embedded = write_embedded_label(file_path, label_set)
+                    else:
+                        # Label exists and content unchanged, reuse existing
+                        label_id = existing_label.label_id
+                        label_embedded = True
                 except Exception:
                     pass  # Embedding failed, continue without it
 
@@ -398,7 +449,7 @@ class ScanWorker(QThread):
                 "tier": tier,
                 "entities": entities,
                 "spans": spans_data,
-                "exposure": "PRIVATE",
+                "exposure": self._exposure,
                 "error": None,
             }
 
@@ -413,7 +464,7 @@ class ScanWorker(QThread):
                 "tier": "UNKNOWN",
                 "entities": {},
                 "spans": [],
-                "exposure": "PRIVATE",
+                "exposure": self._exposure,
                 "error": str(e),
             }
 

@@ -2,6 +2,7 @@
 Scan target panel widget.
 
 Allows selecting target type (Local, SMB, NFS, S3) and entering the path.
+Includes advanced scanner options in a collapsible panel.
 """
 
 import os
@@ -23,14 +24,17 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal
 
+from openlabels.gui.widgets.advanced_options import AdvancedOptionsWidget
+
 
 class ScanTargetPanel(QWidget):
-    """Panel for selecting scan target."""
+    """Panel for selecting scan target with advanced options."""
 
     # Signals
     scan_requested = Signal()
     path_changed = Signal()
     monitoring_toggled = Signal(bool)  # True when monitoring enabled
+    options_changed = Signal()  # When advanced options change
 
     TARGET_TYPES = [
         ("local", "Local Path"),
@@ -46,9 +50,12 @@ class ScanTargetPanel(QWidget):
         self._connect_signals()
 
     def _setup_ui(self):
-        group = QGroupBox("Scan Target")
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(8)
+
+        # Scan target group
+        group = QGroupBox("Scan Target")
         main_layout.addWidget(group)
 
         layout = QHBoxLayout(group)
@@ -113,6 +120,10 @@ class ScanTargetPanel(QWidget):
         self._scan_btn.setDefault(True)
         layout.addWidget(self._scan_btn)
 
+        # Advanced options (collapsible)
+        self._advanced_options = AdvancedOptionsWidget()
+        main_layout.addWidget(self._advanced_options)
+
     def _connect_signals(self):
         """Connect signals."""
         self._type_combo.currentIndexChanged.connect(self._on_type_changed)
@@ -122,6 +133,7 @@ class ScanTargetPanel(QWidget):
         self._path_input.textChanged.connect(self.path_changed)
         self._path_input.returnPressed.connect(self.scan_requested)
         self._monitor_checkbox.toggled.connect(self._on_monitor_toggled)
+        self._advanced_options.options_changed.connect(self.options_changed)
 
     def _on_monitor_toggled(self, checked: bool):
         """Handle monitor checkbox toggle."""
@@ -288,3 +300,25 @@ class ScanTargetPanel(QWidget):
         self._creds_btn.setEnabled(enabled)
         self._scan_btn.setEnabled(enabled)
         self._monitor_checkbox.setEnabled(enabled)
+
+    def get_advanced_options(self) -> Dict[str, Any]:
+        """Get advanced scanner options."""
+        return self._advanced_options.get_options()
+
+    def set_advanced_options(self, options: Dict[str, Any]):
+        """Set advanced scanner options."""
+        self._advanced_options.set_options(options)
+
+    def get_scan_config(self) -> Dict[str, Any]:
+        """Get complete scan configuration including target and advanced options."""
+        config = {
+            "target_type": self.get_target_type(),
+            "path": self.get_path(),
+            "monitoring": self.is_monitoring(),
+        }
+        if self.get_target_type() == "s3":
+            config["s3_credentials"] = self.get_s3_credentials()
+
+        # Merge in advanced options
+        config.update(self.get_advanced_options())
+        return config

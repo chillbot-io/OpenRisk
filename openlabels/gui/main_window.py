@@ -547,10 +547,15 @@ class MainWindow(QMainWindow):
     def _start_scan_in_process(self, target_type: str, path: str,
                                s3_credentials: Optional[Dict[str, str]]):
         """Start scan using in-process worker thread."""
+        # Get advanced options from scan target panel
+        options = self._scan_target.get_advanced_options()
+
         self._scan_worker = ScanWorker(
             target_type=target_type,
             path=path,
             s3_credentials=s3_credentials,
+            max_workers=options.get("workers", 8),
+            options=options,
         )
         self._scan_worker.progress.connect(self._on_scan_progress)
         self._scan_worker.result.connect(self._on_scan_result)
