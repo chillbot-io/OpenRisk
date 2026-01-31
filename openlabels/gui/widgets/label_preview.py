@@ -79,8 +79,8 @@ class LabelPreviewWidget(QWidget):
             QFrame {{
                 background: qlineargradient(
                     x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {COLORS["primary"]},
-                    stop:1 {COLORS["accent"]}
+                    stop:0 {COLORS["accent_green_dark"]},
+                    stop:1 {COLORS["accent_green_muted"]}
                 );
                 border-radius: 12px;
                 padding: 16px;
