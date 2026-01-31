@@ -139,9 +139,14 @@ class ScanWorker(QThread):
         return files
 
     def _scan_file(self, file_path: Path, client) -> Dict[str, Any]:
-        """Scan a single file and generate its OpenLabels label."""
+        """Scan a single file, generate its OpenLabels label, and embed it."""
         from openlabels.adapters.scanner import detect_file as scanner_detect  # noqa: F811
-        from openlabels.core.labels import generate_label_id, compute_content_hash_file
+        from openlabels.core.labels import (
+            generate_label_id, compute_content_hash_file,
+            LabelSet, Label, compute_value_hash,
+        )
+        from openlabels.output.embed import write_embedded_label, supports_embedded_labels
+        import time
 
         try:
             # Get file size
@@ -150,12 +155,12 @@ class ScanWorker(QThread):
             except OSError:
                 size = 0
 
-            # Generate label ID and content hash ONCE during scan
+            # Generate label ID and content hash
             label_id = generate_label_id()
             try:
                 content_hash = compute_content_hash_file(str(file_path))
             except Exception:
-                content_hash = None
+                content_hash = "000000000000"
 
             # Detect entities
             detection = scanner_detect(file_path)
@@ -166,16 +171,61 @@ class ScanWorker(QThread):
 
             # Score the file
             score_result = client.score_file(file_path)
+            tier = score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier)
+
+            # Build Label objects for embedding
+            labels = []
+            for span in detection.spans:
+                labels.append(Label(
+                    type=span.entity_type,
+                    confidence=span.confidence,
+                    detector=getattr(span, 'detector', 'pattern'),
+                    value_hash=compute_value_hash(span.text, span.entity_type),
+                    count=1,
+                ))
+
+            # Deduplicate labels by type (aggregate counts)
+            label_map = {}
+            for label in labels:
+                if label.type in label_map:
+                    label_map[label.type].count += 1
+                else:
+                    label_map[label.type] = Label(
+                        type=label.type,
+                        confidence=label.confidence,
+                        detector=label.detector,
+                        value_hash=label.value_hash,
+                        count=1,
+                    )
+
+            # Create LabelSet
+            label_set = LabelSet(
+                version=1,
+                label_id=label_id,
+                content_hash=content_hash,
+                labels=list(label_map.values()),
+                source="openlabels:1.0.0",
+                timestamp=int(time.time()),
+            )
+
+            # Auto-embed label if file type supports it
+            label_embedded = False
+            if supports_embedded_labels(file_path):
+                try:
+                    label_embedded = write_embedded_label(file_path, label_set)
+                except Exception:
+                    pass  # Embedding failed, continue without it
 
             return {
                 "path": str(file_path),
                 "size": size,
-                "label_id": label_id,           # Persistent label ID
-                "content_hash": content_hash,   # Content hash for versioning
+                "label_id": label_id,
+                "content_hash": content_hash,
+                "label_embedded": label_embedded,
                 "score": score_result.score,
-                "tier": score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier),
+                "tier": tier,
                 "entities": entities,
-                "spans": spans_data,  # Include spans for vault storage
+                "spans": spans_data,
                 "exposure": "PRIVATE",
                 "error": None,
             }
@@ -186,6 +236,7 @@ class ScanWorker(QThread):
                 "size": 0,
                 "label_id": None,
                 "content_hash": None,
+                "label_embedded": False,
                 "score": 0,
                 "tier": "UNKNOWN",
                 "entities": {},
@@ -353,10 +404,11 @@ class ScanWorker(QThread):
                     "size": size,
                     "label_id": label_id,
                     "content_hash": content_hash,
+                    "label_embedded": False,  # S3 objects need re-upload to embed
                     "score": score_result.score,
                     "tier": score_result.tier.value if hasattr(score_result.tier, 'value') else str(score_result.tier),
                     "entities": entities,
-                    "spans": spans_data,  # Include spans for vault storage
+                    "spans": spans_data,
                     "exposure": exposure,
                     "error": None,
                 }
@@ -370,6 +422,7 @@ class ScanWorker(QThread):
                 "size": size,
                 "label_id": None,
                 "content_hash": None,
+                "label_embedded": False,
                 "score": 0,
                 "tier": "UNKNOWN",
                 "entities": {},
