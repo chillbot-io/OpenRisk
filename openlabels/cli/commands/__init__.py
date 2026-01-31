@@ -14,6 +14,7 @@ Commands:
     shell       Interactive shell for exploring data risk
     health      Run system health checks
     gui         Launch the graphical user interface
+    serve       Start the scanner API server
 """
 
 from .scan import add_scan_parser, cmd_scan
@@ -31,6 +32,7 @@ from .gui import add_gui_parser, cmd_gui
 from .inventory import add_inventory_parser, cmd_inventory
 from .config import add_config_parser, cmd_config
 from .export import add_export_parser, cmd_export
+from .serve import add_serve_parser, cmd_serve
 
 __all__ = [
     # Parsers
@@ -49,6 +51,7 @@ __all__ = [
     "add_inventory_parser",
     "add_config_parser",
     "add_export_parser",
+    "add_serve_parser",
     # Commands
     "cmd_scan",
     "cmd_read",
@@ -65,4 +68,5 @@ __all__ = [
     "cmd_inventory",
     "cmd_config",
     "cmd_export",
+    "cmd_serve",
 ]
