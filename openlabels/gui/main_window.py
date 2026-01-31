@@ -216,8 +216,8 @@ class MainWindow(QMainWindow):
 
         # Right: Label Preview panel
         self._label_preview = LabelPreviewWidget()
-        self._label_preview.setMinimumWidth(340)
-        self._label_preview.setMaximumWidth(420)
+        self._label_preview.setMinimumWidth(280)
+        self._label_preview.setMaximumWidth(450)
         self._label_preview.export_requested.connect(self._on_label_export)
         self._label_preview.label_copied.connect(self._on_label_copied)
         main_splitter.addWidget(self._label_preview)

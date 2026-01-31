@@ -22,12 +22,13 @@ COLORS = {
     "text_primary": "#e6edf3",      # Primary text
     "text_secondary": "#8b949e",    # Secondary text
     "text_muted": "#6e7681",        # Muted text
-    "text_link": "#58a6ff",         # Links
+    "text_link": "#4ecca3",         # Links - visible green
 
-    # Accent colors
-    "accent_blue": "#58a6ff",       # Primary accent
-    "accent_blue_muted": "#388bfd", # Muted blue
-    "accent_green": "#3fb950",      # Success
+    # Accent colors - Deep Forest Green theme
+    "accent_green": "#4ecca3",      # Primary accent (visible green)
+    "accent_green_muted": "#2d8b6a", # Muted green for selections
+    "accent_green_dark": "#0d2818", # Deep forest (dark accent)
+    "accent_green_bright": "#6ee7b7", # Bright green for highlights
     "accent_yellow": "#d29922",     # Warning
     "accent_orange": "#db6d28",     # Caution
     "accent_red": "#f85149",        # Danger/Critical
@@ -40,11 +41,13 @@ COLORS = {
     "tier_low": "#3fb950",          # Green - acceptable
     "tier_minimal": "#6e7681",      # Gray - negligible
 
-    # Legacy compatibility aliases
-    "accent": "#58a6ff",
-    "primary": "#58a6ff",
-    "primary_dark": "#388bfd",
-    "primary_light": "#58a6ff",
+    # Legacy compatibility aliases - now green
+    "accent": "#4ecca3",
+    "accent_blue": "#4ecca3",       # Remapped to green
+    "accent_blue_muted": "#2d8b6a", # Remapped to green
+    "primary": "#4ecca3",
+    "primary_dark": "#0d2818",
+    "primary_light": "#6ee7b7",
     "success": "#3fb950",
     "warning": "#d29922",
     "danger": "#f85149",
@@ -52,7 +55,7 @@ COLORS = {
     "bg_secondary": "#161b22",
     "bg_tertiary": "#21262d",
     "text": "#e6edf3",
-    "border_focus": "#58a6ff",
+    "border_focus": "#4ecca3",
 }
 
 # Monospace font stack for technical data (hashes, IDs, code)
