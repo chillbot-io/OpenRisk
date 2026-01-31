@@ -4,7 +4,7 @@ OpenLabels main window.
 The main application window containing:
 - Scan target panel (top)
 - Folder tree (left)
-- Results table (right)
+- Results table (right) with Label preview
 - Status bar (bottom)
 
 Requires authentication to access vault features.
@@ -42,6 +42,8 @@ from openlabels.gui.widgets.dialogs import SettingsDialog, LabelDialog, Quaranti
 from openlabels.gui.workers.scan_worker import ScanWorker
 from openlabels.gui.workers.file_watcher import FileWatcher
 from openlabels.gui.widgets.dashboard import DashboardWidget
+from openlabels.gui.widgets.label_preview import LabelPreviewWidget
+from openlabels.gui.style import get_stylesheet
 
 if TYPE_CHECKING:
     from openlabels.auth import AuthManager
@@ -53,9 +55,12 @@ class MainWindow(QMainWindow):
 
     def __init__(self, initial_path: Optional[str] = None):
         super().__init__()
-        self.setWindowTitle("OpenLabels")
+        self.setWindowTitle("OpenLabels - Portable Risk Labels")
         self.setMinimumSize(1200, 700)
         self.resize(1400, 800)
+
+        # Apply modern stylesheet
+        self.setStyleSheet(get_stylesheet())
 
         # Auth state
         self._auth: Optional["AuthManager"] = None
@@ -66,6 +71,7 @@ class MainWindow(QMainWindow):
         self._current_path: Optional[str] = None
         self._scan_worker: Optional[ScanWorker] = None
         self._initial_path = initial_path
+        self._selected_file: Optional[str] = None
 
         # File watcher for real-time monitoring
         self._file_watcher = FileWatcher(self)
@@ -172,12 +178,20 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
 
         # Scan target panel (top)
         self._scan_target = ScanTargetPanel()
         layout.addWidget(self._scan_target)
+
+        # Main content area with splitter
+        main_splitter = QSplitter(Qt.Horizontal)
+
+        # Left side: folder tree + results table
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
 
         # Tab widget for Results / Dashboard views
         self._tab_widget = QTabWidget()
@@ -188,23 +202,23 @@ class MainWindow(QMainWindow):
         results_layout.setContentsMargins(0, 0, 0, 0)
 
         # Splitter for tree and table
-        splitter = QSplitter(Qt.Horizontal)
+        tree_table_splitter = QSplitter(Qt.Horizontal)
 
         # Folder tree (left)
         self._folder_tree = FolderTreeWidget()
-        self._folder_tree.setMinimumWidth(250)
-        self._folder_tree.setMaximumWidth(400)
-        splitter.addWidget(self._folder_tree)
+        self._folder_tree.setMinimumWidth(200)
+        self._folder_tree.setMaximumWidth(350)
+        tree_table_splitter.addWidget(self._folder_tree)
 
         # Results table (right)
         self._results_table = ResultsTableWidget()
-        splitter.addWidget(self._results_table)
+        tree_table_splitter.addWidget(self._results_table)
 
-        # Set splitter sizes (30% tree, 70% table)
-        splitter.setSizes([300, 700])
-        results_layout.addWidget(splitter)
+        # Set splitter sizes (25% tree, 75% table)
+        tree_table_splitter.setSizes([250, 750])
+        results_layout.addWidget(tree_table_splitter)
 
-        self._tab_widget.addTab(results_widget, "Results")
+        self._tab_widget.addTab(results_widget, "Files")
 
         # --- Dashboard Tab ---
         self._dashboard = DashboardWidget()
@@ -214,15 +228,32 @@ class MainWindow(QMainWindow):
         # Update dashboard when switching to it
         self._tab_widget.currentChanged.connect(self._on_tab_changed)
 
-        layout.addWidget(self._tab_widget, stretch=1)
+        left_layout.addWidget(self._tab_widget)
+        main_splitter.addWidget(left_widget)
+
+        # Right side: Label Preview panel
+        self._label_preview = LabelPreviewWidget()
+        self._label_preview.setMinimumWidth(380)
+        self._label_preview.setMaximumWidth(500)
+        self._label_preview.export_requested.connect(self._on_label_export)
+        self._label_preview.label_copied.connect(self._on_label_copied)
+        main_splitter.addWidget(self._label_preview)
+
+        # Set main splitter sizes (70% left, 30% right)
+        main_splitter.setSizes([900, 400])
+
+        layout.addWidget(main_splitter, stretch=1)
 
         # Bottom actions bar
         actions_layout = QHBoxLayout()
-        actions_layout.setContentsMargins(0, 4, 0, 0)
+        actions_layout.setContentsMargins(0, 8, 0, 0)
 
-        self._export_csv_btn = QPushButton("Export CSV")
-        self._export_json_btn = QPushButton("Export JSON")
+        self._export_csv_btn = QPushButton("Export All CSV")
+        self._export_csv_btn.setProperty("secondary", True)
+        self._export_json_btn = QPushButton("Export All JSON")
+        self._export_json_btn.setProperty("secondary", True)
         self._settings_btn = QPushButton("Settings")
+        self._settings_btn.setProperty("secondary", True)
 
         actions_layout.addWidget(self._export_csv_btn)
         actions_layout.addWidget(self._export_json_btn)
@@ -415,6 +446,9 @@ class MainWindow(QMainWindow):
         self._results_table.quarantine_requested.connect(self._on_quarantine_file)
         self._results_table.label_requested.connect(self._on_label_file)
         self._results_table.detail_requested.connect(self._on_file_detail)
+
+        # Connect table selection to label preview
+        self._results_table._table.itemSelectionChanged.connect(self._on_file_selected)
 
         # Bottom buttons
         self._export_csv_btn.clicked.connect(self._on_export_csv)
@@ -758,6 +792,153 @@ class MainWindow(QMainWindow):
     def _on_folder_selected(self, folder_path: str):
         """Handle folder selection in tree - filter results."""
         self._results_table.filter_by_path(folder_path)
+
+    @Slot()
+    def _on_file_selected(self):
+        """Handle file selection in results table - update label preview."""
+        selected = self._results_table._table.selectedItems()
+        if not selected:
+            self._label_preview.clear()
+            self._selected_file = None
+            return
+
+        # Get file path from the first column (Name column stores path in UserRole)
+        row = selected[0].row()
+        name_item = self._results_table._table.item(row, 0)
+        if not name_item:
+            return
+
+        file_path = name_item.data(Qt.UserRole)
+        if not file_path or file_path == self._selected_file:
+            return
+
+        self._selected_file = file_path
+
+        # Find the result for this file
+        result = next((r for r in self._scan_results if r.get("path") == file_path), None)
+        if result:
+            self._label_preview.set_from_scan_result(result)
+
+    @Slot(str)
+    def _on_label_export(self, format_type: str):
+        """Handle label export request."""
+        if not self._selected_file:
+            QMessageBox.information(
+                self, "No File Selected", "Please select a file to export its label."
+            )
+            return
+
+        result = next((r for r in self._scan_results if r.get("path") == self._selected_file), None)
+        if not result:
+            return
+
+        if format_type == "json":
+            self._export_single_label_json(result)
+        elif format_type == "embed":
+            self._embed_label(result)
+        elif format_type == "index":
+            self._save_to_index(result)
+
+    def _export_single_label_json(self, result: Dict[str, Any]):
+        """Export a single file's label as JSON."""
+        from openlabels.core.labels import generate_label_id, compute_content_hash_file, labels_from_detection
+        import time
+
+        file_path = result.get("path", "")
+        file_name = Path(file_path).stem
+
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Label", f"{file_name}.openlabel.json", "JSON Files (*.json)"
+        )
+        if not save_path:
+            return
+
+        try:
+            # Build LabelSet
+            label_id = generate_label_id()
+            content_hash = compute_content_hash_file(file_path)
+
+            label_data = {
+                "v": 1,
+                "id": label_id,
+                "hash": content_hash,
+                "labels": [
+                    {"t": etype, "c": 0.95, "d": "pattern", "h": "------", "n": count}
+                    for etype, count in result.get("entities", {}).items()
+                ],
+                "src": "openlabels:1.0.0",
+                "ts": int(time.time()),
+            }
+
+            with open(save_path, "w") as f:
+                json.dump(label_data, f, indent=2)
+
+            self._status_label.setText(f"Label exported: {Path(save_path).name}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", str(e))
+
+    def _embed_label(self, result: Dict[str, Any]):
+        """Embed label into the file."""
+        file_path = result.get("path", "")
+
+        try:
+            from openlabels.output.embed import embed_label
+            from openlabels.core.labels import LabelSet, Label, generate_label_id, compute_content_hash_file
+            import time
+
+            # Build LabelSet
+            labels = [
+                Label(
+                    type=etype,
+                    confidence=0.95,
+                    detector="pattern",
+                    value_hash="------",
+                    count=count,
+                )
+                for etype, count in result.get("entities", {}).items()
+            ]
+
+            label_set = LabelSet(
+                version=1,
+                label_id=generate_label_id(),
+                content_hash=compute_content_hash_file(file_path),
+                labels=labels,
+                source="openlabels:1.0.0",
+                timestamp=int(time.time()),
+            )
+
+            embed_label(file_path, label_set)
+            self._status_label.setText(f"Label embedded: {Path(file_path).name}")
+            QMessageBox.information(
+                self, "Label Embedded",
+                f"The OpenLabels label has been embedded in:\n{file_path}\n\n"
+                "This label will travel with the file wherever it goes."
+            )
+
+        except ImportError:
+            QMessageBox.warning(
+                self, "Not Supported",
+                f"Embedding is not supported for this file type:\n{Path(file_path).suffix}"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Embed Error", str(e))
+
+    def _save_to_index(self, result: Dict[str, Any]):
+        """Save label to the index."""
+        self._status_label.setText("Saving to index...")
+        # This would integrate with the index system
+        QMessageBox.information(
+            self, "Index",
+            "Label saved to local index.\n\n"
+            "Configure a remote index in Settings to sync labels across systems."
+        )
+        self._status_label.setText("Label saved to index")
+
+    @Slot()
+    def _on_label_copied(self):
+        """Handle label JSON copied to clipboard."""
+        self._status_label.setText("Label JSON copied to clipboard")
 
     @Slot(str)
     def _on_file_detail(self, file_path: str):

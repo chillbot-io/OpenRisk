@@ -1,13 +1,14 @@
 """
-File detail dialog - the explanation view.
+File detail dialog - the OpenLabels explanation view.
 
 Shows:
+- The portable OpenLabels label (ID, hash, entities)
 - File metadata (path, size, modified date)
-- Risk score and tier
+- Risk score and tier visualization
 - Classification sources (Macie, Purview, OpenLabels scanner, etc.)
 - Detected entities (counts visible, actual text requires vault unlock)
 - User-applied labels
-- Actions (quarantine, scan, label, etc.)
+- Actions (embed label, quarantine, rescan)
 """
 
 from typing import Optional, TYPE_CHECKING
@@ -27,37 +28,30 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QMessageBox,
     QLineEdit,
+    QTabWidget,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QColor
+
+from openlabels.gui.style import get_stylesheet, COLORS, get_tier_color
 
 if TYPE_CHECKING:
     from openlabels.auth.models import Session
     from openlabels.vault.models import FileClassification, ClassificationSource
 
 
-# Tier colors
-TIER_COLORS = {
-    "CRITICAL": "#dc3545",
-    "HIGH": "#fd7e14",
-    "MEDIUM": "#ffc107",
-    "LOW": "#28a745",
-    "MINIMAL": "#6c757d",
-    "UNKNOWN": "#adb5bd",
-}
-
-
 class FileDetailDialog(QDialog):
     """
-    Detailed view of a file's classification and detected sensitive data.
+    Detailed view of a file's OpenLabels classification.
 
-    Shows metadata and classification sources without vault unlock.
-    Sensitive text requires entering password to unlock vault.
+    Shows the portable label format prominently, along with metadata
+    and classification sources. Sensitive text requires vault unlock.
     """
 
     quarantine_requested = Signal(str)  # file_path
     label_changed = Signal(str, list)   # file_path, labels
     rescan_requested = Signal(str)      # file_path
+    embed_requested = Signal(str)       # file_path
 
     def __init__(
         self,
@@ -67,9 +61,12 @@ class FileDetailDialog(QDialog):
         session: Optional["Session"] = None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("File Details")
-        self.setMinimumSize(700, 600)
+        self.setWindowTitle("OpenLabels - File Details")
+        self.setMinimumSize(750, 650)
         self.setModal(True)
+
+        # Apply stylesheet
+        self.setStyleSheet(get_stylesheet())
 
         self._file_path = file_path
         self._classification = classification
@@ -160,44 +157,39 @@ class FileDetailDialog(QDialog):
         return group
 
     def _create_risk_section(self) -> QGroupBox:
-        """Create risk summary section."""
-        group = QGroupBox("Risk Assessment")
+        """Create risk summary section with OpenLabels branding."""
+        group = QGroupBox("OpenLabels Risk Assessment")
         layout = QHBoxLayout(group)
+
+        card_style = f"""
+            QFrame {{
+                background-color: {COLORS["bg_secondary"]};
+                border: 1px solid {COLORS["border"]};
+                border-radius: 12px;
+                padding: 16px;
+            }}
+        """
 
         # Score
         score_frame = QFrame()
-        score_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 8px;
-                padding: 12px;
-            }
-        """)
+        score_frame.setStyleSheet(card_style)
         score_layout = QVBoxLayout(score_frame)
 
         self._score_label = QLabel("--")
-        self._score_label.setFont(QFont("Arial", 32, QFont.Bold))
+        self._score_label.setFont(QFont("Arial", 36, QFont.Bold))
         self._score_label.setAlignment(Qt.AlignCenter)
         score_layout.addWidget(self._score_label)
 
         score_title = QLabel("Risk Score")
         score_title.setAlignment(Qt.AlignCenter)
-        score_title.setStyleSheet("color: #6c757d;")
+        score_title.setStyleSheet(f"color: {COLORS['text_secondary']};")
         score_layout.addWidget(score_title)
 
         layout.addWidget(score_frame)
 
         # Tier
         tier_frame = QFrame()
-        tier_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 8px;
-                padding: 12px;
-            }
-        """)
+        tier_frame.setStyleSheet(card_style)
         tier_layout = QVBoxLayout(tier_frame)
 
         self._tier_label = QLabel("--")
@@ -207,31 +199,25 @@ class FileDetailDialog(QDialog):
 
         tier_title = QLabel("Risk Tier")
         tier_title.setAlignment(Qt.AlignCenter)
-        tier_title.setStyleSheet("color: #6c757d;")
+        tier_title.setStyleSheet(f"color: {COLORS['text_secondary']};")
         tier_layout.addWidget(tier_title)
 
         layout.addWidget(tier_frame)
 
         # Entity summary
         entities_frame = QFrame()
-        entities_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 8px;
-                padding: 12px;
-            }
-        """)
+        entities_frame.setStyleSheet(card_style)
         entities_layout = QVBoxLayout(entities_frame)
 
         self._entities_count_label = QLabel("--")
-        self._entities_count_label.setFont(QFont("Arial", 32, QFont.Bold))
+        self._entities_count_label.setFont(QFont("Arial", 36, QFont.Bold))
         self._entities_count_label.setAlignment(Qt.AlignCenter)
+        self._entities_count_label.setStyleSheet(f"color: {COLORS['primary']};")
         entities_layout.addWidget(self._entities_count_label)
 
         entities_title = QLabel("Entities Found")
         entities_title.setAlignment(Qt.AlignCenter)
-        entities_title.setStyleSheet("color: #6c757d;")
+        entities_title.setStyleSheet(f"color: {COLORS['text_secondary']};")
         entities_layout.addWidget(entities_title)
 
         layout.addWidget(entities_frame)
@@ -356,7 +342,7 @@ class FileDetailDialog(QDialog):
             self._score_label.setText(str(self._classification.risk_score))
             self._tier_label.setText(self._classification.tier)
 
-            tier_color = TIER_COLORS.get(self._classification.tier, "#adb5bd")
+            tier_color = get_tier_color(self._classification.tier)
             self._tier_label.setStyleSheet(f"color: {tier_color};")
 
             total_entities = sum(self._classification.all_findings.values())
