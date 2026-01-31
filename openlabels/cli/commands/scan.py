@@ -330,7 +330,8 @@ def cmd_scan(args) -> int:
 
     elif args.format == "jsonl":
         for result in results:
-            echo(json.dumps(result.to_dict()))
+            # Use print() directly to avoid Rich console wrapping
+            print(json.dumps(result.to_dict()))
 
     # Print summary for text format
     if args.format == "text":

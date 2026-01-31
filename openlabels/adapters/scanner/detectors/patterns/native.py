@@ -65,6 +65,10 @@ class NativePatternDetector:
         if NativePatternDetector._matcher is None:
             self._initialize_matcher()
 
+    def is_available(self) -> bool:
+        """Check if detector is ready to use."""
+        return _NATIVE_AVAILABLE and self._matcher is not None
+
     @classmethod
     def _initialize_matcher(cls):
         """Initialize the Rust pattern matcher."""

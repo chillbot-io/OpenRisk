@@ -608,15 +608,15 @@ class TestSetupLogging:
         console_handlers = [h for h in logger.handlers if isinstance(h, logging.StreamHandler)]
         assert any(h.level == logging.ERROR for h in console_handlers)
 
-    def test_default_sets_info_level(self, tmp_path):
-        """Default should set INFO level."""
+    def test_default_sets_warning_level(self, tmp_path):
+        """Default should set WARNING level (quiet mode for users)."""
         from openlabels.logging_config import setup_logging
 
         setup_logging(no_audit=True)
 
         logger = logging.getLogger("openlabels")
         console_handlers = [h for h in logger.handlers if isinstance(h, logging.StreamHandler)]
-        assert any(h.level == logging.INFO for h in console_handlers)
+        assert any(h.level == logging.WARNING for h in console_handlers)
 
     def test_log_file_creates_handler(self, tmp_path):
         """log_file should create file handler."""

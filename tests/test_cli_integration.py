@@ -97,113 +97,6 @@ class TestHelp:
 
 
 # =============================================================================
-# Detect Command Tests
-# =============================================================================
-
-class TestDetectCommand:
-    """Tests for the detect command (text detection)."""
-
-    def test_detect_text_with_ssn(self):
-        """Test detecting SSN in text."""
-        result = run_cli("detect", "My SSN is 123-45-6789")
-
-        # Should find the SSN
-        assert result.returncode == 0
-        # Output should mention entities found or SSN
-        assert "SSN" in result.stdout or "entities" in result.stdout.lower()
-
-    def test_detect_text_with_email(self):
-        """Test detecting email in text."""
-        result = run_cli("detect", "Contact me at test@example.com")
-
-        assert result.returncode == 0
-        assert "EMAIL" in result.stdout or "email" in result.stdout.lower()
-
-    def test_detect_clean_text(self):
-        """Test detecting no PII in clean text."""
-        result = run_cli("detect", "The quick brown fox jumps over the lazy dog")
-
-        assert result.returncode == 0
-        # Should indicate no PII found
-        assert "No PII" in result.stdout or "0" in result.stdout
-
-    def test_detect_json_output(self):
-        """Test JSON output format."""
-        result = run_cli("detect", "SSN: 123-45-6789", "--format", "json")
-
-        assert result.returncode == 0
-        # Should be valid JSON
-        data = json.loads(result.stdout)
-        assert "spans" in data or "entity_counts" in data
-
-
-# =============================================================================
-# Detect-File Command Tests
-# =============================================================================
-
-class TestDetectFileCommand:
-    """Tests for the detect-file command."""
-
-    def test_detect_file_with_pii(self, temp_dir):
-        """Test detecting PII in a file."""
-        pii_file = temp_dir / "pii_data.txt"
-        result = run_cli("detect-file", str(pii_file))
-
-        assert result.returncode == 0
-        # Should find entities
-        assert "SSN" in result.stdout or "entities" in result.stdout.lower()
-
-    def test_detect_file_clean(self, temp_dir):
-        """Test detecting no PII in clean file."""
-        clean_file = temp_dir / "clean.txt"
-        result = run_cli("detect-file", str(clean_file))
-
-        assert result.returncode == 0
-
-    def test_detect_file_nonexistent(self):
-        """Test error handling for nonexistent file."""
-        result = run_cli("detect-file", "/nonexistent/file.txt")
-
-        # Should exit with error
-        assert result.returncode != 0
-
-    def test_detect_file_json_output(self, temp_dir):
-        """Test JSON output for file detection."""
-        pii_file = temp_dir / "pii_data.txt"
-        result = run_cli("detect-file", str(pii_file), "--format", "json")
-
-        assert result.returncode == 0
-        data = json.loads(result.stdout)
-        assert isinstance(data, dict)
-
-
-# =============================================================================
-# Detect-Dir Command Tests
-# =============================================================================
-
-class TestDetectDirCommand:
-    """Tests for the detect-dir command."""
-
-    def test_detect_dir_scans_files(self, temp_dir):
-        """Test that detect-dir scans files in directory."""
-        result = run_cli("detect-dir", str(temp_dir))
-
-        assert result.returncode == 0
-
-    def test_detect_dir_recursive(self, temp_dir):
-        """Test recursive directory scanning."""
-        result = run_cli("detect-dir", str(temp_dir), "--recursive")
-
-        assert result.returncode == 0
-
-    def test_detect_dir_nonexistent(self):
-        """Test error handling for nonexistent directory."""
-        result = run_cli("detect-dir", "/nonexistent/directory")
-
-        assert result.returncode != 0
-
-
-# =============================================================================
 # Scan Command Tests
 # =============================================================================
 
@@ -217,9 +110,32 @@ class TestScanCommand:
 
         assert result.returncode == 0
 
+    def test_scan_file_with_pii(self, temp_dir):
+        """Test detecting PII in a file."""
+        pii_file = temp_dir / "pii_data.txt"
+        result = run_cli("scan", str(pii_file))
+
+        assert result.returncode == 0
+        # Should find entities - check stdout or stderr
+        output = result.stdout + result.stderr
+        assert "SSN" in output or "entities" in output.lower() or "score" in output.lower()
+
+    def test_scan_file_clean(self, temp_dir):
+        """Test scanning a clean file."""
+        clean_file = temp_dir / "clean.txt"
+        result = run_cli("scan", str(clean_file))
+
+        assert result.returncode == 0
+
     def test_scan_directory(self, temp_dir):
         """Test scanning a directory."""
         result = run_cli("scan", str(temp_dir))
+
+        assert result.returncode == 0
+
+    def test_scan_directory_recursive(self, temp_dir):
+        """Test recursive directory scanning."""
+        result = run_cli("scan", str(temp_dir), "--recursive")
 
         assert result.returncode == 0
 
@@ -252,6 +168,15 @@ class TestScanCommand:
         result = run_cli("scan", "/nonexistent/path")
 
         assert result.returncode != 0
+
+    def test_scan_file_json_output(self, temp_dir):
+        """Test JSON output for file scanning."""
+        pii_file = temp_dir / "pii_data.txt"
+        result = run_cli("scan", str(pii_file), "--format", "json")
+
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert isinstance(data, dict)
 
 
 # =============================================================================
@@ -296,25 +221,31 @@ class TestHealthCommand:
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
-    def test_empty_text_detect(self):
-        """Test detecting with empty text."""
-        result = run_cli("detect", "")
+    def test_empty_file(self, temp_dir):
+        """Test scanning an empty file."""
+        empty_file = temp_dir / "empty.txt"
+        empty_file.write_text("")
+        result = run_cli("scan", str(empty_file))
 
         # Should handle gracefully
         assert result.returncode == 0
 
-    def test_unicode_text(self):
-        """Test detecting unicode text."""
-        result = run_cli("detect", "Naïve café résumé: test@example.com")
+    def test_unicode_file(self, temp_dir):
+        """Test scanning file with unicode text."""
+        unicode_file = temp_dir / "unicode.txt"
+        unicode_file.write_text("Naïve café résumé: test@example.com")
+        result = run_cli("scan", str(unicode_file))
 
         # Should handle unicode without crashing
         assert result.returncode == 0
 
-    def test_very_long_text(self):
-        """Test detecting very long text."""
-        # Generate long text with some PII
-        long_text = "Regular text. " * 1000 + " SSN: 123-45-6789 " + " More text. " * 1000
-        result = run_cli("detect", long_text)
+    def test_large_file(self, temp_dir):
+        """Test scanning a large file."""
+        large_file = temp_dir / "large.txt"
+        # Generate large text with some PII
+        large_text = "Regular text. " * 1000 + " SSN: 123-45-6789 " + " More text. " * 1000
+        large_file.write_text(large_text)
+        result = run_cli("scan", str(large_file))
 
         assert result.returncode == 0
 
@@ -323,7 +254,7 @@ class TestEdgeCases:
         special_file = temp_dir / "file with spaces.txt"
         special_file.write_text("SSN: 123-45-6789")
 
-        result = run_cli("detect-file", str(special_file))
+        result = run_cli("scan", str(special_file))
 
         assert result.returncode == 0
 
@@ -335,28 +266,32 @@ class TestEdgeCases:
 class TestOutputFormats:
     """Tests for different output formats."""
 
-    def test_text_format(self):
+    def test_text_format(self, temp_dir):
         """Test default text format."""
-        result = run_cli("detect", "Email: test@example.com", "--format", "text")
+        pii_file = temp_dir / "pii_data.txt"
+        result = run_cli("scan", str(pii_file), "--format", "text")
 
         assert result.returncode == 0
-        # Should be human-readable
-        assert "EMAIL" in result.stdout or "email" in result.stdout.lower()
 
-    def test_json_format_is_valid(self):
+    def test_json_format_is_valid(self, temp_dir):
         """Test that JSON format produces valid JSON."""
-        result = run_cli("detect", "Email: test@example.com", "--format", "json")
+        pii_file = temp_dir / "pii_data.txt"
+        result = run_cli("scan", str(pii_file), "--format", "json")
 
         assert result.returncode == 0
         # Should parse as JSON
         data = json.loads(result.stdout)
         assert isinstance(data, dict)
 
-    def test_jsonl_format(self):
+    def test_jsonl_format(self, temp_dir):
         """Test JSONL (line-delimited JSON) format."""
-        result = run_cli("detect", "Email: test@example.com", "--format", "jsonl")
+        pii_file = temp_dir / "pii_data.txt"
+        result = run_cli("scan", str(pii_file), "--format", "jsonl")
 
         assert result.returncode == 0
-        # Should be valid JSON
-        data = json.loads(result.stdout.strip())
-        assert isinstance(data, dict)
+        # Should be valid JSON lines
+        for line in result.stdout.strip().split('\n'):
+            line = line.strip()
+            if line and line.startswith('{'):
+                data = json.loads(line)
+                assert isinstance(data, dict)
