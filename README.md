@@ -1,40 +1,40 @@
-# OpenLabels
+# < OpenLabels >
 
-Universal Data Risk Scoring - **Labels are the primitive, risk is derived.**
+Scan files for sensitive data. Score risk.
 
-OpenLabels detects sensitive data (PII/PHI) across files and data sources, assigns portable labels, and computes context-aware risk scores.
+OpenLabels detects PII/PHI in your files (SSNs, credit cards, health records, API keys) and computes a risk score 0-100.
 
-## Installation
+## Install
+
+### Windows
+
+**[Download OpenLabels-0.1.0-Setup.exe](https://github.com/openlabels/openlabels/releases/latest)**
+
+Double-click to install. Launches a desktop GUI for scanning files.
+
+### Linux / macOS
 
 ```bash
 pip install openlabels
 
-# With optional features
-pip install openlabels[pdf,office,ocr]  # Document scanning
-pip install openlabels[all]              # Everything
+# With document support (PDF, Word, Excel, images)
+pip install openlabels[pdf,office,images,ocr]
 ```
-
-**Requirements:** Python 3.9+
 
 ## Quick Start
 
-### CLI
-
 ```bash
-# Scan a directory
-openlabels scan ./data
+openlabels scan ./data           # Scan a directory
+openlabels scan ./data -r        # Scan recursively
+openlabels report ./data         # Generate HTML report
+openlabels gui                   # Launch desktop GUI
+```
 
-# Find high-risk files
-openlabels find ./data --where "score >= 70"
-
-# Generate HTML report
-openlabels report ./data --format html --output report.html
-
-# Visual risk heatmap
-openlabels heatmap ./data --depth 3
-
-# Quarantine risky files
-openlabels quarantine ./data ./quarantine --min-score 80
+Output:
+```
+./data/patients.csv:  85 (CRITICAL) [SSN(12), DIAGNOSIS(3)]
+./data/contacts.xlsx: 28 (LOW)      [EMAIL(45), PHONE(23)]
+./data/notes.pdf:      0 (MINIMAL)  []
 ```
 
 ### Python API
@@ -44,17 +44,10 @@ from openlabels import Client
 
 client = Client()
 
-# Score a single file
-result = client.score_file("patient_records.csv")
+# Score a file
+result = client.score_file("patients.csv")
 print(f"Risk: {result.score}/100 ({result.tier})")
-
-# Scan directory
-for item in client.scan("/data", recursive=True):
-    if item.score >= 70:
-        print(f"High risk: {item.path}")
-
-# Generate report
-client.report("/data", format="html", output="report.html")
+# Risk: 85/100 (CRITICAL)
 ```
 
 ## Features

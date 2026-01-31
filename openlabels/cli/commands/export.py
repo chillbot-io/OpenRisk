@@ -189,11 +189,12 @@ def cmd_export(args) -> int:
     return 0
 
 
-def add_export_parser(subparsers):
+def add_export_parser(subparsers, hidden=False):
     """Add the export subparser."""
+    import argparse
     parser = subparsers.add_parser(
         "export",
-        help="Export labeled file results to CSV or JSON",
+        help=argparse.SUPPRESS if hidden else "Export labeled file results to CSV or JSON",
     )
     parser.add_argument(
         "path",

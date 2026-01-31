@@ -363,11 +363,12 @@ def cmd_shell(args) -> int:
     return 0
 
 
-def add_shell_parser(subparsers):
+def add_shell_parser(subparsers, hidden=False):
     """Add the shell subparser."""
+    import argparse
     parser = subparsers.add_parser(
         "shell",
-        help="Interactive shell for exploring data risk",
+        help=argparse.SUPPRESS if hidden else "Interactive shell for exploring data risk",
     )
     parser.add_argument(
         "source",

@@ -265,11 +265,12 @@ def cmd_encrypt(args) -> int:
     return 0 if not errors else 1
 
 
-def add_encrypt_parser(subparsers):
+def add_encrypt_parser(subparsers, hidden=False):
     """Add the encrypt subparser."""
+    import argparse
     parser = subparsers.add_parser(
         "encrypt",
-        help="Encrypt matching files",
+        help=argparse.SUPPRESS if hidden else "Encrypt matching files",
     )
     parser.add_argument(
         "source",

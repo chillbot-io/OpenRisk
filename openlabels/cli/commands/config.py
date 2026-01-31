@@ -192,11 +192,12 @@ def cmd_config(args) -> int:
     return 0
 
 
-def add_config_parser(subparsers):
+def add_config_parser(subparsers, hidden=False):
     """Add the config subparser."""
+    import argparse
     parser = subparsers.add_parser(
         "config",
-        help="View and edit configuration",
+        help=argparse.SUPPRESS if hidden else "View and edit configuration",
     )
     parser.add_argument(
         "--show", "-s",
