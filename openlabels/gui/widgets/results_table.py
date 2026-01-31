@@ -143,6 +143,30 @@ class ResultsTableWidget(QWidget):
         if not self._batch_mode:
             self._table.setSortingEnabled(True)
 
+    def add_results_batch(self, results: List[Dict[str, Any]]):
+        """Add multiple results efficiently in a single batch.
+
+        This is more efficient than calling add_result() repeatedly
+        because it only updates the display once at the end.
+        """
+        if not results:
+            return
+
+        # Store all results
+        self._all_results.extend(results)
+
+        # Disable sorting during bulk insert
+        was_sorting_enabled = self._table.isSortingEnabled()
+        self._table.setSortingEnabled(False)
+
+        # Add all rows
+        for result in results:
+            self._add_row(result)
+
+        # Restore sorting state
+        if was_sorting_enabled and not self._batch_mode:
+            self._table.setSortingEnabled(True)
+
     def _add_row(self, result: Dict[str, Any]):
         """Add a row to the table for a result."""
         # Check if it passes current filter
