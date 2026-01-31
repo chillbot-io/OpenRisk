@@ -42,6 +42,7 @@ class ResultsTableWidget(QWidget):
     quarantine_requested = Signal(str)  # file_path
     label_requested = Signal(str)       # file_path
     detail_requested = Signal(str)      # file_path (double-click)
+    fp_reported = Signal(str, dict)     # file_path, result dict (for false positive reporting)
 
     COLUMNS = [
         ("Name", 140),
@@ -51,7 +52,7 @@ class ResultsTableWidget(QWidget):
         ("Tier", 55),
         ("Label", 60),
         ("Entities", 100),
-        ("Actions", 80),
+        ("Actions", 110),
     ]
 
     def __init__(self, parent=None):
@@ -249,21 +250,30 @@ class ResultsTableWidget(QWidget):
         # Actions (col 7) - widget with buttons
         actions_widget = QWidget()
         actions_layout = QHBoxLayout(actions_widget)
-        actions_layout.setContentsMargins(4, 2, 4, 2)
-        actions_layout.setSpacing(4)
+        actions_layout.setContentsMargins(2, 2, 2, 2)
+        actions_layout.setSpacing(2)
 
         quarantine_btn = QPushButton("Q")
-        quarantine_btn.setToolTip("Quarantine")
-        quarantine_btn.setMaximumWidth(30)
+        quarantine_btn.setToolTip("Quarantine this file")
+        quarantine_btn.setFixedWidth(28)
+        quarantine_btn.setStyleSheet("font-weight: bold;")
         quarantine_btn.clicked.connect(lambda checked, p=path: self.quarantine_requested.emit(p))
 
         label_btn = QPushButton("L")
-        label_btn.setToolTip("Add Label")
-        label_btn.setMaximumWidth(30)
+        label_btn.setToolTip("Add custom label")
+        label_btn.setFixedWidth(28)
+        label_btn.setStyleSheet("font-weight: bold;")
         label_btn.clicked.connect(lambda checked, p=path: self.label_requested.emit(p))
+
+        fp_btn = QPushButton("FP")
+        fp_btn.setToolTip("Report false positive")
+        fp_btn.setFixedWidth(28)
+        fp_btn.setStyleSheet("font-weight: bold; color: #d29922;")
+        fp_btn.clicked.connect(lambda checked, p=path, r=result: self.fp_reported.emit(p, r))
 
         actions_layout.addWidget(quarantine_btn)
         actions_layout.addWidget(label_btn)
+        actions_layout.addWidget(fp_btn)
         actions_layout.addStretch()
 
         self._table.setCellWidget(row, 7, actions_widget)

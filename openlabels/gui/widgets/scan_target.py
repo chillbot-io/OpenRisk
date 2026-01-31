@@ -296,7 +296,7 @@ class ScanTargetPanel(QWidget):
     def get_advanced_options(self) -> Dict[str, Any]:
         """Get advanced scanner options (defaults for now)."""
         return {
-            "max_file_size": 100 * 1024 * 1024,  # 100MB
+            "max_file_size_mb": 50,  # 50MB default limit
             "scan_archives": True,
             "follow_symlinks": False,
             "include_hidden": False,

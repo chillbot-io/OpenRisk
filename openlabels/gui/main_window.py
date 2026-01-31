@@ -453,6 +453,7 @@ class MainWindow(QMainWindow):
         self._results_table.quarantine_requested.connect(self._on_quarantine_file)
         self._results_table.label_requested.connect(self._on_label_file)
         self._results_table.detail_requested.connect(self._on_file_detail)
+        self._results_table.fp_reported.connect(self._on_report_false_positive)
 
         # Connect table selection to label preview
         self._results_table._table.itemSelectionChanged.connect(self._on_file_selected)
@@ -1144,6 +1145,59 @@ class MainWindow(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Label Error", str(e))
+
+    @Slot(str, dict)
+    def _on_report_false_positive(self, file_path: str, result: Dict[str, Any]):
+        """Handle false positive report for a file."""
+        from openlabels.gui.widgets.fp_dialog import FalsePositiveDialog
+
+        spans = result.get("spans", [])
+        entities = result.get("entities", {})
+
+        if not spans and not entities:
+            QMessageBox.information(
+                self, "No Entities",
+                "No detected entities to report as false positives."
+            )
+            return
+
+        dialog = FalsePositiveDialog(self, file_path, spans, entities)
+        if dialog.exec():
+            allowlist_entries = dialog.get_allowlist_entries()
+            if allowlist_entries:
+                self._add_to_allowlist(allowlist_entries)
+                self._status_label.setText(
+                    f"Added {len(allowlist_entries)} pattern(s) to allowlist"
+                )
+
+    def _add_to_allowlist(self, entries: List[Dict[str, Any]]):
+        """Add entries to the false positive allowlist."""
+        import json
+        allowlist_path = Path.home() / ".openlabels" / "allowlist.json"
+        allowlist_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load existing allowlist
+        if allowlist_path.exists():
+            try:
+                with open(allowlist_path, "r") as f:
+                    allowlist = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                allowlist = {"patterns": [], "exact": []}
+        else:
+            allowlist = {"patterns": [], "exact": []}
+
+        # Add new entries
+        for entry in entries:
+            if entry.get("type") == "pattern":
+                if entry["value"] not in allowlist["patterns"]:
+                    allowlist["patterns"].append(entry["value"])
+            else:
+                if entry["value"] not in allowlist["exact"]:
+                    allowlist["exact"].append(entry["value"])
+
+        # Save updated allowlist
+        with open(allowlist_path, "w") as f:
+            json.dump(allowlist, f, indent=2)
 
     @Slot()
     def _on_export_csv(self):
