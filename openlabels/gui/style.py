@@ -315,9 +315,8 @@ QHeaderView::section:hover {{
    TAB WIDGET
    ============================================ */
 QTabWidget::pane {{
-    border: 1px solid {COLORS["border"]};
-    border-radius: 4px;
-    background-color: {COLORS["bg_surface"]};
+    border: none;
+    background-color: transparent;
     top: -1px;
 }}
 
