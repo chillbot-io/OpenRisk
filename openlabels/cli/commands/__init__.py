@@ -3,6 +3,7 @@ OpenLabels CLI commands.
 
 Commands:
     scan        Scan files for sensitive data and compute risk scores
+    read        Read embedded label from a file
     find        Find files matching filter criteria
     quarantine  Move matching files to quarantine location
     tag         Apply OpenLabels tags to files
@@ -16,6 +17,7 @@ Commands:
 """
 
 from .scan import add_scan_parser, cmd_scan
+from .read import add_read_parser, cmd_read
 from .find import add_find_parser, cmd_find
 from .quarantine import add_quarantine_parser, cmd_quarantine
 from .tag import add_tag_parser, cmd_tag
@@ -33,6 +35,7 @@ from .export import add_export_parser, cmd_export
 __all__ = [
     # Parsers
     "add_scan_parser",
+    "add_read_parser",
     "add_find_parser",
     "add_quarantine_parser",
     "add_tag_parser",
@@ -48,6 +51,7 @@ __all__ = [
     "add_export_parser",
     # Commands
     "cmd_scan",
+    "cmd_read",
     "cmd_find",
     "cmd_quarantine",
     "cmd_tag",
