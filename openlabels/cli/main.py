@@ -107,6 +107,7 @@ Examples:
         add_heatmap_parser,
         add_gui_parser,
         add_health_parser,
+        add_serve_parser,
     )
 
     add_scan_parser(subparsers)
@@ -118,6 +119,7 @@ Examples:
     add_heatmap_parser(subparsers)
     add_gui_parser(subparsers)
     add_health_parser(subparsers)
+    add_serve_parser(subparsers)
 
     args = parser.parse_args(argv)
 
