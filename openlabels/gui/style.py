@@ -641,3 +641,43 @@ def get_tier_color(tier: str) -> str:
 def get_mono_font() -> str:
     """Get the monospace font family string."""
     return MONO_FONT
+
+
+def create_font(family: str, size: int, weight: int = 500, monospace: bool = False) -> "QFont":
+    """Create a QFont with proper antialiasing for crisp rendering.
+
+    This configures the font with the same quality settings as web browsers,
+    including proper antialiasing and hinting for sharp, full-bodied text.
+
+    Args:
+        family: Font family name (e.g., "IBM Plex Sans")
+        size: Font size in points
+        weight: Font weight (400=normal, 500=medium, 600=semibold, 700=bold)
+        monospace: If True, use monospace font stack
+
+    Returns:
+        QFont configured with high-quality rendering
+    """
+    from PySide6.QtGui import QFont
+
+    # Map common weight values to QFont.Weight enum
+    weight_map = {
+        400: QFont.Weight.Normal,
+        500: QFont.Weight.Medium,
+        550: QFont.Weight.Medium,  # Qt doesn't have 550, use Medium
+        600: QFont.Weight.DemiBold,
+        700: QFont.Weight.Bold,
+    }
+    qt_weight = weight_map.get(weight, QFont.Weight.Medium)
+
+    font = QFont(family, size)
+    font.setWeight(qt_weight)
+
+    # Enable high-quality antialiasing (like browser ClearType/FreeType rendering)
+    font.setStyleStrategy(
+        QFont.StyleStrategy.PreferAntialias | QFont.StyleStrategy.PreferQuality
+    )
+    # Full hinting for sharp pixel alignment
+    font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+
+    return font
