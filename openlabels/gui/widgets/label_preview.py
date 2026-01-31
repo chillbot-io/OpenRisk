@@ -90,7 +90,7 @@ class LabelPreviewWidget(QWidget):
 
         # Logo/icon
         logo = QLabel("<OL>")
-        logo.setFont(QFont("JetBrains Mono, Consolas, monospace", 16, QFont.Bold))
+        logo.setFont(QFont("IBM Plex Mono, Consolas, monospace", 14, QFont.Bold))
         logo.setStyleSheet("color: white; background: transparent;")
         layout.addWidget(logo)
 
@@ -99,8 +99,8 @@ class LabelPreviewWidget(QWidget):
         title_layout.setSpacing(2)
 
         title = QLabel("OpenLabels")
-        title.setFont(QFont("Inter, SF Pro Display, sans-serif", 15, QFont.Bold))
-        title.setStyleSheet("color: white; background: transparent; letter-spacing: -0.3px;")
+        title.setFont(QFont("IBM Plex Sans, sans-serif", 14, QFont.Bold))
+        title.setStyleSheet("color: white; background: transparent;")
         title_layout.addWidget(title)
 
         subtitle = QLabel("Portable Risk Label")
@@ -112,7 +112,7 @@ class LabelPreviewWidget(QWidget):
 
         # Tier badge (will be updated)
         self._tier_badge = QLabel("--")
-        self._tier_badge.setFont(QFont("Inter, sans-serif", 10, QFont.Bold))
+        self._tier_badge.setFont(QFont("IBM Plex Sans, sans-serif", 10, QFont.Bold))
         self._tier_badge.setMinimumWidth(70)
         self._tier_badge.setStyleSheet("""
             background-color: rgba(255,255,255,0.2);
@@ -151,7 +151,7 @@ class LabelPreviewWidget(QWidget):
         id_row.addWidget(id_label)
 
         self._label_id = QLabel("ol_____________")
-        self._label_id.setFont(QFont("JetBrains Mono, Consolas, monospace", 13, QFont.Bold))
+        self._label_id.setFont(QFont("IBM Plex Mono, Consolas, monospace", 12, QFont.Bold))
         self._label_id.setStyleSheet(f"color: {COLORS['primary']}; background: transparent;")
         self._label_id.setTextInteractionFlags(Qt.TextSelectableByMouse)
         id_row.addWidget(self._label_id)
@@ -173,7 +173,7 @@ class LabelPreviewWidget(QWidget):
         row1 = QHBoxLayout()
         row1.addWidget(self._create_property_label("Content Hash"))
         self._content_hash = self._create_value_label("____________")
-        self._content_hash.setFont(QFont("JetBrains Mono, Consolas, monospace", 10))
+        self._content_hash.setFont(QFont("IBM Plex Mono, Consolas, monospace", 10))
         row1.addWidget(self._content_hash)
         row1.addStretch()
         props_layout.addLayout(row1)
@@ -182,7 +182,7 @@ class LabelPreviewWidget(QWidget):
         row2 = QHBoxLayout()
         row2.addWidget(self._create_property_label("Risk Score"))
         self._score = self._create_value_label("--")
-        self._score.setFont(QFont("Inter, sans-serif", 13, QFont.Bold))
+        self._score.setFont(QFont("IBM Plex Sans, sans-serif", 13, QFont.Bold))
         row2.addWidget(self._score)
         row2.addStretch()
         props_layout.addLayout(row2)
@@ -293,7 +293,7 @@ class LabelPreviewWidget(QWidget):
         # JSON text area (hidden by default)
         self._json_text = QTextEdit()
         self._json_text.setReadOnly(True)
-        self._json_text.setFont(QFont("JetBrains Mono, Consolas, monospace", 10))
+        self._json_text.setFont(QFont("IBM Plex Mono, Consolas, monospace", 10))
         self._json_text.setMaximumHeight(200)
         self._json_text.setVisible(False)
         self._json_text.setStyleSheet(f"""
