@@ -30,7 +30,7 @@ class FolderTreeWidget(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(0, 0, 4, 0)  # Small right margin for panel separation
         layout.setSpacing(0)
 
         # Tree view - no header for cleaner look

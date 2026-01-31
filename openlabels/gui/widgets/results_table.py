@@ -63,7 +63,7 @@ class ResultsTableWidget(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(0, 0, 4, 0)  # Small right margin for panel separation
         layout.setSpacing(4)
 
         # Filter bar - search input spans to left edge for symmetry

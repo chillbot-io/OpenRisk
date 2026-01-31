@@ -51,8 +51,8 @@ class LabelPreviewWidget(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setContentsMargins(4, 0, 0, 0)  # Small left margin for panel separation
+        layout.setSpacing(12)
 
         # Header with OpenLabels branding
         header = self._create_header()
@@ -165,43 +165,53 @@ class LabelPreviewWidget(QWidget):
         divider.setStyleSheet(f"background-color: {COLORS['border']};")
         layout.addWidget(divider)
 
-        # Grid of label properties
-        grid = QGridLayout()
-        grid.setSpacing(12)
+        # Properties in simple 2-column layout (stacks better when narrow)
+        props_layout = QVBoxLayout()
+        props_layout.setSpacing(8)
 
-        # Content Hash
-        grid.addWidget(self._create_property_label("Content Hash"), 0, 0)
+        # Row 1: Content Hash
+        row1 = QHBoxLayout()
+        row1.addWidget(self._create_property_label("Content Hash"))
         self._content_hash = self._create_value_label("____________")
-        self._content_hash.setFont(QFont("Consolas, Monaco, monospace", 12))
-        grid.addWidget(self._content_hash, 0, 1)
+        self._content_hash.setFont(QFont("Consolas, Monaco, monospace", 11))
+        row1.addWidget(self._content_hash)
+        row1.addStretch()
+        props_layout.addLayout(row1)
 
-        # Timestamp
-        grid.addWidget(self._create_property_label("Scanned"), 1, 0)
-        self._timestamp = self._create_value_label("--")
-        grid.addWidget(self._timestamp, 1, 1)
-
-        # Source
-        grid.addWidget(self._create_property_label("Source"), 2, 0)
-        self._source = self._create_value_label("openlabels")
-        grid.addWidget(self._source, 2, 1)
-
-        # Score
-        grid.addWidget(self._create_property_label("Risk Score"), 0, 2)
+        # Row 2: Risk Score
+        row2 = QHBoxLayout()
+        row2.addWidget(self._create_property_label("Risk Score"))
         self._score = self._create_value_label("--")
-        self._score.setFont(QFont("Arial", 16, QFont.Bold))
-        grid.addWidget(self._score, 0, 3)
+        self._score.setFont(QFont("Arial", 14, QFont.Bold))
+        row2.addWidget(self._score)
+        row2.addStretch()
+        props_layout.addLayout(row2)
 
-        # Entity count
-        grid.addWidget(self._create_property_label("Entities"), 1, 2)
+        # Row 3: Scanned / Entities
+        row3 = QHBoxLayout()
+        row3.addWidget(self._create_property_label("Scanned"))
+        self._timestamp = self._create_value_label("--")
+        row3.addWidget(self._timestamp)
+        row3.addSpacing(16)
+        row3.addWidget(self._create_property_label("Entities"))
         self._entity_count = self._create_value_label("--")
-        grid.addWidget(self._entity_count, 1, 3)
+        row3.addWidget(self._entity_count)
+        row3.addStretch()
+        props_layout.addLayout(row3)
 
-        # Embedded status
-        grid.addWidget(self._create_property_label("Embedded"), 2, 2)
+        # Row 4: Source / Embedded
+        row4 = QHBoxLayout()
+        row4.addWidget(self._create_property_label("Source"))
+        self._source = self._create_value_label("openlabels")
+        row4.addWidget(self._source)
+        row4.addSpacing(16)
+        row4.addWidget(self._create_property_label("Embedded"))
         self._embedded_status = self._create_value_label("--")
-        grid.addWidget(self._embedded_status, 2, 3)
+        row4.addWidget(self._embedded_status)
+        row4.addStretch()
+        props_layout.addLayout(row4)
 
-        layout.addLayout(grid)
+        layout.addLayout(props_layout)
 
         # Divider
         divider2 = QFrame()
