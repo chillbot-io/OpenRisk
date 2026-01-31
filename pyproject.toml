@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
 
 [project]
 name = "openlabels"
@@ -98,13 +98,6 @@ Documentation = "https://openlabels.dev/docs"
 Repository = "https://github.com/openlabels/openlabels"
 Issues = "https://github.com/openlabels/openlabels/issues"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["openlabels*"]
-
-[tool.setuptools.package-data]
-openlabels = ["py.typed"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py39"
@@ -129,3 +122,13 @@ addopts = "-p no:pytest_qt -p no:pytest_xvfb"
 markers = [
     "gui: mark test as requiring Qt GUI",
 ]
+
+[tool.maturin]
+# Build the Rust extension as openlabels._rust
+module-name = "openlabels._rust"
+# Include Python source
+python-source = "."
+# Build features
+features = ["pyo3/extension-module"]
+# Compatibility for Linux
+compatibility = "manylinux2014"

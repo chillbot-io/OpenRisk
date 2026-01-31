@@ -54,3 +54,4 @@ Thumbs.db
 calibration/scoring_results.jsonl
 calibration/labeling_sheet.csv
 calibration/analysis_summary.json
+target/
