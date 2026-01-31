@@ -5,7 +5,7 @@
 
 use once_cell::sync::OnceCell;
 use pyo3::prelude::*;
-use regex::{Regex, RegexSet};
+use regex::{Regex, RegexSet, RegexSetBuilder};
 use std::collections::HashMap;
 
 /// Global compiled patterns (initialized once, reused forever)
@@ -153,8 +153,11 @@ fn compile_patterns(patterns: &[(String, String, f32, usize)]) -> CompiledPatter
         }
     }
 
-    // Build RegexSet from successful patterns
-    let regex_set = RegexSet::new(&successful_patterns).expect("Failed to build RegexSet");
+    // Build RegexSet from successful patterns with increased size limit
+    let regex_set = RegexSetBuilder::new(&successful_patterns)
+        .size_limit(50 * 1024 * 1024)  // 50MB limit (default is 10MB)
+        .build()
+        .expect("Failed to build RegexSet");
 
     CompiledPatterns {
         regex_set,
