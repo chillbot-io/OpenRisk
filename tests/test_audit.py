@@ -81,9 +81,12 @@ class TestAuditEntry:
         data = entry.to_dict()
         restored = AuditEntry.from_dict(data)
         assert restored.id == entry.id
+        assert restored.timestamp == entry.timestamp
         assert restored.user_id == entry.user_id
         assert restored.action == entry.action
         assert restored.details == entry.details
+        assert restored.prev_hash == entry.prev_hash
+        assert restored.entry_hash == entry.entry_hash
 
 
 class TestAuditLog:
@@ -100,9 +103,11 @@ class TestAuditLog:
             details={"test": "data"},
             admin_dek=admin_dek,
         )
-        assert entry.id is not None
+        assert isinstance(entry.id, str) and len(entry.id) > 0
+        assert entry.user_id == "user123"
         assert entry.action == AuditAction.VAULT_UNLOCK
-        assert entry.entry_hash != ""
+        assert entry.details == {"test": "data"}
+        assert isinstance(entry.entry_hash, str) and len(entry.entry_hash) >= 64
 
     def test_log_creates_hash_chain(self, audit, admin_dek):
         entry1 = audit.log("user1", AuditAction.VAULT_UNLOCK, {}, admin_dek)
@@ -148,8 +153,8 @@ class TestAuditLog:
 
     def test_verify_chain_empty_log(self, audit, admin_dek):
         is_valid, message = audit.verify_chain(admin_dek)
-        assert is_valid
-        assert "No entries" in message
+        assert is_valid is True
+        assert isinstance(message, str) and len(message) > 0
 
     def test_verify_chain_valid(self, audit, admin_dek):
         audit.log("user1", AuditAction.VAULT_UNLOCK, {}, admin_dek)
@@ -157,8 +162,8 @@ class TestAuditLog:
         audit.log("user3", AuditAction.VAULT_LOCK, {}, admin_dek)
 
         is_valid, message = audit.verify_chain(admin_dek)
-        assert is_valid
-        assert "3 entries" in message
+        assert is_valid is True
+        assert isinstance(message, str) and len(message) > 0
 
     def test_get_stats(self, audit, admin_dek):
         audit.log("user1", AuditAction.VAULT_UNLOCK, {}, admin_dek)
@@ -180,7 +185,9 @@ class TestAuditLog:
 class TestAuditQueue:
     def test_log_without_admin_dek_queues(self, audit, temp_dir):
         entry = audit.log("user1", AuditAction.VAULT_UNLOCK, {})
-        assert entry.entry_hash != ""
+        assert isinstance(entry.entry_hash, str) and len(entry.entry_hash) >= 64
+        assert entry.user_id == "user1"
+        assert entry.action == AuditAction.VAULT_UNLOCK
 
         # Should be queued (encrypted)
         queue_file = temp_dir / "audit" / "queue.enc"

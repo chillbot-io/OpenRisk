@@ -159,11 +159,10 @@ class TestFileCollectorCollect:
         collector = FileCollector()
         metadata = collector.collect(str(test_file))
 
-        assert metadata.created_at is not None
-        assert metadata.modified_at is not None
-        assert metadata.accessed_at is not None
-        # Timestamps should be ISO format
-        assert "T" in metadata.modified_at
+        # Timestamps should be ISO format strings
+        assert isinstance(metadata.created_at, str) and "T" in metadata.created_at
+        assert isinstance(metadata.modified_at, str) and "T" in metadata.modified_at
+        assert isinstance(metadata.accessed_at, str) and "T" in metadata.accessed_at
 
     def test_collect_partial_hash(self, tmp_path):
         """Should compute partial hash when enabled."""
@@ -173,7 +172,7 @@ class TestFileCollectorCollect:
         collector = FileCollector(compute_partial_hash=True)
         metadata = collector.collect(str(test_file))
 
-        assert metadata.partial_hash is not None
+        assert isinstance(metadata.partial_hash, str)
         assert len(metadata.partial_hash) == 16  # Short hash
 
     def test_collect_full_hash(self, tmp_path):
@@ -312,7 +311,8 @@ class TestPermissionCollection:
         collector = FileCollector()
         metadata = collector.collect(str(test_file))
 
-        assert metadata.mode is not None
+        assert isinstance(metadata.mode, int)
+        assert metadata.mode & 0o777 == 0o644
 
     @pytest.mark.skipif(platform.system() == "Windows", reason="POSIX permissions")
     def test_world_readable_is_org_wide(self, tmp_path):
@@ -518,9 +518,8 @@ class TestCollectDirectory:
         results = list(collect_directory(str(tmp_path)))
 
         # Only the target should be collected, not the symlink
-        names = [r.name for r in results]
-        assert "target.txt" in names
-        # Symlinks are skipped silently
+        assert len(results) == 1
+        assert results[0].name == "target.txt"
 
 
 class TestTOCTOUProtection:
@@ -535,7 +534,8 @@ class TestTOCTOUProtection:
 
         # This should work - file is regular
         metadata = collector.collect(str(test_file))
-        assert metadata is not None
+        assert metadata.name == "test.txt"
+        assert metadata.size_bytes == 7  # "content" is 7 bytes
 
     def test_rejects_symlink_even_to_regular_file(self, tmp_path):
         """Should reject symlinks even when they point to regular files."""

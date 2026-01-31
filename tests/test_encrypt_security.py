@@ -142,11 +142,12 @@ class TestValidateRecipientGPG:
         assert validate_recipient(long_recipient, "gpg") is False
 
     def test_accepts_max_length_recipient(self):
-        """500-character recipient should be accepted."""
-        max_recipient = "a" * 500 + "@example.com"
-        # This will fail because the pattern doesn't match
-        # but length check passes
-        assert len(max_recipient) <= 512  # Just under limit with domain
+        """500-character recipient (valid email) should be accepted."""
+        # Create a valid email that's close to 500 chars
+        local_part = "a" * 480
+        max_recipient = f"{local_part}@test.com"
+        assert len(max_recipient) <= 500
+        assert validate_recipient(max_recipient, "gpg") is True
 
 
 class TestValidateRecipientAge:
@@ -256,12 +257,9 @@ class TestValidateFilePath:
 
     def test_rejects_path_with_backtick(self, tmp_path):
         """Path with backtick should be rejected."""
-        # Can't actually create file with backtick on some systems
-        # Test the string validation directly
-        path = Path("`command`.txt")
-        # The metacharacter check happens before file existence check
-        path_str = str(path)
-        assert any(c in path_str for c in SHELL_METACHARACTERS) or validate_file_path(path) is False
+        # Test that path containing backtick is rejected by validation
+        path = Path(str(tmp_path) + "/`command`.txt")
+        assert validate_file_path(path) is False
 
     def test_rejects_path_with_dollar(self, tmp_path):
         """Path with dollar sign should be rejected."""
@@ -561,16 +559,19 @@ class TestEdgeCases:
         # Unicode email would fail pattern
         assert validate_recipient("user@tst.com", "gpg") is True
 
-    def test_very_long_email(self):
-        """Very long but valid-looking email."""
+    def test_very_long_email_rejected(self):
+        """Very long email exceeding 500 chars should be rejected."""
+        long_local = "a" * 500
+        long_email = f"{long_local}@example.com"
+        assert len(long_email) > 500
+        assert validate_recipient(long_email, "gpg") is False
+
+    def test_moderately_long_email_accepted(self):
+        """Email under 500 chars should be accepted."""
         long_local = "a" * 200
         long_email = f"{long_local}@example.com"
-        # Would exceed 500 char limit
-        if len(long_email) > 500:
-            assert validate_recipient(long_email, "gpg") is False
-        else:
-            # Pattern should still validate
-            pass
+        assert len(long_email) < 500
+        assert validate_recipient(long_email, "gpg") is True
 
     def test_email_with_plus_tag(self):
         """Email with plus tag addressing."""
