@@ -41,6 +41,7 @@ COLORS = {
     "tier_minimal": "#6e7681",      # Gray - negligible
 
     # Legacy compatibility aliases
+    "accent": "#58a6ff",
     "primary": "#58a6ff",
     "primary_dark": "#388bfd",
     "primary_light": "#58a6ff",
