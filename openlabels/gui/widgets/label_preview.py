@@ -127,12 +127,16 @@ class LabelPreviewWidget(QWidget):
     def _create_label_card(self) -> QFrame:
         """Create the main label visualization card."""
         card = QFrame()
+        card.setObjectName("labelCard")
         card.setStyleSheet(f"""
-            QFrame {{
+            QFrame#labelCard {{
                 background-color: {COLORS["bg_secondary"]};
                 border: 2px solid {COLORS["border"]};
                 border-radius: 12px;
                 padding: 20px;
+            }}
+            QFrame#labelCard QLabel {{
+                background-color: transparent;
             }}
         """)
         layout = QVBoxLayout(card)
@@ -142,12 +146,12 @@ class LabelPreviewWidget(QWidget):
         id_row = QHBoxLayout()
 
         id_label = QLabel("Label ID")
-        id_label.setStyleSheet(f"color: {COLORS['text_secondary']}; font-weight: 500;")
+        id_label.setStyleSheet(f"color: {COLORS['text_secondary']}; font-weight: 500; background: transparent;")
         id_row.addWidget(id_label)
 
         self._label_id = QLabel("ol_____________")
         self._label_id.setFont(QFont("Consolas, Monaco, monospace", 16, QFont.Bold))
-        self._label_id.setStyleSheet(f"color: {COLORS['primary']};")
+        self._label_id.setStyleSheet(f"color: {COLORS['primary']}; background: transparent;")
         self._label_id.setTextInteractionFlags(Qt.TextSelectableByMouse)
         id_row.addWidget(self._label_id)
         id_row.addStretch()
@@ -194,7 +198,7 @@ class LabelPreviewWidget(QWidget):
         # Portable
         grid.addWidget(self._create_property_label("Format"), 2, 2)
         portable = self._create_value_label("OpenLabels v1")
-        portable.setStyleSheet(f"color: {COLORS['success']}; font-weight: 500;")
+        portable.setStyleSheet(f"color: {COLORS['success']}; font-weight: 500; background: transparent;")
         grid.addWidget(portable, 2, 3)
 
         layout.addLayout(grid)
@@ -211,6 +215,7 @@ class LabelPreviewWidget(QWidget):
             color: {COLORS['text']};
             font-weight: 600;
             font-size: 14px;
+            background: transparent;
         """)
         layout.addWidget(entities_header)
 
@@ -225,13 +230,13 @@ class LabelPreviewWidget(QWidget):
     def _create_property_label(self, text: str) -> QLabel:
         """Create a property name label."""
         label = QLabel(text)
-        label.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 12px;")
+        label.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 12px; background: transparent;")
         return label
 
     def _create_value_label(self, text: str) -> QLabel:
         """Create a property value label."""
         label = QLabel(text)
-        label.setStyleSheet(f"color: {COLORS['text']}; font-weight: 500;")
+        label.setStyleSheet(f"color: {COLORS['text']}; font-weight: 500; background: transparent;")
         label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         return label
 
