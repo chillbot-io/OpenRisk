@@ -62,8 +62,8 @@ MONO_FONT = '"IBM Plex Mono", "JetBrains Mono", "Fira Code", Consolas, monospace
 UI_FONT = '"IBM Plex Sans", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 
 # Font weights
-FONT_WEIGHT_NORMAL = 450  # Slightly heavier than typical 400
-FONT_WEIGHT_MEDIUM = 500
+FONT_WEIGHT_NORMAL = 500  # Medium as base for solid look
+FONT_WEIGHT_MEDIUM = 550
 FONT_WEIGHT_SEMIBOLD = 600
 
 
@@ -75,8 +75,8 @@ def get_stylesheet() -> str:
    ============================================ */
 QWidget {{
     font-family: {UI_FONT};
-    font-size: 12px;
-    font-weight: {FONT_WEIGHT_MEDIUM};
+    font-size: 13px;
+    font-weight: {FONT_WEIGHT_NORMAL};
     color: {COLORS["text_primary"]};
     background-color: {COLORS["bg_base"]};
 }}
@@ -99,9 +99,9 @@ QFrame[frameShape="4"], QFrame[frameShape="5"] {{
 
 QGroupBox {{
     font-weight: {FONT_WEIGHT_SEMIBOLD};
-    font-size: 10px;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 0.5px;
     color: {COLORS["text_secondary"]};
     border: 1px solid {COLORS["border"]};
     border-radius: 4px;
@@ -126,10 +126,10 @@ QPushButton {{
     color: {COLORS["text_primary"]};
     border: 1px solid {COLORS["border"]};
     border-radius: 4px;
-    padding: 4px 10px;
+    padding: 5px 12px;
     font-weight: {FONT_WEIGHT_MEDIUM};
-    font-size: 11px;
-    min-height: 20px;
+    font-size: 12px;
+    min-height: 22px;
 }}
 
 QPushButton:hover {{
@@ -294,10 +294,10 @@ QHeaderView::section {{
     background-color: {COLORS["bg_elevated"]};
     color: {COLORS["text_secondary"]};
     font-weight: {FONT_WEIGHT_SEMIBOLD};
-    font-size: 10px;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    padding: 5px 6px;
+    letter-spacing: 0.4px;
+    padding: 6px 8px;
     border: none;
     border-bottom: 1px solid {COLORS["border"]};
     border-right: 1px solid {COLORS["border_subtle"]};
@@ -328,10 +328,10 @@ QTabBar::tab {{
     border-bottom: none;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
-    padding: 5px 12px;
+    padding: 6px 14px;
     margin-right: 2px;
     font-weight: {FONT_WEIGHT_MEDIUM};
-    font-size: 11px;
+    font-size: 12px;
 }}
 
 QTabBar::tab:selected {{
@@ -516,21 +516,19 @@ QLabel {{
 }}
 
 QLabel[heading="true"] {{
-    font-size: 14px;
+    font-size: 15px;
     font-weight: {FONT_WEIGHT_SEMIBOLD};
-    letter-spacing: -0.2px;
 }}
 
 QLabel[subheading="true"] {{
-    font-size: 11px;
+    font-size: 12px;
     font-weight: {FONT_WEIGHT_MEDIUM};
     color: {COLORS["text_secondary"]};
-    letter-spacing: 0.1px;
 }}
 
 QLabel[muted="true"] {{
     color: {COLORS["text_muted"]};
-    font-size: 10px;
+    font-size: 11px;
 }}
 
 QLabel[monospace="true"] {{
