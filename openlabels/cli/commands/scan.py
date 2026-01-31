@@ -2,16 +2,21 @@
 OpenLabels scan command.
 
 Scan local files and directories for sensitive data and compute risk scores.
+Supports parallel processing for improved performance.
 
 Usage:
     openlabels scan <path>
     openlabels scan ./data --recursive
     openlabels scan /path/to/file.csv
+    openlabels scan ./data -r --workers 8
 """
 
 import argparse
 import json
+import os
 import stat as stat_module
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterator, Optional, Dict, Any, List
 from dataclasses import dataclass
@@ -23,6 +28,9 @@ from openlabels.logging_config import get_logger, get_audit_logger
 
 logger = get_logger(__name__)
 audit = get_audit_logger()
+
+# Default number of parallel workers
+DEFAULT_WORKERS = min(os.cpu_count() or 4, 8)
 
 
 # Risk tier to rich color mapping
@@ -92,14 +100,12 @@ def scan_file(
         )
 
 
-def scan_directory(
+def collect_files(
     path: Path,
-    client: Client,
     recursive: bool = False,
-    exposure: str = "PRIVATE",
     extensions: Optional[List[str]] = None,
-) -> Iterator[ScanResult]:
-    """Scan all files in a directory."""
+) -> List[Path]:
+    """Collect all files to scan from a directory."""
     if recursive:
         files = list(path.rglob("*"))
     else:
@@ -118,8 +124,84 @@ def scan_directory(
         exts = {e.lower().lstrip(".") for e in extensions}
         files = [f for f in files if f.suffix.lower().lstrip(".") in exts]
 
-    for file_path in sorted(files):
+    return sorted(files)
+
+
+def scan_directory(
+    path: Path,
+    client: Client,
+    recursive: bool = False,
+    exposure: str = "PRIVATE",
+    extensions: Optional[List[str]] = None,
+) -> Iterator[ScanResult]:
+    """Scan all files in a directory (sequential)."""
+    files = collect_files(path, recursive, extensions)
+    for file_path in files:
         yield scan_file(file_path, client, exposure)
+
+
+def scan_directory_parallel(
+    files: List[Path],
+    exposure: str = "PRIVATE",
+    max_workers: int = DEFAULT_WORKERS,
+    callback=None,
+) -> List[ScanResult]:
+    """Scan files in parallel using ThreadPoolExecutor.
+
+    Args:
+        files: List of file paths to scan
+        exposure: Exposure level for scoring
+        max_workers: Number of parallel workers
+        callback: Optional callback(result) called for each completed file
+
+    Returns:
+        List of ScanResult objects
+    """
+    if not files:
+        return []
+
+    results = []
+    results_lock = threading.Lock()
+
+    # Thread-local storage for Client instances
+    thread_local = threading.local()
+
+    def get_thread_client():
+        """Get or create a Client for the current thread."""
+        if not hasattr(thread_local, 'client'):
+            thread_local.client = Client(default_exposure=exposure)
+        return thread_local.client
+
+    def scan_task(file_path: Path) -> ScanResult:
+        """Scan a single file in the thread pool."""
+        client = get_thread_client()
+        return scan_file(file_path, client, exposure)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(scan_task, fp): fp for fp in files}
+
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+            except Exception as e:
+                file_path = futures[future]
+                logger.warning(f"Failed to scan {file_path}: {e}")
+                result = ScanResult(
+                    path=str(file_path),
+                    score=0,
+                    tier="UNKNOWN",
+                    entities={},
+                    exposure=exposure,
+                    error=str(e),
+                )
+
+            with results_lock:
+                results.append(result)
+
+            if callback:
+                callback(result)
+
+    return results
 
 
 def format_scan_result_rich(result: ScanResult) -> None:
@@ -143,9 +225,9 @@ def format_scan_result_rich(result: ScanResult) -> None:
 
 
 def cmd_scan(args) -> int:
-    """Execute the scan command."""
-    client = Client(default_exposure=args.exposure)
+    """Execute the scan command with parallel processing."""
     path = Path(args.path)
+    max_workers = getattr(args, 'workers', DEFAULT_WORKERS)
 
     if not path.exists():
         error(f"Path not found: {path}")
@@ -155,6 +237,7 @@ def cmd_scan(args) -> int:
         "path": str(path),
         "recursive": args.recursive,
         "exposure": args.exposure,
+        "workers": max_workers,
     })
 
     # Audit log scan start
@@ -172,6 +255,8 @@ def cmd_scan(args) -> int:
             return False
 
     if is_regular_file_check(path):
+        # Single file - no parallelism needed
+        client = Client(default_exposure=args.exposure)
         result = scan_file(path, client, args.exposure)
         results.append(result)
         total_files = 1
@@ -182,27 +267,26 @@ def cmd_scan(args) -> int:
         if args.format == "text" and not args.quiet:
             format_scan_result_rich(result)
     else:
+        # Directory scan with parallel processing
         extensions = args.extensions.split(",") if args.extensions else None
 
-        # Count files first for progress bar
-        if args.recursive:
-            all_files = list(path.rglob("*"))
-        else:
-            all_files = list(path.glob("*"))
-        all_files = [f for f in all_files if is_regular_file_check(f)]
-        if extensions:
-            exts = {e.lower().lstrip(".") for e in extensions}
-            all_files = [f for f in all_files if f.suffix.lower().lstrip(".") in exts]
+        # Collect files
+        all_files = collect_files(path, args.recursive, extensions)
 
-        with progress("Scanning files", total=len(all_files)) as p:
-            for result in scan_directory(
-                path, client,
-                recursive=args.recursive,
-                exposure=args.exposure,
-                extensions=extensions,
-            ):
-                results.append(result)
-                total_files += 1
+        if not all_files:
+            echo("No files to scan")
+            return 0
+
+        # Progress tracking with thread safety
+        progress_lock = threading.Lock()
+        completed = [0]  # Use list for mutability in closure
+
+        def on_result(result: ScanResult):
+            """Callback for each completed scan."""
+            nonlocal files_with_risk, max_score
+
+            with progress_lock:
+                completed[0] += 1
                 if result.score > 0:
                     files_with_risk += 1
                     max_score = max(max_score, result.score)
@@ -212,6 +296,25 @@ def cmd_scan(args) -> int:
                     format_scan_result_rich(result)
 
                 p.advance()
+
+        with progress("Scanning files", total=len(all_files)) as p:
+            if max_workers == 1:
+                # Sequential mode
+                client = Client(default_exposure=args.exposure)
+                for file_path in all_files:
+                    result = scan_file(file_path, client, args.exposure)
+                    results.append(result)
+                    on_result(result)
+            else:
+                # Parallel mode
+                results = scan_directory_parallel(
+                    all_files,
+                    exposure=args.exposure,
+                    max_workers=max_workers,
+                    callback=on_result,
+                )
+
+        total_files = len(results)
 
     # Output results
     if args.format == "json":
@@ -287,6 +390,13 @@ def add_scan_parser(subparsers):
         type=int,
         metavar="SCORE",
         help="Exit code 1 if any file scores above threshold (for CI)",
+    )
+    parser.add_argument(
+        "--workers", "-j",
+        type=int,
+        default=DEFAULT_WORKERS,
+        metavar="N",
+        help=f"Number of parallel workers (default: {DEFAULT_WORKERS})",
     )
     # Hidden options for power users
     parser.add_argument(

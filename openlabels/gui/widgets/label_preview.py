@@ -195,11 +195,10 @@ class LabelPreviewWidget(QWidget):
         self._entity_count = self._create_value_label("--")
         grid.addWidget(self._entity_count, 1, 3)
 
-        # Portable
-        grid.addWidget(self._create_property_label("Format"), 2, 2)
-        portable = self._create_value_label("OpenLabels v1")
-        portable.setStyleSheet(f"color: {COLORS['success']}; font-weight: 500; background: transparent;")
-        grid.addWidget(portable, 2, 3)
+        # Embedded status
+        grid.addWidget(self._create_property_label("Embedded"), 2, 2)
+        self._embedded_status = self._create_value_label("--")
+        grid.addWidget(self._embedded_status, 2, 3)
 
         layout.addLayout(grid)
 
@@ -469,21 +468,16 @@ class LabelPreviewWidget(QWidget):
     def set_from_scan_result(self, result: Dict[str, Any]):
         """Set label from a scan result dictionary."""
         import time
-        from openlabels.core.labels import generate_label_id, compute_content_hash_file
 
         file_path = result.get("path", "")
         entities = result.get("entities", {})
         score = result.get("score", 0)
         tier = result.get("tier", "UNKNOWN")
+        label_embedded = result.get("label_embedded", False)
 
-        # Generate or retrieve label ID
-        label_id = result.get("label_id") or generate_label_id()
-
-        # Compute content hash if we have file access
-        try:
-            content_hash = compute_content_hash_file(file_path)
-        except Exception:
-            content_hash = "____________"
+        # Use label_id and content_hash from scan result (already generated during scan)
+        label_id = result.get("label_id") or "ol_____________"
+        content_hash = result.get("content_hash") or "____________"
 
         self.set_label(
             label_id=label_id,
@@ -494,6 +488,14 @@ class LabelPreviewWidget(QWidget):
             timestamp=int(time.time()),
             file_path=file_path,
         )
+
+        # Update embedded status
+        if label_embedded:
+            self._embedded_status.setText("Yes")
+            self._embedded_status.setStyleSheet(f"color: {COLORS['success']}; font-weight: 600; background: transparent;")
+        else:
+            self._embedded_status.setText("No")
+            self._embedded_status.setStyleSheet(f"color: {COLORS['text_muted']}; font-weight: 500; background: transparent;")
 
     def clear(self):
         """Clear the label preview."""

@@ -4,7 +4,8 @@ OpenLabels CLI - Command-line interface.
 Labels are the primitive. Risk is derived.
 
 Usage:
-    openlabels scan <path>              # Scan files for sensitive data
+    openlabels scan <path>              # Scan files and embed labels
+    openlabels read <file>              # Read embedded label from file
     openlabels scan ./data -r           # Scan recursively
     openlabels report ./data            # Generate HTML report
     openlabels gui                      # Launch desktop GUI
@@ -29,7 +30,8 @@ def cmd_version(args):
     echo("Scan files for sensitive data. Score risk.")
     echo("")
     echo("Quick start:")
-    echo("  openlabels scan ./data        Scan a directory")
+    echo("  openlabels scan ./data        Scan and embed labels")
+    echo("  openlabels read document.pdf  Read embedded label")
     echo("  openlabels scan ./data -r     Scan recursively")
     echo("  openlabels report ./data      Generate HTML report")
     echo("  openlabels gui                Launch desktop GUI")
@@ -48,7 +50,8 @@ def main(argv: Optional[List[str]] = None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  openlabels scan ./data              Scan a directory
+  openlabels scan ./data              Scan and embed labels
+  openlabels read document.pdf        Read embedded label
   openlabels scan ./data -r           Scan recursively
   openlabels report ./data            Generate HTML report
   openlabels gui                      Launch desktop GUI
@@ -96,6 +99,7 @@ Examples:
     # Core commands
     from openlabels.cli.commands import (
         add_scan_parser,
+        add_read_parser,
         add_find_parser,
         add_quarantine_parser,
         add_tag_parser,
@@ -106,6 +110,7 @@ Examples:
     )
 
     add_scan_parser(subparsers)
+    add_read_parser(subparsers)
     add_find_parser(subparsers)
     add_quarantine_parser(subparsers)
     add_tag_parser(subparsers)

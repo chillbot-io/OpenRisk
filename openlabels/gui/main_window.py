@@ -1200,14 +1200,21 @@ class MainWindow(QMainWindow):
             return
 
         tier_counts = {}
+        embedded_count = 0
         for r in self._scan_results:
             tier = r.get("tier", "UNKNOWN")
             tier_counts[tier] = tier_counts.get(tier, 0) + 1
+            if r.get("label_embedded"):
+                embedded_count += 1
 
         parts = []
         for tier in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "MINIMAL"]:
             if tier in tier_counts:
                 parts.append(f"{tier_counts[tier]} {tier}")
+
+        # Add embedded count
+        if embedded_count > 0:
+            parts.append(f"{embedded_count} labeled")
 
         self._risk_summary_label.setText(" | ".join(parts))
 

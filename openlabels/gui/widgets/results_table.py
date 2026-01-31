@@ -45,11 +45,12 @@ class ResultsTableWidget(QWidget):
 
     COLUMNS = [
         ("Name", 200),
-        ("Directory", 250),
+        ("Directory", 200),
         ("Size", 70),
         ("Score", 55),
         ("Tier", 75),
-        ("Entities", 180),
+        ("Label", 55),
+        ("Entities", 150),
         ("Actions", 90),
     ]
 
@@ -99,7 +100,7 @@ class ResultsTableWidget(QWidget):
         for i, (name, width) in enumerate(self.COLUMNS):
             self._table.setColumnWidth(i, width)
         header.setStretchLastSection(False)
-        header.setSectionResizeMode(5, QHeaderView.Stretch)  # Entities column stretches
+        header.setSectionResizeMode(6, QHeaderView.Stretch)  # Entities column stretches
 
         # Double-click to show details
         self._table.cellDoubleClicked.connect(self._on_double_click)
@@ -193,15 +194,25 @@ class ResultsTableWidget(QWidget):
             tier_item.setForeground(QBrush(TIER_COLORS[tier]))
         self._table.setItem(row, 4, tier_item)
 
-        # Entities (col 5)
+        # Label embedded status (col 5)
+        label_embedded = result.get("label_embedded", False)
+        label_item = QTableWidgetItem("Yes" if label_embedded else "--")
+        label_item.setTextAlignment(Qt.AlignCenter)
+        if label_embedded:
+            label_item.setForeground(QBrush(QColor(34, 197, 94)))  # Green
+        else:
+            label_item.setForeground(QBrush(QColor(148, 163, 184)))  # Gray
+        self._table.setItem(row, 5, label_item)
+
+        # Entities (col 6)
         if error:
             entities_str = f"Error: {error}"
         else:
             entities_str = ", ".join(f"{k}({v})" for k, v in entities.items()) if entities else "-"
         entities_item = QTableWidgetItem(entities_str)
-        self._table.setItem(row, 5, entities_item)
+        self._table.setItem(row, 6, entities_item)
 
-        # Actions (col 6) - widget with buttons
+        # Actions (col 7) - widget with buttons
         actions_widget = QWidget()
         actions_layout = QHBoxLayout(actions_widget)
         actions_layout.setContentsMargins(4, 2, 4, 2)
@@ -221,7 +232,7 @@ class ResultsTableWidget(QWidget):
         actions_layout.addWidget(label_btn)
         actions_layout.addStretch()
 
-        self._table.setCellWidget(row, 6, actions_widget)
+        self._table.setCellWidget(row, 7, actions_widget)
 
     def _passes_filter(self, result: Dict[str, Any]) -> bool:
         """Check if a result passes current filters."""
