@@ -2,18 +2,24 @@
 Background scan worker.
 
 Performs file scanning in a separate thread to keep the UI responsive.
+Uses parallel processing for improved performance on multi-core systems.
 """
 
+import os
 import stat as stat_module
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from PySide6.QtCore import QThread, Signal
 
+# Default number of parallel workers (use CPU count, capped at 8)
+DEFAULT_WORKERS = min(os.cpu_count() or 4, 8)
+
 
 class ScanWorker(QThread):
-    """Background worker for scanning files."""
+    """Background worker for scanning files with parallel processing."""
 
     # Signals
     progress = Signal(int, int)      # current, total
@@ -27,19 +33,26 @@ class ScanWorker(QThread):
         path: str,
         s3_credentials: Optional[Dict[str, str]] = None,
         parent=None,
+        max_workers: int = DEFAULT_WORKERS,
     ):
         super().__init__(parent)
         self._target_type = target_type
         self._path = path
         self._s3_credentials = s3_credentials
+        self._max_workers = max_workers
         # HIGH-001: Use threading.Event for thread-safe stop signaling
         self._stop_event = threading.Event()
         # Reuse single Client instance across scan operations
         self._client = None
+        # Thread pool for parallel scanning
+        self._executor: Optional[ThreadPoolExecutor] = None
 
     def stop(self):
         """Request the worker to stop (thread-safe)."""
         self._stop_event.set()
+        # Shutdown executor if running
+        if self._executor:
+            self._executor.shutdown(wait=False, cancel_futures=True)
 
     def run(self):
         """Main worker thread."""
@@ -86,22 +99,37 @@ class ScanWorker(QThread):
         return spans_data
 
     def _scan_local(self):
-        """Scan local/SMB/NFS path."""
-        from openlabels.adapters.scanner import detect_file as scanner_detect
-
+        """Scan local/SMB/NFS path with parallel processing."""
         path = Path(self._path)
 
         if not path.exists():
             self.error.emit(f"Path not found: {path}")
             return
 
-        client = self._get_client()
-
         # Collect files first
         files = self._collect_files(path)
         total = len(files)
 
+        if total == 0:
+            self.progress.emit(0, 0)
+            self.finished.emit()
+            return
+
         self.progress.emit(0, total)
+
+        # Use parallel processing for multiple files
+        if total == 1 or self._max_workers == 1:
+            # Single file or single-threaded mode
+            self._scan_sequential(files, total)
+        else:
+            # Parallel scanning
+            self._scan_parallel(files, total)
+
+        self.finished.emit()
+
+    def _scan_sequential(self, files: List[Path], total: int):
+        """Scan files sequentially (fallback mode)."""
+        client = self._get_client()
 
         for i, file_path in enumerate(files):
             if self._stop_event.is_set():
@@ -111,7 +139,77 @@ class ScanWorker(QThread):
             self.result.emit(result)
             self.progress.emit(i + 1, total)
 
-        self.finished.emit()
+    def _scan_parallel(self, files: List[Path], total: int):
+        """Scan files in parallel using ThreadPoolExecutor."""
+        completed = 0
+        completed_lock = threading.Lock()
+
+        # Create thread-local storage for Client instances
+        # Each thread gets its own Client to avoid contention
+        thread_local = threading.local()
+
+        def get_thread_client():
+            """Get or create a Client for the current thread."""
+            if not hasattr(thread_local, 'client'):
+                from openlabels import Client
+                thread_local.client = Client()
+            return thread_local.client
+
+        def scan_task(file_path: Path) -> Dict[str, Any]:
+            """Task executed in thread pool."""
+            if self._stop_event.is_set():
+                return None
+            client = get_thread_client()
+            return self._scan_file(file_path, client)
+
+        # Create executor
+        self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+
+        try:
+            # Submit all tasks
+            futures = {
+                self._executor.submit(scan_task, fp): fp
+                for fp in files
+            }
+
+            # Process results as they complete
+            for future in as_completed(futures):
+                if self._stop_event.is_set():
+                    break
+
+                try:
+                    result = future.result()
+                    if result is not None:
+                        self.result.emit(result)
+
+                        with completed_lock:
+                            completed += 1
+                            self.progress.emit(completed, total)
+
+                except Exception as e:
+                    # Handle individual file errors
+                    file_path = futures[future]
+                    self.result.emit({
+                        "path": str(file_path),
+                        "size": 0,
+                        "label_id": None,
+                        "content_hash": None,
+                        "label_embedded": False,
+                        "score": 0,
+                        "tier": "UNKNOWN",
+                        "entities": {},
+                        "spans": [],
+                        "exposure": "PRIVATE",
+                        "error": str(e),
+                    })
+
+                    with completed_lock:
+                        completed += 1
+                        self.progress.emit(completed, total)
+
+        finally:
+            self._executor.shutdown(wait=True)
+            self._executor = None
 
     def _collect_files(self, path: Path) -> List[Path]:
         """Collect all files to scan."""
@@ -303,20 +401,85 @@ class ScanWorker(QThread):
             total = len(objects)
             self.progress.emit(0, total)
 
-            # Process each object
-            for i, obj in enumerate(objects):
-                if self._stop_event.is_set():
-                    break
+            if total == 0:
+                self.finished.emit()
+                return
 
-                result = self._scan_s3_object(s3, bucket, obj, client, bucket_exposure)
-                self.result.emit(result)
-                self.progress.emit(i + 1, total)
+            # Use parallel processing for S3 objects
+            if total == 1 or self._max_workers == 1:
+                # Sequential mode
+                for i, obj in enumerate(objects):
+                    if self._stop_event.is_set():
+                        break
+                    result = self._scan_s3_object(s3, bucket, obj, client, bucket_exposure)
+                    self.result.emit(result)
+                    self.progress.emit(i + 1, total)
+            else:
+                # Parallel mode
+                self._scan_s3_parallel(s3, bucket, objects, client, bucket_exposure, total)
 
         except Exception as e:
             self.error.emit(f"Failed to list S3 objects: {e}")
             return
 
         self.finished.emit()
+
+    def _scan_s3_parallel(self, s3_client, bucket: str, objects: List[Dict],
+                          client, exposure: str, total: int):
+        """Scan S3 objects in parallel."""
+        completed = 0
+        completed_lock = threading.Lock()
+
+        def scan_task(obj: Dict) -> Dict[str, Any]:
+            """Task executed in thread pool."""
+            if self._stop_event.is_set():
+                return None
+            return self._scan_s3_object(s3_client, bucket, obj, client, exposure)
+
+        self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+
+        try:
+            futures = {
+                self._executor.submit(scan_task, obj): obj
+                for obj in objects
+            }
+
+            for future in as_completed(futures):
+                if self._stop_event.is_set():
+                    break
+
+                try:
+                    result = future.result()
+                    if result is not None:
+                        self.result.emit(result)
+
+                        with completed_lock:
+                            completed += 1
+                            self.progress.emit(completed, total)
+
+                except Exception as e:
+                    obj = futures[future]
+                    self.result.emit({
+                        "path": f"s3://{bucket}/{obj['Key']}",
+                        "size": obj.get("Size", 0),
+                        "label_id": None,
+                        "content_hash": None,
+                        "label_embedded": False,
+                        "score": 0,
+                        "tier": "UNKNOWN",
+                        "entities": {},
+                        "spans": [],
+                        "exposure": exposure,
+                        "error": str(e),
+                    })
+
+                    with completed_lock:
+                        completed += 1
+                        self.progress.emit(completed, total)
+
+        finally:
+            self._executor.shutdown(wait=True)
+            self._executor = None
 
     def _get_bucket_exposure(self, s3_client, bucket: str) -> str:
         """Determine exposure level based on S3 bucket ACL and public access settings.
