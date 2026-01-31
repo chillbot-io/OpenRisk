@@ -44,14 +44,14 @@ class ResultsTableWidget(QWidget):
     detail_requested = Signal(str)      # file_path (double-click)
 
     COLUMNS = [
-        ("Name", 200),
-        ("Directory", 200),
-        ("Size", 70),
-        ("Score", 55),
-        ("Tier", 75),
-        ("Label", 55),
-        ("Entities", 150),
-        ("Actions", 90),
+        ("Name", 140),
+        ("Directory", 120),
+        ("Size", 55),
+        ("Score", 45),
+        ("Tier", 60),
+        ("Label", 45),
+        ("Entities", 100),
+        ("Actions", 70),
     ]
 
     def __init__(self, parent=None):
@@ -66,10 +66,11 @@ class ResultsTableWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        # Filter bar
+        # Filter bar - search input spans to left edge for symmetry
         filter_layout = QHBoxLayout()
+        filter_layout.setContentsMargins(0, 0, 0, 0)
+        filter_layout.setSpacing(8)
 
-        filter_label = QLabel("Filter:")
         self._filter_input = QLineEdit()
         self._filter_input.setPlaceholderText("Search by name...")
         self._filter_input.textChanged.connect(self._apply_filters)
@@ -79,8 +80,8 @@ class ResultsTableWidget(QWidget):
         for tier in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "MINIMAL"]:
             self._tier_filter.addItem(tier, tier)
         self._tier_filter.currentIndexChanged.connect(self._apply_filters)
+        self._tier_filter.setMinimumWidth(100)
 
-        filter_layout.addWidget(filter_label)
         filter_layout.addWidget(self._filter_input, stretch=1)
         filter_layout.addWidget(self._tier_filter)
 

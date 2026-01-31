@@ -189,40 +189,42 @@ class MainWindow(QMainWindow):
         self._scan_target = ScanTargetPanel()
         layout.addWidget(self._scan_target)
 
-        # Main content area with splitter
-        main_splitter = QSplitter(Qt.Horizontal)
-
-        # Left side: folder tree + results table
-        left_widget = QWidget()
-        left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-
         # Tab widget for Results / Dashboard views
         self._tab_widget = QTabWidget()
 
-        # --- Results Tab ---
-        results_widget = QWidget()
-        results_layout = QVBoxLayout(results_widget)
-        results_layout.setContentsMargins(0, 0, 0, 0)
+        # --- Files Tab ---
+        # Contains: folder tree | results table | label preview (all aligned)
+        files_tab = QWidget()
+        files_layout = QVBoxLayout(files_tab)
+        files_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Splitter for tree and table
-        tree_table_splitter = QSplitter(Qt.Horizontal)
+        # Main horizontal splitter for all three panels
+        main_splitter = QSplitter(Qt.Horizontal)
 
-        # Folder tree (left)
+        # Left: Folder tree
         self._folder_tree = FolderTreeWidget()
-        self._folder_tree.setMinimumWidth(200)
-        self._folder_tree.setMaximumWidth(350)
-        tree_table_splitter.addWidget(self._folder_tree)
+        self._folder_tree.setMinimumWidth(180)
+        self._folder_tree.setMaximumWidth(300)
+        main_splitter.addWidget(self._folder_tree)
 
-        # Results table (right)
+        # Center: Results table
         self._results_table = ResultsTableWidget()
-        tree_table_splitter.addWidget(self._results_table)
+        self._results_table.setMinimumWidth(400)
+        main_splitter.addWidget(self._results_table)
 
-        # Set splitter sizes (25% tree, 75% table)
-        tree_table_splitter.setSizes([250, 750])
-        results_layout.addWidget(tree_table_splitter)
+        # Right: Label Preview panel
+        self._label_preview = LabelPreviewWidget()
+        self._label_preview.setMinimumWidth(340)
+        self._label_preview.setMaximumWidth(420)
+        self._label_preview.export_requested.connect(self._on_label_export)
+        self._label_preview.label_copied.connect(self._on_label_copied)
+        main_splitter.addWidget(self._label_preview)
 
-        self._tab_widget.addTab(results_widget, "Files")
+        # Set splitter proportions (20% tree, 50% table, 30% preview)
+        main_splitter.setSizes([200, 600, 380])
+
+        files_layout.addWidget(main_splitter)
+        self._tab_widget.addTab(files_tab, "Files")
 
         # --- Dashboard Tab ---
         self._dashboard = DashboardWidget()
@@ -232,21 +234,7 @@ class MainWindow(QMainWindow):
         # Update dashboard when switching to it
         self._tab_widget.currentChanged.connect(self._on_tab_changed)
 
-        left_layout.addWidget(self._tab_widget)
-        main_splitter.addWidget(left_widget)
-
-        # Right side: Label Preview panel
-        self._label_preview = LabelPreviewWidget()
-        self._label_preview.setMinimumWidth(380)
-        self._label_preview.setMaximumWidth(500)
-        self._label_preview.export_requested.connect(self._on_label_export)
-        self._label_preview.label_copied.connect(self._on_label_copied)
-        main_splitter.addWidget(self._label_preview)
-
-        # Set main splitter sizes (70% left, 30% right)
-        main_splitter.setSizes([900, 400])
-
-        layout.addWidget(main_splitter, stretch=1)
+        layout.addWidget(self._tab_widget, stretch=1)
 
         # Bottom actions bar
         actions_layout = QHBoxLayout()
