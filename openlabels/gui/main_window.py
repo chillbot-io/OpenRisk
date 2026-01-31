@@ -200,6 +200,8 @@ class MainWindow(QMainWindow):
 
         # Main horizontal splitter for all three panels
         main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter.setHandleWidth(12)  # Gap between panels
+        main_splitter.setChildrenCollapsible(False)
 
         # Left: Folder tree
         self._folder_tree = FolderTreeWidget()

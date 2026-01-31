@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QColor
 
-from openlabels.gui.style import COLORS, get_tier_color
+from openlabels.gui.style import COLORS, get_tier_color, MONO_FONT, UI_FONT
 
 
 class LabelPreviewWidget(QWidget):
@@ -51,8 +51,8 @@ class LabelPreviewWidget(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setContentsMargins(4, 0, 0, 0)  # Small left margin for panel separation
+        layout.setSpacing(12)
 
         # Header with OpenLabels branding
         header = self._create_header()
@@ -90,7 +90,7 @@ class LabelPreviewWidget(QWidget):
 
         # Logo/icon
         logo = QLabel("<OL>")
-        logo.setFont(QFont("Consolas, Monaco, monospace", 20, QFont.Bold))
+        logo.setFont(QFont("JetBrains Mono, Consolas, monospace", 16, QFont.Bold))
         logo.setStyleSheet("color: white; background: transparent;")
         layout.addWidget(logo)
 
@@ -99,8 +99,8 @@ class LabelPreviewWidget(QWidget):
         title_layout.setSpacing(2)
 
         title = QLabel("OpenLabels")
-        title.setFont(QFont("Arial", 18, QFont.Bold))
-        title.setStyleSheet("color: white; background: transparent;")
+        title.setFont(QFont("Inter, SF Pro Display, sans-serif", 15, QFont.Bold))
+        title.setStyleSheet("color: white; background: transparent; letter-spacing: -0.3px;")
         title_layout.addWidget(title)
 
         subtitle = QLabel("Portable Risk Label")
@@ -112,8 +112,8 @@ class LabelPreviewWidget(QWidget):
 
         # Tier badge (will be updated)
         self._tier_badge = QLabel("--")
-        self._tier_badge.setFont(QFont("Arial", 12, QFont.Bold))
-        self._tier_badge.setMinimumWidth(80)
+        self._tier_badge.setFont(QFont("Inter, sans-serif", 10, QFont.Bold))
+        self._tier_badge.setMinimumWidth(70)
         self._tier_badge.setStyleSheet("""
             background-color: rgba(255,255,255,0.2);
             color: white;
@@ -151,7 +151,7 @@ class LabelPreviewWidget(QWidget):
         id_row.addWidget(id_label)
 
         self._label_id = QLabel("ol_____________")
-        self._label_id.setFont(QFont("Consolas, Monaco, monospace", 16, QFont.Bold))
+        self._label_id.setFont(QFont("JetBrains Mono, Consolas, monospace", 13, QFont.Bold))
         self._label_id.setStyleSheet(f"color: {COLORS['primary']}; background: transparent;")
         self._label_id.setTextInteractionFlags(Qt.TextSelectableByMouse)
         id_row.addWidget(self._label_id)
@@ -165,43 +165,53 @@ class LabelPreviewWidget(QWidget):
         divider.setStyleSheet(f"background-color: {COLORS['border']};")
         layout.addWidget(divider)
 
-        # Grid of label properties
-        grid = QGridLayout()
-        grid.setSpacing(12)
+        # Properties in simple 2-column layout (stacks better when narrow)
+        props_layout = QVBoxLayout()
+        props_layout.setSpacing(8)
 
-        # Content Hash
-        grid.addWidget(self._create_property_label("Content Hash"), 0, 0)
+        # Row 1: Content Hash
+        row1 = QHBoxLayout()
+        row1.addWidget(self._create_property_label("Content Hash"))
         self._content_hash = self._create_value_label("____________")
-        self._content_hash.setFont(QFont("Consolas, Monaco, monospace", 12))
-        grid.addWidget(self._content_hash, 0, 1)
+        self._content_hash.setFont(QFont("JetBrains Mono, Consolas, monospace", 10))
+        row1.addWidget(self._content_hash)
+        row1.addStretch()
+        props_layout.addLayout(row1)
 
-        # Timestamp
-        grid.addWidget(self._create_property_label("Scanned"), 1, 0)
-        self._timestamp = self._create_value_label("--")
-        grid.addWidget(self._timestamp, 1, 1)
-
-        # Source
-        grid.addWidget(self._create_property_label("Source"), 2, 0)
-        self._source = self._create_value_label("openlabels")
-        grid.addWidget(self._source, 2, 1)
-
-        # Score
-        grid.addWidget(self._create_property_label("Risk Score"), 0, 2)
+        # Row 2: Risk Score
+        row2 = QHBoxLayout()
+        row2.addWidget(self._create_property_label("Risk Score"))
         self._score = self._create_value_label("--")
-        self._score.setFont(QFont("Arial", 16, QFont.Bold))
-        grid.addWidget(self._score, 0, 3)
+        self._score.setFont(QFont("Inter, sans-serif", 13, QFont.Bold))
+        row2.addWidget(self._score)
+        row2.addStretch()
+        props_layout.addLayout(row2)
 
-        # Entity count
-        grid.addWidget(self._create_property_label("Entities"), 1, 2)
+        # Row 3: Scanned / Entities
+        row3 = QHBoxLayout()
+        row3.addWidget(self._create_property_label("Scanned"))
+        self._timestamp = self._create_value_label("--")
+        row3.addWidget(self._timestamp)
+        row3.addSpacing(16)
+        row3.addWidget(self._create_property_label("Entities"))
         self._entity_count = self._create_value_label("--")
-        grid.addWidget(self._entity_count, 1, 3)
+        row3.addWidget(self._entity_count)
+        row3.addStretch()
+        props_layout.addLayout(row3)
 
-        # Embedded status
-        grid.addWidget(self._create_property_label("Embedded"), 2, 2)
+        # Row 4: Source / Embedded
+        row4 = QHBoxLayout()
+        row4.addWidget(self._create_property_label("Source"))
+        self._source = self._create_value_label("openlabels")
+        row4.addWidget(self._source)
+        row4.addSpacing(16)
+        row4.addWidget(self._create_property_label("Embedded"))
         self._embedded_status = self._create_value_label("--")
-        grid.addWidget(self._embedded_status, 2, 3)
+        row4.addWidget(self._embedded_status)
+        row4.addStretch()
+        props_layout.addLayout(row4)
 
-        layout.addLayout(grid)
+        layout.addLayout(props_layout)
 
         # Divider
         divider2 = QFrame()
@@ -283,7 +293,7 @@ class LabelPreviewWidget(QWidget):
         # JSON text area (hidden by default)
         self._json_text = QTextEdit()
         self._json_text.setReadOnly(True)
-        self._json_text.setFont(QFont("Consolas, Monaco, monospace", 11))
+        self._json_text.setFont(QFont("JetBrains Mono, Consolas, monospace", 10))
         self._json_text.setMaximumHeight(200)
         self._json_text.setVisible(False)
         self._json_text.setStyleSheet(f"""

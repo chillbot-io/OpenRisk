@@ -55,9 +55,16 @@ COLORS = {
     "border_focus": "#58a6ff",
 }
 
-# Monospace font stack for technical data
+# Monospace font stack for technical data (hashes, IDs, code)
 MONO_FONT = '"JetBrains Mono", "Fira Code", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace'
-UI_FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif'
+
+# UI font - Inter for clean, professional look (falls back to system fonts)
+UI_FONT = 'Inter, "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+
+# Font weights
+FONT_WEIGHT_NORMAL = 400
+FONT_WEIGHT_MEDIUM = 500
+FONT_WEIGHT_SEMIBOLD = 600
 
 
 def get_stylesheet() -> str:
@@ -68,7 +75,7 @@ def get_stylesheet() -> str:
    ============================================ */
 QWidget {{
     font-family: {UI_FONT};
-    font-size: 13px;
+    font-size: 12px;
     color: {COLORS["text_primary"]};
     background-color: {COLORS["bg_base"]};
 }}
@@ -90,10 +97,10 @@ QFrame[frameShape="4"], QFrame[frameShape="5"] {{
 }}
 
 QGroupBox {{
-    font-weight: 600;
-    font-size: 11px;
+    font-weight: {FONT_WEIGHT_SEMIBOLD};
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
     color: {COLORS["text_secondary"]};
     border: 1px solid {COLORS["border"]};
     border-radius: 4px;
@@ -118,10 +125,10 @@ QPushButton {{
     color: {COLORS["text_primary"]};
     border: 1px solid {COLORS["border"]};
     border-radius: 4px;
-    padding: 5px 12px;
-    font-weight: 500;
-    font-size: 12px;
-    min-height: 22px;
+    padding: 4px 10px;
+    font-weight: {FONT_WEIGHT_MEDIUM};
+    font-size: 11px;
+    min-height: 20px;
 }}
 
 QPushButton:hover {{
@@ -285,11 +292,11 @@ QTableWidget::item:selected, QTableView::item:selected {{
 QHeaderView::section {{
     background-color: {COLORS["bg_elevated"]};
     color: {COLORS["text_secondary"]};
-    font-weight: 600;
-    font-size: 11px;
+    font-weight: {FONT_WEIGHT_SEMIBOLD};
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
-    padding: 6px 6px;
+    letter-spacing: 0.6px;
+    padding: 5px 6px;
     border: none;
     border-bottom: 1px solid {COLORS["border"]};
     border-right: 1px solid {COLORS["border_subtle"]};
@@ -320,10 +327,10 @@ QTabBar::tab {{
     border-bottom: none;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
-    padding: 6px 14px;
+    padding: 5px 12px;
     margin-right: 2px;
-    font-weight: 500;
-    font-size: 12px;
+    font-weight: {FONT_WEIGHT_MEDIUM};
+    font-size: 11px;
 }}
 
 QTabBar::tab:selected {{
@@ -508,19 +515,21 @@ QLabel {{
 }}
 
 QLabel[heading="true"] {{
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: {FONT_WEIGHT_SEMIBOLD};
+    letter-spacing: -0.2px;
 }}
 
 QLabel[subheading="true"] {{
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 11px;
+    font-weight: {FONT_WEIGHT_MEDIUM};
     color: {COLORS["text_secondary"]};
+    letter-spacing: 0.1px;
 }}
 
 QLabel[muted="true"] {{
     color: {COLORS["text_muted"]};
-    font-size: 11px;
+    font-size: 10px;
 }}
 
 QLabel[monospace="true"] {{
