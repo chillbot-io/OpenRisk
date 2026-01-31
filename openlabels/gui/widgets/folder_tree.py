@@ -33,10 +33,15 @@ class FolderTreeWidget(QWidget):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
 
-        # Header label
+        # Header label - match height of filter bar in results table
         self._header = QLabel("Folders")
-        self._header.setStyleSheet("font-weight: bold; padding: 4px;")
+        self._header.setStyleSheet("""
+            font-weight: bold;
+            padding: 6px 4px;
+        """)
+        self._header.setFixedHeight(32)  # Match the filter bar height
         layout.addWidget(self._header)
 
         # Tree view

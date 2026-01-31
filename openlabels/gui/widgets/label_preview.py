@@ -112,12 +112,13 @@ class LabelPreviewWidget(QWidget):
 
         # Tier badge (will be updated)
         self._tier_badge = QLabel("--")
-        self._tier_badge.setFont(QFont("Arial", 14, QFont.Bold))
+        self._tier_badge.setFont(QFont("Arial", 12, QFont.Bold))
+        self._tier_badge.setMinimumWidth(80)
         self._tier_badge.setStyleSheet("""
             background-color: rgba(255,255,255,0.2);
             color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
+            padding: 6px 12px;
+            border-radius: 16px;
         """)
         self._tier_badge.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._tier_badge)
@@ -379,8 +380,8 @@ class LabelPreviewWidget(QWidget):
         self._tier_badge.setStyleSheet(f"""
             background-color: {tier_color};
             color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
+            padding: 6px 12px;
+            border-radius: 16px;
             font-weight: bold;
         """)
 
@@ -510,8 +511,8 @@ class LabelPreviewWidget(QWidget):
         self._tier_badge.setStyleSheet("""
             background-color: rgba(255,255,255,0.2);
             color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
+            padding: 6px 12px;
+            border-radius: 16px;
         """)
         self._label_data = None
         self._json_text.clear()
