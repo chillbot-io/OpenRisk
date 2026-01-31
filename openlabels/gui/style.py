@@ -99,7 +99,7 @@ QFrame[frameShape="4"], QFrame[frameShape="5"] {{
 
 QGroupBox {{
     font-weight: {FONT_WEIGHT_SEMIBOLD};
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: {COLORS["text_secondary"]};
@@ -127,8 +127,8 @@ QPushButton {{
     border: 1px solid {COLORS["border"]};
     border-radius: 4px;
     padding: 5px 12px;
-    font-weight: {FONT_WEIGHT_MEDIUM};
-    font-size: 12px;
+    font-weight: {FONT_WEIGHT_SEMIBOLD};
+    font-size: 13px;
     min-height: 22px;
 }}
 
@@ -294,7 +294,7 @@ QHeaderView::section {{
     background-color: {COLORS["bg_elevated"]};
     color: {COLORS["text_secondary"]};
     font-weight: {FONT_WEIGHT_SEMIBOLD};
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.4px;
     padding: 6px 8px;
@@ -330,8 +330,8 @@ QTabBar::tab {{
     border-top-right-radius: 4px;
     padding: 6px 14px;
     margin-right: 2px;
-    font-weight: {FONT_WEIGHT_MEDIUM};
-    font-size: 12px;
+    font-weight: {FONT_WEIGHT_SEMIBOLD};
+    font-size: 13px;
 }}
 
 QTabBar::tab:selected {{
@@ -477,6 +477,8 @@ QMenuBar::item {{
     padding: 4px 8px;
     border-radius: 3px;
     color: {COLORS["text_secondary"]};
+    font-size: 13px;
+    font-weight: {FONT_WEIGHT_MEDIUM};
 }}
 
 QMenuBar::item:selected {{
@@ -494,6 +496,7 @@ QMenu {{
 QMenu::item {{
     padding: 5px 20px 5px 10px;
     border-radius: 3px;
+    font-size: 13px;
 }}
 
 QMenu::item:selected {{

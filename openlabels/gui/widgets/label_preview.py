@@ -90,7 +90,7 @@ class LabelPreviewWidget(QWidget):
 
         # Logo/icon
         logo = QLabel("<OL>")
-        logo.setFont(create_font("IBM Plex Mono", 16, weight=700, monospace=True))
+        logo.setFont(create_font("IBM Plex Mono", 18, weight=700, monospace=True))
         logo.setStyleSheet("color: white; background: transparent;")
         layout.addWidget(logo)
 
@@ -99,11 +99,12 @@ class LabelPreviewWidget(QWidget):
         title_layout.setSpacing(2)
 
         title = QLabel("OpenLabels")
-        title.setFont(create_font("IBM Plex Sans", 16, weight=700))
+        title.setFont(create_font("IBM Plex Sans", 18, weight=700))
         title.setStyleSheet("color: white; background: transparent;")
         title_layout.addWidget(title)
 
         subtitle = QLabel("Portable Risk Label")
+        subtitle.setFont(create_font("IBM Plex Sans", 13, weight=500))
         subtitle.setStyleSheet("color: rgba(255,255,255,0.8); background: transparent;")
         title_layout.addWidget(subtitle)
 
@@ -112,7 +113,7 @@ class LabelPreviewWidget(QWidget):
 
         # Tier badge (will be updated)
         self._tier_badge = QLabel("--")
-        self._tier_badge.setFont(create_font("IBM Plex Sans", 11, weight=700))
+        self._tier_badge.setFont(create_font("IBM Plex Sans", 13, weight=700))
         self._tier_badge.setMinimumWidth(75)
         self._tier_badge.setStyleSheet("""
             background-color: rgba(255,255,255,0.2);
@@ -147,7 +148,8 @@ class LabelPreviewWidget(QWidget):
         id_row = QHBoxLayout()
 
         id_label = QLabel("Label ID")
-        id_label.setStyleSheet(f"color: {COLORS['text_secondary']}; font-weight: 500; background: transparent;")
+        id_label.setFont(create_font("IBM Plex Sans", 13, weight=500))
+        id_label.setStyleSheet(f"color: {COLORS['text_secondary']}; background: transparent;")
         id_row.addWidget(id_label)
 
         self._label_id = QLabel("ol_____________")
@@ -221,10 +223,9 @@ class LabelPreviewWidget(QWidget):
 
         # Entities section
         entities_header = QLabel("Detected Entities")
+        entities_header.setFont(create_font("IBM Plex Sans", 15, weight=600))
         entities_header.setStyleSheet(f"""
             color: {COLORS['text']};
-            font-weight: 600;
-            font-size: 14px;
             background: transparent;
         """)
         layout.addWidget(entities_header)
@@ -240,13 +241,15 @@ class LabelPreviewWidget(QWidget):
     def _create_property_label(self, text: str) -> QLabel:
         """Create a property name label."""
         label = QLabel(text)
-        label.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 12px; background: transparent;")
+        label.setFont(create_font("IBM Plex Sans", 13, weight=500))
+        label.setStyleSheet(f"color: {COLORS['text_secondary']}; background: transparent;")
         return label
 
     def _create_value_label(self, text: str) -> QLabel:
         """Create a property value label."""
         label = QLabel(text)
-        label.setStyleSheet(f"color: {COLORS['text']}; font-weight: 500; background: transparent;")
+        label.setFont(create_font("IBM Plex Sans", 13, weight=600))
+        label.setStyleSheet(f"color: {COLORS['text']}; background: transparent;")
         label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         return label
 
