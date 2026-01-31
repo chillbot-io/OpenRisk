@@ -245,10 +245,13 @@ class FileDetailDialog(QDialog):
         self._lock_frame = QFrame()
         self._lock_frame.setStyleSheet("""
             QFrame {
-                background-color: #fff3cd;
-                border: 1px solid #ffc107;
+                background-color: #21262d;
+                border: 1px solid #30363d;
                 border-radius: 4px;
                 padding: 12px;
+            }
+            QLabel {
+                color: #8b949e;
             }
         """)
         lock_layout = QHBoxLayout(self._lock_frame)

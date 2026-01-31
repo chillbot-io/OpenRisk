@@ -132,6 +132,15 @@ class ResultsTableWidget(QWidget):
 
     def add_result(self, result: Dict[str, Any]):
         """Add a scan result to the table."""
+        file_path = result.get("path", "")
+
+        # Check if file already exists - update instead of adding duplicate
+        for i, r in enumerate(self._all_results):
+            if r.get("path") == file_path:
+                self._all_results[i] = result
+                self.update_result(result)
+                return
+
         self._all_results.append(result)
 
         # Temporarily disable sorting if not in batch mode (for single adds)
