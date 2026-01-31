@@ -2,9 +2,12 @@
 //!
 //! Compiles all patterns once and reuses them across scans.
 //! Uses RegexSet for efficient multi-pattern matching.
+//! Supports batch processing with parallel execution via Rayon.
 
+use aho_corasick::AhoCorasick;
 use once_cell::sync::OnceCell;
 use pyo3::prelude::*;
+use rayon::prelude::*;
 use regex::{Regex, RegexSet, RegexSetBuilder};
 use std::collections::HashMap;
 
@@ -21,6 +24,9 @@ struct CompiledPatterns {
     metadata: Vec<PatternMetadata>,
     /// Map from pattern index to metadata index (for failed compilations)
     index_map: HashMap<usize, usize>,
+    /// Aho-Corasick automaton for fast literal pre-filtering
+    /// Contains common literals like "@", ".", "-" that most patterns need
+    prefilter: Option<AhoCorasick>,
 }
 
 #[derive(Clone)]
@@ -123,6 +129,49 @@ impl PatternMatcher {
             .map(|c| c.index_map.contains_key(&index))
             .unwrap_or(false)
     }
+
+    /// Find matches in multiple texts in parallel (batch API)
+    ///
+    /// Processes texts concurrently using Rayon's parallel iterator.
+    /// Significantly faster than calling find_matches() repeatedly.
+    ///
+    /// Args:
+    ///     texts: List of texts to scan
+    ///
+    /// Returns:
+    ///     List of lists of RawMatch objects (one per input text)
+    fn find_matches_batch(&self, py: Python<'_>, texts: Vec<String>) -> PyResult<Vec<Vec<RawMatch>>> {
+        Ok(py.allow_threads(|| {
+            let compiled = COMPILED_PATTERNS.get().expect("Patterns not initialized");
+
+            // Process texts in parallel
+            texts
+                .par_iter()
+                .map(|text| find_matches_impl(compiled, text.as_str()).unwrap_or_default())
+                .collect::<Vec<Vec<RawMatch>>>()
+        }))
+    }
+
+    /// Quick check if text likely contains any patterns (pre-filter)
+    ///
+    /// Uses Aho-Corasick to quickly check for common pattern literals
+    /// before running full regex matching. Can skip texts that definitely
+    /// won't match any patterns.
+    ///
+    /// Args:
+    ///     text: The text to check
+    ///
+    /// Returns:
+    ///     True if text might contain patterns, False if definitely not
+    fn might_contain_patterns(&self, py: Python<'_>, text: &str) -> bool {
+        py.allow_threads(|| {
+            let compiled = COMPILED_PATTERNS.get().expect("Patterns not initialized");
+            match &compiled.prefilter {
+                Some(ac) => ac.is_match(text),
+                None => true, // No prefilter, assume might match
+            }
+        })
+    }
 }
 
 /// Compile all patterns into RegexSet and individual Regexes
@@ -159,11 +208,26 @@ fn compile_patterns(patterns: &[(String, String, f32, usize)]) -> CompiledPatter
         .build()
         .expect("Failed to build RegexSet");
 
+    // Build Aho-Corasick prefilter for common pattern literals
+    // These are characters/strings that must appear for patterns to match
+    let prefilter_patterns = [
+        "@",     // Emails
+        "-",     // SSNs, phone numbers, dates
+        ".",     // Emails, IPs
+        "/",     // Dates, paths
+        ":",     // Times, IPs
+        " ",     // Names, addresses (whitespace between words)
+    ];
+    let prefilter = AhoCorasick::builder()
+        .build(&prefilter_patterns)
+        .ok();
+
     CompiledPatterns {
         regex_set,
         individual_regexes,
         metadata,
         index_map,
+        prefilter,
     }
 }
 

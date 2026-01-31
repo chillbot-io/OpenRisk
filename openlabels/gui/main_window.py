@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self, initial_path: Optional[str] = None):
+    def __init__(self, initial_path: Optional[str] = None, server_url: Optional[str] = None):
         super().__init__()
         self.setWindowTitle("OpenLabels - Portable Risk Labels")
         self.setMinimumSize(1200, 700)
@@ -66,10 +66,14 @@ class MainWindow(QMainWindow):
         self._auth: Optional["AuthManager"] = None
         self._session: Optional["Session"] = None
 
+        # Backend server URL (if running async server)
+        self._server_url = server_url
+
         # State
         self._scan_results: List[Dict[str, Any]] = []
         self._current_path: Optional[str] = None
         self._scan_worker: Optional[ScanWorker] = None
+        self._api_client = None  # ScannerAPIClient when using server
         self._initial_path = initial_path
         self._selected_file: Optional[str] = None
 
@@ -488,6 +492,8 @@ class MainWindow(QMainWindow):
         """Start scanning."""
         if self._scan_worker and self._scan_worker.isRunning():
             return  # Already scanning
+        if self._api_client:
+            return  # Already scanning via API
 
         target_type = self._scan_target.get_target_type()
         path = self._scan_target.get_path()
@@ -514,7 +520,33 @@ class MainWindow(QMainWindow):
         self._progress_bar.setRange(0, 0)  # Indeterminate initially
         self._scan_target.set_enabled(False)
 
-        # Start worker
+        # Use API client if server is available, otherwise use in-process worker
+        if self._server_url:
+            self._start_scan_via_api(target_type, path, s3_credentials)
+        else:
+            self._start_scan_in_process(target_type, path, s3_credentials)
+
+    def _start_scan_via_api(self, target_type: str, path: str,
+                            s3_credentials: Optional[Dict[str, str]]):
+        """Start scan using the async API server."""
+        from openlabels.gui.workers.api_client import ScannerAPIClient
+
+        self._api_client = ScannerAPIClient(self._server_url, parent=self)
+        self._api_client.progress.connect(self._on_scan_progress)
+        self._api_client.result.connect(self._on_scan_result)
+        self._api_client.batch_results.connect(self._on_batch_results)
+        self._api_client.finished.connect(self._on_api_scan_finished)
+        self._api_client.error.connect(self._on_scan_error)
+
+        if not self._api_client.start_scan(path, target_type, s3_credentials):
+            # Fall back to in-process scanning
+            self._api_client = None
+            self._status_label.setText("API unavailable, using local scanner...")
+            self._start_scan_in_process(target_type, path, s3_credentials)
+
+    def _start_scan_in_process(self, target_type: str, path: str,
+                               s3_credentials: Optional[Dict[str, str]]):
+        """Start scan using in-process worker thread."""
         self._scan_worker = ScanWorker(
             target_type=target_type,
             path=path,
@@ -533,6 +565,15 @@ class MainWindow(QMainWindow):
         if self._scan_worker and self._scan_worker.isRunning():
             self._scan_worker.stop()
             self._status_label.setText("Stopping...")
+        elif self._api_client:
+            self._api_client.stop()
+            self._status_label.setText("Stopping...")
+
+    @Slot()
+    def _on_api_scan_finished(self):
+        """Handle scan completion from API client."""
+        self._api_client = None
+        self._on_scan_finished()
 
     @Slot(int, int)
     def _on_scan_progress(self, current: int, total: int):
