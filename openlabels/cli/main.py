@@ -97,14 +97,20 @@ Examples:
     from openlabels.cli.commands import (
         add_scan_parser,
         add_find_parser,
+        add_quarantine_parser,
+        add_tag_parser,
         add_report_parser,
+        add_heatmap_parser,
         add_gui_parser,
         add_health_parser,
     )
 
     add_scan_parser(subparsers)
     add_find_parser(subparsers)
+    add_quarantine_parser(subparsers)
+    add_tag_parser(subparsers)
     add_report_parser(subparsers)
+    add_heatmap_parser(subparsers)
     add_gui_parser(subparsers)
     add_health_parser(subparsers)
 
