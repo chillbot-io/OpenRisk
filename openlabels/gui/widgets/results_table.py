@@ -118,13 +118,15 @@ class ResultsTableWidget(QWidget):
         """Begin batch insert mode - disables sorting for performance."""
         self._batch_mode = True
         self._table.setSortingEnabled(False)
-        self._table.setUpdatesEnabled(False)
+        # Don't disable updates entirely - it causes rendering glitches
+        # Instead, just disable sorting which is the main performance hit
 
     def end_batch(self):
         """End batch insert mode - re-enables sorting."""
         self._batch_mode = False
-        self._table.setUpdatesEnabled(True)
         self._table.setSortingEnabled(True)
+        # Force a repaint to ensure everything renders correctly
+        self._table.viewport().update()
 
     def add_result(self, result: Dict[str, Any]):
         """Add a scan result to the table."""
@@ -183,16 +185,12 @@ class ResultsTableWidget(QWidget):
             score_item.setForeground(QBrush(TIER_COLORS[tier]))
         self._table.setItem(row, 3, score_item)
 
-        # Tier (col 4)
-        tier_item = QTableWidgetItem(tier if not error else "ERROR")
+        # Tier (col 4) - use text only, no background color (cleaner look)
+        tier_display = tier if not error else "ERROR"
+        tier_item = QTableWidgetItem(tier_display)
         tier_item.setTextAlignment(Qt.AlignCenter)
         if tier in TIER_COLORS:
-            tier_item.setBackground(QBrush(TIER_COLORS[tier]))
-            # White text for dark backgrounds
-            if tier in ["CRITICAL", "HIGH", "MINIMAL", "UNKNOWN"]:
-                tier_item.setForeground(QBrush(QColor(255, 255, 255)))
-            else:
-                tier_item.setForeground(QBrush(QColor(0, 0, 0)))
+            tier_item.setForeground(QBrush(TIER_COLORS[tier]))
         self._table.setItem(row, 4, tier_item)
 
         # Entities (col 5)
@@ -310,16 +308,12 @@ class ResultsTableWidget(QWidget):
                     if tier in TIER_COLORS:
                         score_item.setForeground(QBrush(TIER_COLORS[tier]))
 
-                # Tier (col 4)
+                # Tier (col 4) - colored text only
                 tier_item = self._table.item(row, 4)
                 if tier_item:
                     tier_item.setText(tier if not error else "ERROR")
                     if tier in TIER_COLORS:
-                        tier_item.setBackground(QBrush(TIER_COLORS[tier]))
-                        if tier in ["CRITICAL", "HIGH", "MINIMAL", "UNKNOWN"]:
-                            tier_item.setForeground(QBrush(QColor(255, 255, 255)))
-                        else:
-                            tier_item.setForeground(QBrush(QColor(0, 0, 0)))
+                        tier_item.setForeground(QBrush(TIER_COLORS[tier]))
 
                 # Entities (col 5)
                 entities_item = self._table.item(row, 5)
