@@ -11,8 +11,6 @@ from PySide6.QtWidgets import (
     QTreeView,
     QVBoxLayout,
     QWidget,
-    QLabel,
-    QHeaderView,
     QFileSystemModel,
 )
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon
@@ -33,18 +31,9 @@ class FolderTreeWidget(QWidget):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(0)
 
-        # Header label - match height of filter bar in results table
-        self._header = QLabel("Folders")
-        self._header.setStyleSheet("""
-            font-weight: bold;
-            padding: 6px 4px;
-        """)
-        self._header.setFixedHeight(32)  # Match the filter bar height
-        layout.addWidget(self._header)
-
-        # Tree view
+        # Tree view - no header for cleaner look
         self._tree = QTreeView()
         self._tree.setHeaderHidden(True)
         self._tree.setAnimated(True)
@@ -79,9 +68,6 @@ class FolderTreeWidget(QWidget):
         root_index = self._model.setRootPath(path)
         self._tree.setRootIndex(root_index)
 
-        # Update header
-        self._header.setText(f"Folders: {path_obj.name or path}")
-
         # Expand the first level
         self._tree.expandToDepth(0)
 
@@ -90,7 +76,6 @@ class FolderTreeWidget(QWidget):
         self._root_path = None
         self._model.setRootPath("")
         self._tree.setRootIndex(self._model.index(""))
-        self._header.setText("Folders")
 
     def _on_selection_changed(self, selected, deselected):
         """Handle selection change."""
