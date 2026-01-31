@@ -46,12 +46,12 @@ class ResultsTableWidget(QWidget):
     COLUMNS = [
         ("Name", 140),
         ("Directory", 120),
-        ("Size", 55),
-        ("Score", 45),
-        ("Tier", 60),
-        ("Label", 45),
+        ("Size", 60),
+        ("Score", 65),
+        ("Tier", 55),
+        ("Label", 60),
         ("Entities", 100),
-        ("Actions", 70),
+        ("Actions", 80),
     ]
 
     def __init__(self, parent=None):
