@@ -422,11 +422,12 @@ def cmd_quarantine(args) -> int:
     return 0 if not errors else 1
 
 
-def add_quarantine_parser(subparsers):
+def add_quarantine_parser(subparsers, hidden=False):
     """Add the quarantine subparser."""
+    import argparse
     parser = subparsers.add_parser(
         "quarantine",
-        help="Move matching files to quarantine location, or manage quarantined files",
+        help=argparse.SUPPRESS if hidden else "Move matching files to quarantine location",
     )
     parser.add_argument(
         "source",

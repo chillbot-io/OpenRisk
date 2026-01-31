@@ -9,6 +9,7 @@ Usage:
     openlabels scan /path/to/file.csv
 """
 
+import argparse
 import json
 import stat as stat_module
 from pathlib import Path
@@ -268,38 +269,40 @@ def add_scan_parser(subparsers):
     )
     parser.add_argument(
         "path",
-        help="Path to local file or directory",
+        help="File or directory to scan",
     )
     parser.add_argument(
         "--recursive", "-r",
         action="store_true",
-        help="Scan directories recursively",
+        help="Scan subdirectories",
     )
     parser.add_argument(
         "--format", "-f",
         choices=["text", "json", "jsonl"],
         default="text",
-        help="Output format",
-    )
-    parser.add_argument(
-        "--exposure", "-e",
-        choices=["PRIVATE", "INTERNAL", "ORG_WIDE", "PUBLIC"],
-        default="PRIVATE",
-        help="Exposure level for scoring",
-    )
-    parser.add_argument(
-        "--extensions",
-        help="Comma-separated list of file extensions to scan",
-    )
-    parser.add_argument(
-        "--quiet", "-q",
-        action="store_true",
-        help="Only show summary",
+        help="Output format (default: text)",
     )
     parser.add_argument(
         "--fail-above",
         type=int,
-        help="Exit with error if any score exceeds this threshold",
+        metavar="SCORE",
+        help="Exit code 1 if any file scores above threshold (for CI)",
+    )
+    # Hidden options for power users
+    parser.add_argument(
+        "--exposure", "-e",
+        choices=["PRIVATE", "INTERNAL", "ORG_WIDE", "PUBLIC"],
+        default="PRIVATE",
+        help=argparse.SUPPRESS,  # Hidden: always PRIVATE for simplicity
+    )
+    parser.add_argument(
+        "--extensions",
+        help=argparse.SUPPRESS,  # Hidden: scan all files
+    )
+    parser.add_argument(
+        "--quiet", "-q",
+        action="store_true",
+        help=argparse.SUPPRESS,  # Hidden: use global --quiet
     )
     parser.set_defaults(func=cmd_scan)
 

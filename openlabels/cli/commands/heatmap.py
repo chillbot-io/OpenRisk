@@ -331,11 +331,12 @@ def cmd_heatmap(args) -> int:
     return 0
 
 
-def add_heatmap_parser(subparsers):
+def add_heatmap_parser(subparsers, hidden=False):
     """Add the heatmap subparser."""
+    import argparse
     parser = subparsers.add_parser(
         "heatmap",
-        help="Display risk heatmap of directory structure",
+        help=argparse.SUPPRESS if hidden else "Display risk heatmap of directory structure",
     )
     parser.add_argument(
         "path",

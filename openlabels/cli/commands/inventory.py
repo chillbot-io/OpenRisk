@@ -191,11 +191,12 @@ def cmd_inventory(args) -> int:
     return 0
 
 
-def add_inventory_parser(subparsers):
+def add_inventory_parser(subparsers, hidden=False):
     """Add the inventory subparser."""
+    import argparse
     parser = subparsers.add_parser(
         "inventory",
-        help="Query and filter scan results",
+        help=argparse.SUPPRESS if hidden else "Query and filter scan results",
     )
     parser.add_argument(
         "--tier", "-t",

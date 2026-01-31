@@ -152,11 +152,12 @@ def cmd_tag(args) -> int:
     return 0 if not errors else 1
 
 
-def add_tag_parser(subparsers):
+def add_tag_parser(subparsers, hidden=False):
     """Add the tag subparser."""
+    import argparse
     parser = subparsers.add_parser(
         "tag",
-        help="Apply OpenLabels tags to files",
+        help=argparse.SUPPRESS if hidden else "Apply OpenLabels tags to files",
     )
     parser.add_argument(
         "source",

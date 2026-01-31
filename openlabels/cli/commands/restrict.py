@@ -172,11 +172,12 @@ def cmd_restrict(args) -> int:
     return 0 if not errors else 1
 
 
-def add_restrict_parser(subparsers):
+def add_restrict_parser(subparsers, hidden=False):
     """Add the restrict subparser."""
+    import argparse
     parser = subparsers.add_parser(
         "restrict",
-        help="Restrict access permissions on matching files",
+        help=argparse.SUPPRESS if hidden else "Restrict access permissions on matching files",
     )
     parser.add_argument(
         "source",
