@@ -250,7 +250,7 @@ class SettingsDialog(QDialog):
 
         self._max_file_size = QSpinBox()
         self._max_file_size.setRange(1, 10000)
-        self._max_file_size.setValue(100)
+        self._max_file_size.setValue(50)
         self._max_file_size.setSuffix(" MB")
 
         self._threads = QSpinBox()
@@ -322,7 +322,7 @@ class SettingsDialog(QDialog):
         from PySide6.QtCore import QSettings
         settings = QSettings("OpenLabels", "OpenLabels")
 
-        self._max_file_size.setValue(settings.value("scanning/max_file_size_mb", 100, int))
+        self._max_file_size.setValue(settings.value("scanning/max_file_size_mb", 50, int))
         self._threads.setValue(settings.value("scanning/threads", 4, int))
         self._include_archives.setChecked(settings.value("scanning/include_archives", False, bool))
         self._excluded_patterns.setText(settings.value("scanning/excluded_patterns", ".git,node_modules,__pycache__"))
@@ -345,7 +345,7 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self):
         """Restore default settings."""
-        self._max_file_size.setValue(100)
+        self._max_file_size.setValue(50)
         self._threads.setValue(4)
         self._include_archives.setChecked(False)
         self._excluded_patterns.setText(".git,node_modules,__pycache__")
